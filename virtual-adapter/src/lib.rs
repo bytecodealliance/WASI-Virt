@@ -46,11 +46,6 @@ pub fn get_env_ptr() -> u32 {
     unsafe { &ENV as *const Env as u32 }
 }
 
-#[no_mangle]
-pub fn get_env_ptr_allow() -> u32 {
-    unsafe { &ENV.host_fallback_allow as *const bool as u32 }
-}
-
 fn read_data_str(offset: &mut isize) -> &'static str {
     let data: *const u8 = unsafe { ENV.host_field_data.offset(*offset) };
     let byte_len = unsafe { (data as *const u32).read() } as usize;

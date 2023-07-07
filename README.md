@@ -43,6 +43,32 @@ With the created `virt.component.wasm` component, this can now be composed into 
 wasm-tools compose mycomponent.wasm -d virt.component.wasm -o out.component.wasm
 ```
 
+## CLI
+
+A CLI is also provided in this crate supporting:
+
+```
+wasi-virt config.toml -o virt.wasm
+```
+
+With the configuration schema:
+
+```
+[env]
+# Support all env vars on the final host (apart from the overrides)
+# Set to "None" to entirely encapsulate the host env
+host = "All"
+# Always ensures that this env var and value is set
+overrides = [["CUSTOM", "VAL"]]
+```
+
+Allow lists and deny lists can also be provided via:
+
+```
+[env.host]
+Allow = ["ENV_KEY"] # Or Deny = ...
+```
+
 # License
 
 This project is licensed under the Apache 2.0 license with the LLVM exception.
