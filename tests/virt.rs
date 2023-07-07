@@ -92,7 +92,8 @@ async fn virt_test() -> Result<()> {
         // create the test case specific virtualization
         let mut virt_component_path = generated_path.join(test_case_name);
         virt_component_path.set_extension("virt.wasm");
-        let virt_component = create_virt(test.virt_opts.clone().unwrap_or_default())?;
+        let virt_opts = test.virt_opts.clone().unwrap_or_default();
+        let virt_component = create_virt(&virt_opts)?;
         fs::write(&virt_component_path, virt_component)?;
 
         // compose the test component with the defined test virtualization

@@ -13,7 +13,7 @@ pub struct VirtOpts {
     env: Option<VirtEnv>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Default)]
 pub struct VirtEnv {
     /// Set specific environment variable overrides
     overrides: Vec<(String, String)>,
@@ -22,10 +22,11 @@ pub struct VirtEnv {
     host: HostEnv,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Default)]
 pub enum HostEnv {
     /// Apart from the overrides, pass through all environment
     /// variables from the host
+    #[default]
     All,
     /// Fully encapsulate the environment, removing all host
     /// environment import checks
@@ -132,14 +133,69 @@ fn stub_imported_func<'a>(module: &'a mut Module, import_module: &str, import_na
     module.imports.delete(imported_fn.id());
 }
 
-pub fn create_virt<'a>(opts: VirtOpts) -> Result<Vec<u8>> {
+pub struct WasiVirt {
+    virt_opts: VirtOpts,
+}
+
+impl WasiVirt {
+    pub fn new() -> Self {
+        WasiVirt {
+            virt_opts: VirtOpts::default(),
+        }
+    }
+
+    fn get_or_create_env<'a>(&'a mut self) -> &'a mut VirtEnv {
+        if self.virt_opts.env.is_none() {
+            self.virt_opts.env = Some(VirtEnv::default());
+        }
+        self.virt_opts.env.as_mut().unwrap()
+    }
+
+    pub fn env_host_allow(mut self, allow_list: &[&str]) -> Self {
+        let env = self.get_or_create_env();
+        env.host = HostEnv::Allow(allow_list.iter().map(|s| s.to_string()).collect());
+        self
+    }
+
+    pub fn env_host_deny(mut self, deny_list: &[&str]) -> Self {
+        let env = self.get_or_create_env();
+        env.host = HostEnv::Deny(deny_list.iter().map(|s| s.to_string()).collect());
+        self
+    }
+
+    pub fn env_host_all(mut self) -> Self {
+        let env = self.get_or_create_env();
+        env.host = HostEnv::All;
+        self
+    }
+
+    pub fn env_host_none(mut self) -> Self {
+        let env = self.get_or_create_env();
+        env.host = HostEnv::None;
+        self
+    }
+
+    pub fn env_overrides(mut self, overrides: &[(&str, &str)]) -> Self {
+        let env = self.get_or_create_env();
+        for (key, val) in overrides {
+            env.overrides.push((key.to_string(), val.to_string()));
+        }
+        self
+    }
+
+    pub fn create(&self) -> Result<Vec<u8>> {
+        create_virt(&self.virt_opts)
+    }
+}
+
+pub fn create_virt<'a>(opts: &VirtOpts) -> Result<Vec<u8>> {
     let virt_adapter = include_bytes!("../lib/virtual_adapter.wasm");
 
     let config = walrus::ModuleConfig::new();
     let mut module = config.parse(virt_adapter)?;
 
     // env virtualization injection
-    if let Some(env) = opts.env {
+    if let Some(env) = &opts.env {
         let env_ptr_addr = {
             let env_ptr_export = module
                 .exports
@@ -267,7 +323,7 @@ pub fn create_virt<'a>(opts: VirtOpts) -> Result<Vec<u8>> {
 
         let host_field_cnt = env.overrides.len() as u32;
         bytes[data_offset + 4..data_offset + 8].copy_from_slice(&host_field_cnt.to_le_bytes());
-        match env.host {
+        match &env.host {
             // All is already the default data
             HostEnv::All => {}
             HostEnv::None => {

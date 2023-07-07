@@ -22,18 +22,18 @@ Subsystem support:
 ### Example
 
 ```rs
-use wasi_virt::{create_virt, VirtEnv, VirtOpts, HostEnv};
+use std::fs;
+use wasi_virt::WasiVirt;
 
 fn main() {
-    let virt_component = create_virt(VirtOpts {
-      env: Some(VirtEnv {
-        // provide explicit env var overrides
-        overrides: vec![["SOME", "ENV"], ["VAR", "OVERRIDES"]],
-        // select how to interact with host env vars
-        host: HostEnv::Allow(vec!["PUBLIC_ENV_VAR"]),
-      })
-    }).unwrap();
-    fs::write("virt.component.wasm", virt_component)?;
+    let virt_component_bytes = WasiVirt::new()
+        // provide an allow list of host env vars
+        .env_host_allow(&["PUBLIC_ENV_VAR"])
+        // provide custom env overrides
+        .env_overrides(&[("SOME", "ENV"), ("VAR", "OVERRIDES")])
+        .create()
+        .unwrap();
+    fs::write("virt.component.wasm", virt_component_bytes).unwrap();
 }
 ```
 

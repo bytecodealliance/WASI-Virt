@@ -8,6 +8,9 @@ edition = "2021"
 [lib]
 crate-type = ["lib"]
 
+[[bin]]
+name = "wasi-virt"
+
 [workspace]
 members = [
   "virtual-adapter",
