@@ -40,7 +40,7 @@ anyhow = "1"
 async-std = { version = "1", features = ["attributes"] }
 cap-std = "1.0.12"
 heck =  { version = "0.4" }
-wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools", branch = "compose-defs" }
+wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools", branch = "main" }
 wasmtime = { version = "10.0.1", features = ["component-model"] }
 wasmtime-wasi =  "10.0.1"
 
