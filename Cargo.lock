@@ -1434,9 +1434,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.9.0"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89089e897c013b3deb627116ae56a6955a72b8bed395c9526af31c9fe528b484"
+checksum = "b2eae68fc220f7cf2532e4494aded17545fce192d59cd996e0fe7887f4ceb575"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -1446,9 +1446,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa250384981ea14565685dea16a9ccc4d1c541a13f82b9c168572264d1df8c56"
+checksum = "e9aaecc05d5c4b5f7da074b9a0d1a0867e71fd36e7fc0482d8bcfe8e8fc56290"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -2073,7 +2073,7 @@ checksum = "ca6ad05a4870b2bf5fe995117d3728437bd27d7cd5f06f13c17443ef369775a1"
 [[package]]
 name = "wasm-compose"
 version = "0.2.17"
-source = "git+https://github.com/bytecodealliance/wasm-tools?branch=compose-defs#f2235101aec9e559903d11639d668c7e281e0814"
+source = "git+https://github.com/bytecodealliance/wasm-tools?branch=compose-defs#4a78b0a2acdc9ab03c5d23b38488c26e811eb8e2"
 dependencies = [
  "anyhow",
  "heck 0.4.1",
@@ -2100,7 +2100,7 @@ dependencies = [
 [[package]]
 name = "wasm-encoder"
 version = "0.29.0"
-source = "git+https://github.com/bytecodealliance/wasm-tools?branch=compose-defs#f2235101aec9e559903d11639d668c7e281e0814"
+source = "git+https://github.com/bytecodealliance/wasm-tools?branch=compose-defs#4a78b0a2acdc9ab03c5d23b38488c26e811eb8e2"
 dependencies = [
  "leb128",
 ]
@@ -2137,7 +2137,7 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.107.0"
-source = "git+https://github.com/bytecodealliance/wasm-tools?branch=compose-defs#f2235101aec9e559903d11639d668c7e281e0814"
+source = "git+https://github.com/bytecodealliance/wasm-tools?branch=compose-defs#4a78b0a2acdc9ab03c5d23b38488c26e811eb8e2"
 dependencies = [
  "indexmap 2.0.0",
  "semver",
@@ -2481,7 +2481,7 @@ dependencies = [
 [[package]]
 name = "wast"
 version = "60.0.0"
-source = "git+https://github.com/bytecodealliance/wasm-tools?branch=compose-defs#f2235101aec9e559903d11639d668c7e281e0814"
+source = "git+https://github.com/bytecodealliance/wasm-tools?branch=compose-defs#4a78b0a2acdc9ab03c5d23b38488c26e811eb8e2"
 dependencies = [
  "leb128",
  "memchr",
@@ -2501,7 +2501,7 @@ dependencies = [
 [[package]]
 name = "wat"
 version = "1.0.66"
-source = "git+https://github.com/bytecodealliance/wasm-tools?branch=compose-defs#f2235101aec9e559903d11639d668c7e281e0814"
+source = "git+https://github.com/bytecodealliance/wasm-tools?branch=compose-defs#4a78b0a2acdc9ab03c5d23b38488c26e811eb8e2"
 dependencies = [
  "wast 60.0.0 (git+https://github.com/bytecodealliance/wasm-tools?branch=compose-defs)",
 ]
