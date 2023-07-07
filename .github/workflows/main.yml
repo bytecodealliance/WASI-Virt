@@ -42,7 +42,7 @@ jobs:
         key: engine-build-${{ hashFiles('Cargo.lock', 'virtual-adapter/**/*.rs', 'src/**/*.rs', 'tests/components/**/*.rs') }}
 
     - name: Build
-      run: cargo build
+      run: cargo build --target wasm32-wasi
 
     - name: Test
       run: cargo test
