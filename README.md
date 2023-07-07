@@ -8,7 +8,7 @@
   <strong>A <a href="https://bytecodealliance.org/">Bytecode Alliance</a> project</strong>
 
   <p>
-    <a href="https://github.com/bytecodealliance/jco/actions?query=workflow%3ACI"><img src="https://github.com/bytecodealliance/jco/workflows/CI/badge.svg" alt="build status" /></a>
+    <a href="https://github.com/bytecodealliance/wasi-virt/actions?query=workflow%3ACI"><img src="https://github.com/bytecodealliance/wasi-virt/workflows/CI/badge.svg" alt="build status" /></a>
   </p>
 </div>
 
