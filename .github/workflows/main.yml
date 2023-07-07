@@ -41,6 +41,9 @@ jobs:
         path: target
         key: engine-build-${{ hashFiles('Cargo.lock', 'virtual-adapter/**/*.rs', 'src/**/*.rs', 'tests/components/**/*.rs') }}
 
+    - name: Build
+      run: cargo build
+
     - name: Test
       run: cargo test
 
@@ -57,6 +60,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Install Rust
-      run: rustup update stable && rustup default stable && rustup component add rustfmt
+      run: rustup update nightly --no-self-update && rustup default nightly
     - name: Format source code
       run: cargo fmt -- --check
