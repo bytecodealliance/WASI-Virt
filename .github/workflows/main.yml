@@ -60,6 +60,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Install Rust
-      run: rustup update nightly --no-self-update && rustup default nightly
+      run: rustup update nightly && rustup default nightly && rustup component add rustfmt
     - name: Format source code
       run: cargo fmt -- --check
