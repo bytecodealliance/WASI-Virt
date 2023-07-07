@@ -1,0 +1,190 @@
+use anyhow::{anyhow, Result};
+use heck::ToSnakeCase;
+use serde::Deserialize;
+use std::collections::BTreeMap;
+use std::process::Command;
+use std::{fs, path::PathBuf};
+use wasi_virt::{create_virt, VirtOpts};
+use wasm_compose::composer::ComponentComposer;
+use wasmtime::{
+    component::{Component, Linker},
+    Config, Engine, Store, WasmBacktraceDetails,
+};
+use wasmtime_wasi::preview2::{wasi as wasi_preview2, Table, WasiCtx, WasiCtxBuilder, WasiView};
+use wit_component::ComponentEncoder;
+
+wasmtime::component::bindgen!({
+    world: "virt-test",
+    path: "wit",
+    async: true
+});
+
+fn cmd(arg: &str) -> Result<()> {
+    let mut cmd = if cfg!(target_os = "windows") {
+        let mut cmd = Command::new("cmd");
+        cmd.arg("/C");
+        cmd
+    } else {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c");
+        cmd
+    };
+    let output = cmd.arg(arg).output()?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "failed running command: {}\n{}",
+            arg,
+            &String::from_utf8(output.stderr)?
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Deserialize, Debug)]
+struct TestExpectation {
+    env: Option<Vec<(String, String)>>,
+}
+
+#[derive(Deserialize, Debug)]
+struct TestCase {
+    component: String,
+    host_env: Option<BTreeMap<String, String>>,
+    virt_opts: Option<VirtOpts>,
+    expect: TestExpectation,
+}
+
+#[async_std::test]
+async fn virt_test() -> Result<()> {
+    let wasi_adapter = fs::read("lib/wasi_snapshot_preview1.reactor.wasm")?;
+
+    for test_case in fs::read_dir("tests/cases")? {
+        let test_case = test_case?;
+        let test_case_path = test_case.path();
+        let test_case_file_name = test_case.file_name().to_string_lossy().to_string();
+        let test_case_name = test_case_file_name.strip_suffix(".toml").unwrap();
+
+        // load the test case JSON data
+        let test: TestCase = toml::from_str(&fs::read_to_string(&test_case_path)?)?;
+
+        let component_name = &test.component;
+
+        // build the generated test component
+        let generated_path = PathBuf::from("tests/generated");
+        fs::create_dir_all(&generated_path)?;
+
+        let mut generated_component_path = generated_path.join(component_name);
+        generated_component_path.set_extension("component.wasm");
+        cmd(&format!(
+            "cargo build -p {component_name} --target wasm32-wasi --release"
+        ))?;
+
+        // encode the component
+        let component_core = fs::read(&format!(
+            "target/wasm32-wasi/release/{}.wasm",
+            component_name.to_snake_case()
+        ))?;
+        let mut encoder = ComponentEncoder::default()
+            .validate(true)
+            .module(&component_core)?;
+        encoder = encoder.adapter("wasi_snapshot_preview1", wasi_adapter.as_slice())?;
+        fs::write(&generated_component_path, encoder.encode()?)?;
+
+        // create the test case specific virtualization
+        let mut virt_component_path = generated_path.join(test_case_name);
+        virt_component_path.set_extension("virt.wasm");
+        let virt_component = create_virt(test.virt_opts.clone().unwrap_or_default())?;
+        fs::write(&virt_component_path, virt_component)?;
+
+        // compose the test component with the defined test virtualization
+        let component_bytes = ComponentComposer::new(
+            &generated_component_path,
+            &wasm_compose::config::Config {
+                definitions: vec![virt_component_path],
+                ..Default::default()
+            },
+        )
+        .compose()?;
+
+        if true {
+            let mut composed_path = generated_path.join(test_case_name);
+            composed_path.set_extension("composed.wasm");
+            fs::write(composed_path, &component_bytes)?;
+        }
+
+        // execute the composed virtualized component test function
+        let mut builder = WasiCtxBuilder::new().inherit_stdio();
+        if let Some(host_env) = &test.host_env {
+            let env: Vec<(String, String)> = host_env
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect();
+            builder = builder.set_env(env.as_slice());
+        }
+        let mut table = Table::new();
+        let wasi = builder.build(&mut table)?;
+
+        let mut config = Config::new();
+        config.cache_config_load_default().unwrap();
+        config.wasm_backtrace_details(WasmBacktraceDetails::Enable);
+        config.wasm_component_model(true);
+        config.async_support(true);
+
+        let engine = Engine::new(&config)?;
+        let mut linker = Linker::new(&engine);
+
+        let component = Component::from_binary(&engine, &component_bytes).unwrap();
+
+        struct CommandCtx {
+            table: Table,
+            wasi: WasiCtx,
+        }
+        impl WasiView for CommandCtx {
+            fn table(&self) -> &Table {
+                &self.table
+            }
+            fn table_mut(&mut self) -> &mut Table {
+                &mut self.table
+            }
+            fn ctx(&self) -> &WasiCtx {
+                &self.wasi
+            }
+            fn ctx_mut(&mut self) -> &mut WasiCtx {
+                &mut self.wasi
+            }
+        }
+
+        // simple logger for debugging
+        let mut log_builder = linker.instance("console")?;
+        log_builder.func_wrap("log", |_store, params: (String,)| {
+            println!("LOG: {}", params.0);
+            Ok(())
+        })?;
+
+        wasi_preview2::command::add_to_linker(&mut linker)?;
+        let mut store = Store::new(&engine, CommandCtx { table, wasi });
+
+        let (instance, _instance) =
+            VirtTest::instantiate_async(&mut store, &component, &linker).await?;
+
+        // env var expectation check
+        if let Some(env) = &test.expect.env {
+            let env_vars = instance.call_test_get_env(&mut store).await?;
+            if !env_vars.eq(env) {
+                return Err(anyhow!(
+                    "Unexpected env vars testing {:?}:
+
+    \x1b[1mExpected:\x1b[0m {:?}
+    \x1b[1mActual:\x1b[0m {:?}
+
+    {:?}",
+                    test_case_path,
+                    env,
+                    env_vars,
+                    test
+                ));
+            }
+        }
+        println!("\x1b[1;32m√\x1b[0m {:?}", test_case_path);
+    }
+    Ok(())
+}

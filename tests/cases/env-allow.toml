@@ -1,0 +1,14 @@
+component = "get-env"
+
+[host_env]
+PRIVATE_TOKEN = "PRIVATE"
+PUBLIC_VAR = "VAL"
+
+[virt_opts.env]
+overrides = [["CUSTOM", "VAL"]]
+
+[virt_opts.env.host]
+Allow = ["PUBLIC_VAR"]
+
+[expect]
+env = [["CUSTOM", "VAL"], ["PUBLIC_VAR", "VAL"]]

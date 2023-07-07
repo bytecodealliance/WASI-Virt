@@ -2,7 +2,7 @@
   <h1><code>WASI Virt</code></h1>
 
   <p>
-    <strong>Virtualization Component Generator for WASI</strong>
+    <strong>Virtualization Component Generator for WASI Preview 2</strong>
   </p>
 
   <strong>A <a href="https://bytecodealliance.org/">Bytecode Alliance</a> project</strong>
@@ -12,7 +12,36 @@
   </p>
 </div>
 
-WIP: Check back soon.
+The virtualized component can be composed into a WASI Preview2 component with `wasm-tools compose`, providing fully-configurable WASI virtualization with host pass through or full encapsulation as needed.
+
+Subsystem support:
+
+- [x] Environment virtualization
+- [ ] Filesystem virtualization
+
+### Example
+
+```rs
+use wasi_virt::{create_virt, VirtEnv, VirtOpts, HostEnv};
+
+fn main() {
+    let virt_component = create_virt(VirtOpts {
+      env: Some(VirtEnv {
+        // provide explicit env var overrides
+        overrides: vec![["SOME", "ENV"], ["VAR", "OVERRIDES"]],
+        // select how to interact with host env vars
+        host: HostEnv::Allow(vec!["PUBLIC_ENV_VAR"]),
+      })
+    }).unwrap();
+    fs::write("virt.component.wasm", virt_component)?;
+}
+```
+
+With the created `virt.component.wasm` component, this can now be composed into a component with the `wasm-tools compose` "definitions" feature:
+
+```
+wasm-tools compose mycomponent.wasm -d virt.component.wasm -o out.component.wasm
+```
 
 # License
 

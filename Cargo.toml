@@ -1,0 +1,45 @@
+cargo-features = ["profile-rustflags"]
+
+[package]
+name = "wasi-virt"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["lib"]
+
+[workspace]
+members = [
+  "virtual-adapter",
+  "tests/components/get-env"
+]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+rustflags = ["-Zoom=panic"]
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+walrus = "0.20.1"
+wit-component = "0.11.0"
+
+[build-dependencies]
+anyhow = "1"
+
+[dev-dependencies]
+anyhow = "1"
+async-std = { version = "1", features = ["attributes"] }
+cap-std = "1.0.12"
+heck =  { version = "0.4" }
+toml = "0.7"
+wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools", branch = "compose-defs" }
+wasmtime = { version = "10.0.1", features = ["component-model"] }
+wasmtime-wasi =  "10.0.1"
+
+[workspace.dependencies]
+anyhow = "1"
+wit-bindgen = "0.8.0"

@@ -1,0 +1,12 @@
+[package]
+name = "virtual-adapter"
+publish = false
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = { workspace = true }
+wit-bindgen = { workspace = true }
