@@ -1,8 +1,7 @@
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use walrus::{
-    ir::{Const, Instr, Value},
-    ActiveData, ActiveDataLocation, DataKind, ExportItem, FunctionKind, Module,
+    ir::Value, ActiveData, ActiveDataLocation, DataKind, ExportItem, GlobalKind, InitExpr, Module,
 };
 
 use crate::{
@@ -20,6 +19,7 @@ pub struct VirtEnv {
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "snake_case")]
 pub enum HostEnv {
     /// Apart from the overrides, pass through all environment
     /// variables from the host
@@ -35,11 +35,8 @@ pub enum HostEnv {
 }
 
 impl WasiVirt {
-    fn get_or_create_env<'a>(&'a mut self) -> &'a mut VirtEnv {
-        if self.virt_opts.env.is_none() {
-            self.virt_opts.env = Some(VirtEnv::default());
-        }
-        self.virt_opts.env.as_mut().unwrap()
+    fn get_or_create_env<'a>(&mut self) -> &mut VirtEnv {
+        self.virt_opts.env.get_or_insert_with(Default::default)
     }
 
     pub fn env_host_allow(mut self, allow_list: &[&str]) -> Self {
@@ -80,27 +77,15 @@ pub fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> 
         let env_ptr_export = module
             .exports
             .iter()
-            .find(|expt| expt.name.as_str() == "get_env_ptr")
-            .unwrap();
-        let ExportItem::Function(func) = env_ptr_export.item else {
-            panic!()
+            .find(|expt| expt.name.as_str() == "env")
+            .context("Adapter 'env' is not exported")?;
+        let ExportItem::Global(env_ptr_global) = env_ptr_export.item else {
+            bail!("Adapter 'env' not a global");
         };
-        let FunctionKind::Local(local_func) = &module.funcs.get(func).kind else {
-            panic!()
-        };
-        let func_body = local_func.block(local_func.entry_block());
-        if func_body.instrs.len() != 1 {
-            return Err(anyhow!(
-                "Unexpected get_env_ptr implementation. Should be a constant address return."
-            ));
-        }
-        let Instr::Const(Const {
-            value: Value::I32(env_ptr_addr),
-        }) = &func_body.instrs[0].0
+        let GlobalKind::Local(InitExpr::Value(Value::I32(env_ptr_addr))) =
+            &module.globals.get(env_ptr_global).kind
         else {
-            return Err(anyhow!(
-                "Unexpected get_env_ptr implementation. Should be a constant address return."
-            ));
+            bail!("Adapter 'env' not a local I32 global value");
         };
         *env_ptr_addr as u32
     };
@@ -108,21 +93,27 @@ pub fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> 
     // If host env is disabled, remove its import entirely
     // replacing it with a stub panic
     if matches!(env.host, HostEnv::None) {
-        stub_imported_func(module, "wasi:cli-base/environment", "get-environment");
+        stub_imported_func(module, "wasi:cli-base/environment", "get-environment")?;
         // we do arguments as well because virt assumes reactors for now...
-        stub_imported_func(module, "wasi:cli-base/environment", "get-arguments");
+        stub_imported_func(module, "wasi:cli-base/environment", "get-arguments")?;
     }
 
-    let memory = module.memories.iter().nth(0).unwrap().id();
+    let memory = module
+        .memories
+        .iter()
+        .nth(0)
+        .context("Adapter does not export a memory")?
+        .id();
 
     // prepare the field data list vector for writing
     // strings must be sorted as binary searches are used against this data
     let mut field_data_vec: Vec<&str> = Vec::new();
-    for (key, value) in &env.overrides {
+    let mut sorted_overrides = env.overrides.clone();
+    sorted_overrides.sort();
+    for (key, value) in &sorted_overrides {
         field_data_vec.push(key.as_ref());
         field_data_vec.push(value.as_ref());
     }
-    field_data_vec.sort();
     match &env.host {
         HostEnv::Allow(allow_list) => {
             let mut allow_list: Vec<&str> = allow_list.iter().map(|item| item.as_ref()).collect();

@@ -12,15 +12,14 @@ pub struct VirtOpts {
     env: Option<VirtEnv>,
 }
 
+#[derive(Debug, Default, Clone)]
 pub struct WasiVirt {
     virt_opts: VirtOpts,
 }
 
 impl WasiVirt {
     pub fn new() -> Self {
-        WasiVirt {
-            virt_opts: VirtOpts::default(),
-        }
+        Self::default()
     }
 
     pub fn create(&self) -> Result<Vec<u8>> {
@@ -43,5 +42,5 @@ pub fn create_virt<'a>(opts: &VirtOpts) -> Result<Vec<u8>> {
 
     // now adapt the virtualized component
     let encoder = ComponentEncoder::default().validate(true).module(&bytes)?;
-    Ok(encoder.encode()?)
+    encoder.encode()
 }

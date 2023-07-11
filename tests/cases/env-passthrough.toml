@@ -4,7 +4,7 @@ component = "get-env"
 CUSTOM = "ENV"
 
 [virt_opts.env]
-host = "All"
+host = "all"
 overrides = []
 
 [expect]

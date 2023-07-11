@@ -33,7 +33,8 @@ pub struct Env {
     host_field_data: *const u8,
 }
 
-static mut ENV: Env = Env {
+#[no_mangle]
+pub static mut env: Env = Env {
     host_fallback: true,
     host_fallback_allow: false,
     host_field_cnt: 0,
@@ -41,16 +42,11 @@ static mut ENV: Env = Env {
     host_field_data: 0 as *const u8,
 };
 
-#[no_mangle]
-pub fn get_env_ptr() -> u32 {
-    unsafe { &ENV as *const Env as u32 }
-}
-
 fn read_data_str(offset: &mut isize) -> &'static str {
-    let data: *const u8 = unsafe { ENV.host_field_data.offset(*offset) };
+    let data: *const u8 = unsafe { env.host_field_data.offset(*offset) };
     let byte_len = unsafe { (data as *const u32).read() } as usize;
     *offset += 4;
-    let data: *const u8 = unsafe { ENV.host_field_data.offset(*offset) };
+    let data: *const u8 = unsafe { env.host_field_data.offset(*offset) };
     let str_data = unsafe { std::slice::from_raw_parts(data, byte_len) };
     *offset += byte_len as isize;
     let rem = *offset % 4;
@@ -64,20 +60,20 @@ impl Environment for VirtAdapter {
     fn get_environment() -> Vec<(String, String)> {
         let mut environment = Vec::new();
         let mut data_offset: isize = 0;
-        for _ in 0..unsafe { ENV.host_field_cnt } {
+        for _ in 0..unsafe { env.host_field_cnt } {
             let env_key = read_data_str(&mut data_offset);
             let env_val = read_data_str(&mut data_offset);
             environment.push((env_key.to_string(), env_val.to_string()));
         }
         // fallback ASSUMES that all data is alphabetically ordered
-        if unsafe { ENV.host_fallback } {
+        if unsafe { env.host_fallback } {
             let mut allow_or_deny = Vec::new();
-            for _ in 0..unsafe { ENV.host_allow_or_deny_cnt } {
+            for _ in 0..unsafe { env.host_allow_or_deny_cnt } {
                 let allow_or_deny_key = read_data_str(&mut data_offset);
                 allow_or_deny.push(allow_or_deny_key);
             }
 
-            let is_allow_list = unsafe { ENV.host_fallback_allow };
+            let is_allow_list = unsafe { env.host_fallback_allow };
             for (key, value) in wasi::cli_base::environment::get_environment().drain(..) {
                 let in_list = allow_or_deny.binary_search(&key.as_ref()).is_ok();
                 if is_allow_list && in_list || !is_allow_list && !in_list {

@@ -8,7 +8,7 @@ PUBLIC_VAR = "VAL"
 overrides = [["CUSTOM", "VAL"]]
 
 [virt_opts.env.host]
-Deny = ["PRIVATE_TOKEN"]
+deny = ["PRIVATE_TOKEN"]
 
 [expect]
 env = [["CUSTOM", "VAL"], ["PUBLIC_VAR", "VAL"]]

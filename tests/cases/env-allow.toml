@@ -8,7 +8,7 @@ PUBLIC_VAR = "VAL"
 overrides = [["CUSTOM", "VAL"]]
 
 [virt_opts.env.host]
-Allow = ["PUBLIC_VAR"]
+allow = ["PUBLIC_VAR"]
 
 [expect]
 env = [["CUSTOM", "VAL"], ["PUBLIC_VAR", "VAL"]]
