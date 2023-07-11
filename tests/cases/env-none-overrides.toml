@@ -1,9 +1,9 @@
 component = "get-env"
 
-[host_env]
+[host-env]
 CUSTOM = "TEST"
 
-[virt_opts.env]
+[virt-opts.env]
 host = "none"
 overrides = [["ENV_OVERRIDE", "Value"]]
 

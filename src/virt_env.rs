@@ -1,25 +1,28 @@
+use crate::{
+    walrus_ops::{
+        bump_stack_global, get_active_data_segment, get_memory_id, remove_exported_func,
+        stub_imported_func,
+    },
+    WasiVirt,
+};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use walrus::{
     ir::Value, ActiveData, ActiveDataLocation, DataKind, ExportItem, GlobalKind, InitExpr, Module,
 };
 
-use crate::{
-    walrus_ops::{bump_stack_global, get_active_data_segment, stub_imported_func},
-    WasiVirt,
-};
-
 #[derive(Deserialize, Debug, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct VirtEnv {
     /// Set specific environment variable overrides
-    overrides: Vec<(String, String)>,
+    pub overrides: Vec<(String, String)>,
     /// Define how to embed into the host environment
     /// (Pass-through / encapsulate / allow / deny)
-    host: HostEnv,
+    pub host: HostEnv,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum HostEnv {
     /// Apart from the overrides, pass through all environment
     /// variables from the host
@@ -93,17 +96,11 @@ pub fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> 
     // If host env is disabled, remove its import entirely
     // replacing it with a stub panic
     if matches!(env.host, HostEnv::None) {
-        stub_imported_func(module, "wasi:cli-base/environment", "get-environment")?;
+        stub_env_virt(module)?;
         // we do arguments as well because virt assumes reactors for now...
-        stub_imported_func(module, "wasi:cli-base/environment", "get-arguments")?;
     }
 
-    let memory = module
-        .memories
-        .iter()
-        .nth(0)
-        .context("Adapter does not export a memory")?
-        .id();
+    let memory = get_memory_id(module)?;
 
     // prepare the field data list vector for writing
     // strings must be sorted as binary searches are used against this data
@@ -146,6 +143,10 @@ pub fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> 
         }
     }
 
+    if field_data_bytes.len() % 8 != 0 {
+        field_data_bytes.resize(field_data_bytes.len() + 4, 0);
+    }
+
     let field_data_addr = if field_data_bytes.len() > 0 {
         // Offset the stack global by the static field data length
         let field_data_addr = bump_stack_global(module, field_data_bytes.len() as i32)?;
@@ -165,7 +166,7 @@ pub fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> 
 
     // In the existing static data segment, update the static data options.
     //
-    // From virtual-adapter/src/lib.js:
+    // From virtual-adapter/src/env.rs:
     //
     // #[repr(C)]
     // pub struct Env {
@@ -214,5 +215,18 @@ pub fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> 
         bytes[data_offset + 12..data_offset + 16].copy_from_slice(&field_data_addr.to_le_bytes());
     }
 
+    Ok(())
+}
+
+fn stub_env_virt(module: &mut Module) -> Result<()> {
+    stub_imported_func(module, "wasi:cli-base/environment", "get-arguments", true)?;
+    stub_imported_func(module, "wasi:cli-base/environment", "get-environment", true)?;
+    Ok(())
+}
+
+pub(crate) fn strip_env_virt(module: &mut Module) -> Result<()> {
+    stub_env_virt(module)?;
+    remove_exported_func(module, "wasi:cli-base/environment#get-arguments")?;
+    remove_exported_func(module, "wasi:cli-base/environment#get-environment")?;
     Ok(())
 }

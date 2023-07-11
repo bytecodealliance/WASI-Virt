@@ -1,0 +1,9 @@
+component = "file-read"
+
+host-fs-path = "/mydir/file.txt"
+
+[virt-opts.fs.preopens."/".dir."mydir".dir]
+"file.txt" = { file = { source = "inner contents" } }
+
+[expect]
+file-read = "inner contents"

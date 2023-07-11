@@ -1,0 +1,23 @@
+component = "file-read"
+
+host-fs-path = "/cases/env-none.toml"
+
+[virt-opts.fs]
+passive-cutoff = 10
+
+[virt-opts.fs.preopens."/"]
+host = "./tests"
+
+[expect]
+file-read = '''component = "get-env"
+
+[host-env]
+CUSTOM = "TEST"
+
+[virt-opts.env]
+host = "none"
+overrides = []
+
+[expect]
+env = []
+'''

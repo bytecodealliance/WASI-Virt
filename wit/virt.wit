@@ -1,11 +1,39 @@
 package local:virt
 
+// in future this should be defined as a union world of the various
+// virtual subsystems, when union syntax lands
 world virtual-adapter {
   import wasi:cli-base/environment
+  import wasi:cli-base/preopens
+  import wasi:filesystem/filesystem
+  import wasi:io/streams
   import console: interface {
     log: func(msg: string) -> ()
   }
+  export wasi:io/streams
   export wasi:cli-base/environment
+  export wasi:filesystem/filesystem
+  export wasi:cli-base/preopens
+}
+
+world virtual-base {
+  import console: interface {
+    log: func(msg: string) -> ()
+  }
+}
+
+world virtual-env {
+  import wasi:cli-base/environment
+  export wasi:cli-base/environment
+}
+
+world virtual-fs {
+  import wasi:cli-base/preopens
+  import wasi:filesystem/filesystem
+  import wasi:io/streams
+  export wasi:io/streams
+  export wasi:filesystem/filesystem
+  export wasi:cli-base/preopens
 }
 
 world virt-test {
@@ -33,4 +61,5 @@ world virt-test {
   import wasi:cli-base/stderr
 
   export test-get-env: func() -> list<tuple<string, string>>
+  export test-file-read: func(path: string) -> string
 }

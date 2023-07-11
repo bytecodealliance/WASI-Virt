@@ -42,7 +42,7 @@ fn main() -> Result<()> {
 
     let virt_component = create_virt(&virt_cfg)?;
 
-    fs::write(args.out, virt_component)?;
+    fs::write(args.out, virt_component.adapter)?;
 
     Ok(())
 }
