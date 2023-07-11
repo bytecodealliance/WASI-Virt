@@ -51,13 +51,13 @@ A CLI is also provided in this crate supporting:
 wasi-virt config.toml -o virt.wasm
 ```
 
-With the configuration schema:
+With the configuration file format:
 
 ```
 [env]
 # Support all env vars on the final host (apart from the overrides)
-# Set to "None" to entirely encapsulate the host env
-host = "All"
+# Set to "none" to entirely encapsulate the host env
+host = "all"
 # Always ensures that this env var and value is set
 overrides = [["CUSTOM", "VAL"]]
 ```
@@ -66,7 +66,7 @@ Allow lists and deny lists can also be provided via:
 
 ```
 [env.host]
-Allow = ["ENV_KEY"] # Or Deny = ...
+allow = ["ENV_KEY"] # Or Deny = ...
 ```
 
 # License
