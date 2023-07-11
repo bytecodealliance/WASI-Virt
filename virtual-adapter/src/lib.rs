@@ -65,6 +65,7 @@ impl Environment for VirtAdapter {
             let env_val = read_data_str(&mut data_offset);
             environment.push((env_key.to_string(), env_val.to_string()));
         }
+        let override_len = environment.len();
         // fallback ASSUMES that all data is alphabetically ordered
         if unsafe { env.host_fallback } {
             let mut allow_or_deny = Vec::new();
@@ -75,6 +76,12 @@ impl Environment for VirtAdapter {
 
             let is_allow_list = unsafe { env.host_fallback_allow };
             for (key, value) in wasi::cli_base::environment::get_environment().drain(..) {
+                if environment[0..override_len]
+                    .binary_search_by_key(&&key, |(s, _)| s)
+                    .is_ok()
+                {
+                    continue;
+                }
                 let in_list = allow_or_deny.binary_search(&key.as_ref()).is_ok();
                 if is_allow_list && in_list || !is_allow_list && !in_list {
                     environment.push((key, value));

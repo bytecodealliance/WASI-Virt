@@ -35,7 +35,7 @@ pub enum HostEnv {
 }
 
 impl WasiVirt {
-    fn get_or_create_env<'a>(&mut self) -> &mut VirtEnv {
+    fn get_or_create_env(&mut self) -> &mut VirtEnv {
         self.virt_opts.env.get_or_insert_with(Default::default)
     }
 
@@ -109,7 +109,7 @@ pub fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> 
     // strings must be sorted as binary searches are used against this data
     let mut field_data_vec: Vec<&str> = Vec::new();
     let mut sorted_overrides = env.overrides.clone();
-    sorted_overrides.sort();
+    sorted_overrides.sort_by_key(|(k, _)| k.to_string());
     for (key, value) in &sorted_overrides {
         field_data_vec.push(key.as_ref());
         field_data_vec.push(value.as_ref());
