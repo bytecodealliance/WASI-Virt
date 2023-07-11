@@ -75,7 +75,7 @@ impl Environment for VirtAdapter {
             }
 
             let is_allow_list = unsafe { env.host_fallback_allow };
-            for (key, value) in wasi::cli_base::environment::get_environment().drain(..) {
+            for (key, value) in wasi::cli_base::environment::get_environment() {
                 if environment[0..override_len]
                     .binary_search_by_key(&&key, |(s, _)| s)
                     .is_ok()
