@@ -3,9 +3,10 @@ use serde::Deserialize;
 use walrus::{
     ir::Value, ActiveData, ActiveDataLocation, DataKind, ExportItem, GlobalKind, InitExpr, Module,
 };
-
 use crate::{
-    walrus_ops::{bump_stack_global, get_active_data_segment, stub_imported_func},
+    walrus_ops::{
+        bump_stack_global, get_active_data_segment, stub_imported_func,
+    },
     WasiVirt,
 };
 

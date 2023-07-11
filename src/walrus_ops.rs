@@ -37,6 +37,24 @@ pub(crate) fn get_active_data_segment(
     Ok((module.data.get_mut(data_id), offset))
 }
 
+pub(crate) fn get_stack_global(module: &Module) -> Result<u32> {
+    let stack_global_id = module
+        .globals
+        .iter()
+        .find(|&global| global.name.as_deref() == Some("__stack_pointer"))
+        .context("Unable to find __stack_pointer global name")?
+        .id();
+    let stack_global = module.globals.get_mut(stack_global_id);
+    let GlobalKind::Local(InitExpr::Value(Value::I32(stack_value))) = &mut stack_global.kind else {
+        bail!("Stack global is not a constant I32");
+    };
+    let stack_global = module.globals.get_mut(stack_global_id);
+    let GlobalKind::Local(InitExpr::Value(Value::I32(stack_value))) = &mut stack_global.kind else {
+        bail!("Stack global is not a constant I32");
+    };
+    Ok(*stack_value as u32)
+}
+
 pub(crate) fn bump_stack_global(module: &mut Module, offset: i32) -> Result<u32> {
     let stack_global_id = module
         .globals

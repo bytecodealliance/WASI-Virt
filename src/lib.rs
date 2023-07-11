@@ -1,15 +1,20 @@
 use anyhow::Result;
-use env::{create_env_virt, VirtEnv};
+use virt_env::{create_env_virt, VirtEnv};
+use virt_fs::{create_fs_virt, VirtFs};
 use serde::Deserialize;
 use wit_component::ComponentEncoder;
 
-mod env;
+mod data;
+mod virt_env;
+mod virt_fs;
 mod walrus_ops;
 
 #[derive(Deserialize, Debug, Default, Clone)]
 pub struct VirtOpts {
     /// Environment virtualization
     env: Option<VirtEnv>,
+    /// Filesystem virtualization
+    fs: Option<VirtFs>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -33,9 +38,11 @@ pub fn create_virt<'a>(opts: &VirtOpts) -> Result<Vec<u8>> {
     let config = walrus::ModuleConfig::new();
     let mut module = config.parse(virt_adapter)?;
 
-    // env virtualization injection
     if let Some(env) = &opts.env {
         create_env_virt(&mut module, env)?;
+    }
+    if let Some(fs) = &opts.fs {
+        create_fs_virt(&mut module, fs)?;
     }
 
     let bytes = module.emit_wasm();
