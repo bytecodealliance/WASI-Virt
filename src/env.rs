@@ -109,7 +109,7 @@ pub fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> 
     // strings must be sorted as binary searches are used against this data
     let mut field_data_vec: Vec<&str> = Vec::new();
     let mut sorted_overrides = env.overrides.clone();
-    sorted_overrides.sort_by_key(|(k, _)| k.to_string());
+    sorted_overrides.sort_by(|(a, _), (b, _)| a.cmp(b));
     for (key, value) in &sorted_overrides {
         field_data_vec.push(key.as_ref());
         field_data_vec.push(value.as_ref());
