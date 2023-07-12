@@ -44,12 +44,8 @@ pub(crate) fn get_stack_global(module: &Module) -> Result<u32> {
         .find(|&global| global.name.as_deref() == Some("__stack_pointer"))
         .context("Unable to find __stack_pointer global name")?
         .id();
-    let stack_global = module.globals.get_mut(stack_global_id);
-    let GlobalKind::Local(InitExpr::Value(Value::I32(stack_value))) = &mut stack_global.kind else {
-        bail!("Stack global is not a constant I32");
-    };
-    let stack_global = module.globals.get_mut(stack_global_id);
-    let GlobalKind::Local(InitExpr::Value(Value::I32(stack_value))) = &mut stack_global.kind else {
+    let stack_global = module.globals.get(stack_global_id);
+    let GlobalKind::Local(InitExpr::Value(Value::I32(stack_value))) = &stack_global.kind else {
         bail!("Stack global is not a constant I32");
     };
     Ok(*stack_value as u32)

@@ -46,6 +46,7 @@ struct TestExpectation {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "kebab-case")]
 struct TestCase {
     component: String,
     host_env: Option<BTreeMap<String, String>>,

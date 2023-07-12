@@ -43,7 +43,8 @@ impl DataSection {
         let end = self.stack_ptr - 1;
         self.stack_ptr -= str.as_bytes().len() + 1;
         self.bytes[self.stack_ptr as usize..end].copy_from_slice(&(str.len() as u32).to_le_bytes());
-        self.strings.insert(str.to_string(), self.stack_ptr as *const u8);
+        self.strings
+            .insert(str.to_string(), self.stack_ptr as *const u8);
         self.stack_ptr as *const u8
     }
     pub fn finish(&self) -> &[u8] {

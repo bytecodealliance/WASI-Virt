@@ -1,7 +1,7 @@
 use anyhow::Result;
+use serde::Deserialize;
 use virt_env::{create_env_virt, VirtEnv};
 use virt_fs::{create_fs_virt, VirtFs};
-use serde::Deserialize;
 use wit_component::ComponentEncoder;
 
 mod data;
@@ -10,6 +10,7 @@ mod virt_fs;
 mod walrus_ops;
 
 #[derive(Deserialize, Debug, Default, Clone)]
+#[serde(rename_all = "kebab-case")]
 pub struct VirtOpts {
     /// Environment virtualization
     env: Option<VirtEnv>,

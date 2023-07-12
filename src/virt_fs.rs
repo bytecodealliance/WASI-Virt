@@ -20,49 +20,40 @@ impl WasiVirt {}
 #[derive(Deserialize, Debug, Default, Clone)]
 pub struct VirtFs {
     /// Filesystem state to virtualize
-    preopen_dirs: BTreeMap<String, DirEntry>,
+    preopens: BTreeMap<String, FsEntry>,
     /// A cutoff size in bytes, above which
     /// files will be treated as passive segments.
     /// Per-file control may also be provided.
-    passive_cutoff: u32,
+    passive_cutoff: Option<u32>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct FsEntry {
-    basename: String,
-    perms: u16,
-    kind: FsEntryKind,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub enum FsEntryKind {
-    File(FileEntry),
-    Dir(DirEntry),
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub enum FileEntry {
+#[serde(rename_all = "kebab-case")]
+pub enum FsEntry {
     /// symlink absolute or relative file path on the virtual filesystem
     Symlink(String),
-    /// host path to the host file to substitute
-    HostFile(String),
-    /// Inline bytes for the file
-    InlineFile(Vec<u8>),
+    /// host path at virtualization time
+    Host(String),
+    /// host path st runtime
+    Runtime(String),
+    /// Virtual file
+    File(VirtFile),
+    /// Virtual directory
+    Dir(VirtDir),
 }
 
-type VirtDir = BTreeMap<String, FsEntry>;
+#[derive(Deserialize, Debug, Clone)]
+pub struct VirtFile {
+    perms: Option<u16>,
+    bytes: Option<Vec<u8>>,
+    source: Option<String>,
+}
 
 #[derive(Deserialize, Debug, Clone)]
-pub enum DirEntry {
-    /// symlink absolute or relative file path on the virtual filesystem
-    Symlink(String),
-    /// host path to host directory to substitute
-    HostDir(String),
+pub struct VirtDir {
+    perms: Option<u16>,
     /// Inline directory definition
-    InlineDir(VirtDir),
-    /// Runtime directory path to the runtime preopen
-    /// This is the only configuration which provides "passthrough" of fs virt
-    RuntimeDir(String),
+    entries: BTreeMap<String, FsEntry>,
 }
 
 #[repr(C)]
@@ -94,40 +85,38 @@ union StaticFileData {
     dir: (*const StaticIndexEntry, u32),
 }
 
-fn visit_pre_mut<'a>(entry: &'a mut DirEntry, visit: fn(name: &str, entry: &mut FsEntry) -> ()) {
+fn visit_pre_mut<'a>(entry: &'a mut FsEntry, visit: fn(name: &str, entry: &mut FsEntry) -> ()) {
     match entry {
-        DirEntry::Symlink(_) => todo!(),
-        DirEntry::HostDir(_) => todo!(),
-        DirEntry::RuntimeDir(_) => todo!(),
-        DirEntry::InlineDir(dir) => {
-            for (name, sub_entry) in dir.iter_mut() {
+        FsEntry::Symlink(_) => todo!(),
+        FsEntry::Host(_) => todo!(),
+        FsEntry::Runtime(_) => todo!(),
+        FsEntry::File(_) => todo!(),
+        FsEntry::Dir(dir) => {
+            for (name, sub_entry) in dir.entries.iter_mut() {
                 visit(name, sub_entry);
             }
-            for sub_entry in dir.values_mut() {
-                if let FsEntryKind::Dir(dir) = &mut sub_entry.kind {
-                    visit_pre_mut(dir, visit);
-                }
+            for sub_entry in dir.entries.values_mut() {
+                visit_pre_mut(sub_entry, visit);
             }
         }
     }
 }
 
-fn visit_pre<'a, Visitor>(entry: &'a DirEntry, visit: &mut Visitor)
+fn visit_pre<'a, Visitor>(entry: &'a FsEntry, visit: &mut Visitor)
 where
-    Visitor: FnMut(&str, &FsEntry, &'a DirEntry) -> (),
+    Visitor: FnMut(&str, &FsEntry, &'a VirtDir) -> (),
 {
     match entry {
-        DirEntry::Symlink(_) => todo!(),
-        DirEntry::HostDir(_) => todo!(),
-        DirEntry::RuntimeDir(_) => todo!(),
-        DirEntry::InlineDir(dir) => {
-            for (name, sub_entry) in dir {
-                visit(name, sub_entry, entry);
+        FsEntry::Symlink(_) => todo!(),
+        FsEntry::Host(_) => todo!(),
+        FsEntry::Runtime(_) => todo!(),
+        FsEntry::File(_) => todo!(),
+        FsEntry::Dir(dir) => {
+            for (name, sub_entry) in &dir.entries {
+                visit(name, sub_entry, dir);
             }
-            for sub_entry in dir.values() {
-                if let FsEntryKind::Dir(dir) = &sub_entry.kind {
-                    visit_pre(dir, visit);
-                }
+            for sub_entry in dir.entries.values() {
+                visit_pre(sub_entry, visit);
             }
         }
     }
@@ -137,15 +126,19 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<()> {
     // First we iterate the options and fill in all HostDir and HostFile entries
     // With InlineDir and InlineFile entries
     let mut fs = fs.clone();
-    for entry in fs.preopen_dirs.values_mut() {
+    for entry in fs.preopens.values_mut() {
         match entry {
-            DirEntry::Symlink(_) => todo!(),
-            DirEntry::RuntimeDir(_) => todo!(),
-            DirEntry::HostDir(_) => todo!(),
-            DirEntry::InlineDir(_) => {
-                visit_pre_mut(entry, |name, entry| match &entry.kind {
-                    FsEntryKind::File(file) => {}
-                    FsEntryKind::Dir(dir) => {}
+            FsEntry::Symlink(_) => todo!(),
+            FsEntry::Runtime(_) => todo!(),
+            FsEntry::Host(_) => todo!(),
+            FsEntry::File(_) => todo!(),
+            FsEntry::Dir(_) => {
+                visit_pre_mut(entry, |name, entry| match entry {
+                    FsEntry::File(file) => {}
+                    FsEntry::Dir(dir) => {}
+                    FsEntry::Symlink(_) => todo!(),
+                    FsEntry::Host(_) => todo!(),
+                    FsEntry::Runtime(_) => todo!(),
                 });
             }
         }
@@ -162,35 +155,33 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<()> {
 
     let mut len = 0;
 
-    let mut last_parent: &DirEntry;
+    // let mut last_parent: &DirEntry;
     let mut cur_child_cnt = 0;
-    for (name, entry) in &fs.preopen_dirs {
+    for (name, entry) in &fs.preopens {
         visit_pre(entry, &mut |name, entry, parent| {
-            if std::ptr::eq(parent, last_parent) {
-                cur_child_cnt += 1;
+            // if std::ptr::eq(parent, last_parent) {
+            //     cur_child_cnt += 1;
 
-            } else {
-                last_parent = parent;
-            }
+            // } else {
+            //     last_parent = parent;
+            // }
             let name_str_ptr = data_section.string(name);
             let perms = 0x0;
-            let (ty, data) = match &entry.kind {
-                FsEntryKind::File(FileEntry::Symlink(_))
-                | FsEntryKind::Dir(DirEntry::Symlink(_)) => todo!(),
-                FsEntryKind::File(FileEntry::HostFile(_))
-                | FsEntryKind::Dir(DirEntry::HostDir(_)) => todo!(),
-                FsEntryKind::Dir(DirEntry::RuntimeDir(_)) => todo!(),
-                FsEntryKind::File(FileEntry::InlineFile(file)) => {
-                    let data_ptr = data_section.bytes(file.as_slice());
-                    (StaticIndexType::ActiveFile, StaticFileData {
-                        active: data_ptr
-                    })
-                },
-                FsEntryKind::Dir(DirEntry::InlineDir(dir)) => {
-                    (StaticIndexType::Dir, StaticFileData {
-                        dir: (std::ptr::null(), 0)
-                    })
-                },
+            let (ty, data) = match &entry {
+                FsEntry::Symlink(_) => todo!(),
+                FsEntry::Host(_) => todo!(),
+                FsEntry::Runtime(_) => todo!(),
+                FsEntry::Dir(_) => todo!(),
+                FsEntry::File(VirtFile {
+                    perms,
+                    bytes,
+                    source,
+                }) => (
+                    StaticIndexType::Dir,
+                    StaticFileData {
+                        dir: (std::ptr::null(), 0),
+                    },
+                ),
             };
             static_fs_data.push(StaticIndexEntry {
                 name: name_str_ptr,
@@ -199,7 +190,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<()> {
                 data,
             });
         });
-        assert!(stack.len() == 0);
+        // assert!(stack.len() == 0);
     }
 
     // We then write the strings section

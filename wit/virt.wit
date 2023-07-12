@@ -33,4 +33,5 @@ world virt-test {
   import wasi:cli-base/stderr
 
   export test-get-env: func() -> list<tuple<string, string>>
+  export test-file-read: func(path: string) -> option<string>
 }
