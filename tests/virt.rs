@@ -1,7 +1,8 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use heck::ToSnakeCase;
 use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::env;
 use std::process::Command;
 use std::{fs, path::PathBuf};
 use wasi_virt::{create_virt, VirtOpts};
@@ -41,15 +42,18 @@ fn cmd(arg: &str) -> Result<()> {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct TestExpectation {
     env: Option<Vec<(String, String)>>,
+    file_read: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct TestCase {
     component: String,
     host_env: Option<BTreeMap<String, String>>,
+    host_fs_path: Option<String>,
     virt_opts: Option<VirtOpts>,
     expect: TestExpectation,
 }
@@ -64,8 +68,13 @@ async fn virt_test() -> Result<()> {
         let test_case_file_name = test_case.file_name().to_string_lossy().to_string();
         let test_case_name = test_case_file_name.strip_suffix(".toml").unwrap();
 
+        if test_case_name != "fs-file-read" {
+            continue;
+        }
+
         // load the test case JSON data
-        let test: TestCase = toml::from_str(&fs::read_to_string(&test_case_path)?)?;
+        let test: TestCase = toml::from_str(&fs::read_to_string(&test_case_path)?)
+            .context(format!("Error reading test case {:?}", test_case_path))?;
 
         let component_name = &test.component;
 
@@ -94,7 +103,8 @@ async fn virt_test() -> Result<()> {
         let mut virt_component_path = generated_path.join(test_case_name);
         virt_component_path.set_extension("virt.wasm");
         let virt_opts = test.virt_opts.clone().unwrap_or_default();
-        let virt_component = create_virt(&virt_opts)?;
+        let virt_component = create_virt(&virt_opts)
+            .with_context(|| format!("Error creating virtual adapter for {:?}", test_case_path))?;
         fs::write(&virt_component_path, virt_component)?;
 
         // compose the test component with the defined test virtualization
@@ -169,9 +179,9 @@ async fn virt_test() -> Result<()> {
             VirtTest::instantiate_async(&mut store, &component, &linker).await?;
 
         // env var expectation check
-        if let Some(env) = &test.expect.env {
+        if let Some(expect_env) = &test.expect.env {
             let env_vars = instance.call_test_get_env(&mut store).await?;
-            if !env_vars.eq(env) {
+            if !env_vars.eq(expect_env) {
                 return Err(anyhow!(
                     "Unexpected env vars testing {:?}:
 
@@ -180,12 +190,34 @@ async fn virt_test() -> Result<()> {
 
     {:?}",
                     test_case_path,
-                    env,
+                    expect_env,
                     env_vars,
                     test
                 ));
             }
         }
+
+        // fs read expectation check
+        if let Some(expect_file_read) = &test.expect.file_read {
+            let file_read = instance
+                .call_test_file_read(&mut store, test.host_fs_path.as_ref().unwrap())
+                .await?;
+            if !file_read.eq(expect_file_read) {
+                return Err(anyhow!(
+                    "Unexpected file read result testing {:?}:
+
+    \x1b[1mExpected:\x1b[0m {:?}
+    \x1b[1mActual:\x1b[0m {:?}
+
+    {:?}",
+                    test_case_path,
+                    expect_file_read,
+                    file_read,
+                    test
+                ));
+            }
+        }
+
         println!("\x1b[1;32m√\x1b[0m {:?}", test_case_path);
     }
     Ok(())

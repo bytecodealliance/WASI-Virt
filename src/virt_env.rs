@@ -1,5 +1,7 @@
 use crate::{
-    walrus_ops::{bump_stack_global, get_active_data_segment, stub_imported_func},
+    walrus_ops::{
+        bump_stack_global, get_active_data_segment, remove_exported_func, stub_imported_func,
+    },
     WasiVirt,
 };
 use anyhow::{bail, Context, Result};
@@ -9,6 +11,7 @@ use walrus::{
 };
 
 #[derive(Deserialize, Debug, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct VirtEnv {
     /// Set specific environment variable overrides
     overrides: Vec<(String, String)>,
@@ -18,7 +21,7 @@ pub struct VirtEnv {
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum HostEnv {
     /// Apart from the overrides, pass through all environment
     /// variables from the host
@@ -213,5 +216,13 @@ pub fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> 
         bytes[data_offset + 12..data_offset + 16].copy_from_slice(&field_data_addr.to_le_bytes());
     }
 
+    Ok(())
+}
+
+pub(crate) fn strip_env_virt(module: &mut Module) -> Result<()> {
+    stub_imported_func(module, "wasi:cli-base/environment", "get-arguments")?;
+    stub_imported_func(module, "wasi:cli-base/environment", "get-environment")?;
+    remove_exported_func(module, "wasi:cli-base/environment#get-arguments")?;
+    remove_exported_func(module, "wasi:cli-base/environment#get-environment")?;
     Ok(())
 }

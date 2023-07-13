@@ -1,30 +1,42 @@
 use anyhow::{bail, Context, Result};
 use walrus::{
-    ir::Value, ActiveData, ActiveDataLocation, Data, DataKind, Function, FunctionBuilder,
-    FunctionKind, GlobalKind, ImportKind, ImportedFunction, InitExpr, MemoryId, Module,
+    ir::Value, ActiveData, ActiveDataLocation, Data, DataKind, ExportItem, Function,
+    FunctionBuilder, FunctionKind, GlobalKind, ImportKind, ImportedFunction, InitExpr, MemoryId,
+    Module,
 };
+
+pub(crate) fn get_active_data_start(data: &Data, mem: MemoryId) -> Result<u32> {
+    let DataKind::Active(active_data) = &data.kind else {
+        bail!("Adapter data section is not active");
+    };
+    if active_data.memory != mem {
+        bail!("Adapter data memory is not the expected memory id");
+    }
+    let ActiveDataLocation::Absolute(loc) = &active_data.location else {
+        bail!("Adapter data memory is not absolutely offset");
+    };
+    Ok(*loc)
+}
 
 pub(crate) fn get_active_data_segment(
     module: &mut Module,
     mem: MemoryId,
     addr: u32,
 ) -> Result<(&mut Data, usize)> {
-    let data = module
-        .data
-        .iter()
-        .find(|&data| {
-            let DataKind::Active(active_data) = &data.kind else {
-                return false;
+    let mut found_data: Option<&Data> = None;
+    for data in module.data.iter() {
+        let data_addr = get_active_data_start(data, mem)?;
+        if data_addr <= addr {
+            let best_match = match found_data {
+                Some(found_data) => data_addr > get_active_data_start(found_data, mem)?,
+                None => true,
             };
-            if active_data.memory != mem {
-                return false;
-            };
-            let ActiveDataLocation::Absolute(loc) = &active_data.location else {
-                return false;
-            };
-            *loc <= addr && *loc + data.value.len() as u32 > addr
-        })
-        .context("Unable to find data section for env ptr")?;
+            if best_match {
+                found_data = Some(data);
+            }
+        }
+    }
+    let data = found_data.context("Unable to find data section for ptr")?;
     let DataKind::Active(ActiveData {
         location: ActiveDataLocation::Absolute(loc),
         ..
@@ -82,7 +94,7 @@ pub(crate) fn stub_imported_func(
         .imports
         .iter()
         .find(|impt| impt.module == import_module && impt.name == import_name)
-        .unwrap();
+        .with_context(|| format!("Unable to find import {import_module}#{import_name}"))?;
 
     let ImportKind::Function(fid) = imported_fn.kind else {
         bail!("Unable to stub import {import_module}#{import_name}, as it is not an imported function");
@@ -108,6 +120,18 @@ pub(crate) fn stub_imported_func(
 
     // remove the import
     module.imports.delete(imported_fn.id());
+
+    Ok(())
+}
+
+pub(crate) fn remove_exported_func(module: &mut Module, export_name: &str) -> Result<()> {
+    let exported_fn = module
+        .exports
+        .iter()
+        .find(|expt| expt.name == export_name)
+        .with_context(|| format!("Unable to find export {export_name}"))?;
+
+    module.exports.delete(exported_fn.id());
 
     Ok(())
 }

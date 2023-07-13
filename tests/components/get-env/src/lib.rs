@@ -13,7 +13,7 @@ impl VirtTest for VirtTestImpl {
     fn test_get_env() -> Vec<(String, String)> {
         env::vars().collect()
     }
-    fn test_file_read(_path: String) -> Option<String> {
-        None
+    fn test_file_read(_path: String) -> String {
+        unimplemented!();
     }
 }

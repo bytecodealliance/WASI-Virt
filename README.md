@@ -17,7 +17,10 @@ The virtualized component can be composed into a WASI Preview2 component with `w
 Subsystem support:
 
 - [x] Environment virtualization
-- [ ] Filesystem virtualization
+- [x] Filesystem virtualization
+- [ ] Stdio
+- [ ] Sockets
+- [ ] Clocks
 
 ### Example
 
@@ -31,6 +34,8 @@ fn main() {
         .env_host_allow(&["PUBLIC_ENV_VAR"])
         // provide custom env overrides
         .env_overrides(&[("SOME", "ENV"), ("VAR", "OVERRIDES")])
+        // virtualize a file
+        .fs_virt_file("/test.txt", "hello world")
         .create()
         .unwrap();
     fs::write("virt.component.wasm", virt_component_bytes).unwrap();
