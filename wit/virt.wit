@@ -3,17 +3,9 @@ package local:virt
 // in future this should be defined as a union world of the various
 // virtual subsystems, when union syntax lands
 world virtual-adapter {
-  import wasi:cli-base/environment
-  import wasi:cli-base/preopens
-  import wasi:filesystem/filesystem
-  import wasi:io/streams
-  import console: interface {
-    log: func(msg: string) -> ()
-  }
-  export wasi:cli-base/environment
-  export wasi:cli-base/preopens
-  export wasi:filesystem/filesystem
-  export wasi:io/streams
+  include virtual-base
+  include virtual-env
+  include virtual-fs
 }
 
 world virtual-base {
