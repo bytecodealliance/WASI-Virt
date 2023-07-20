@@ -10,12 +10,13 @@ use crate::exports::wasi::io::streams::{StreamError, Streams};
 
 // for debugging
 // use crate::console;
+// use std::fmt;
 
 use crate::VirtAdapter;
+use std::cmp;
 use std::collections::BTreeMap;
 use std::ffi::CStr;
 use std::slice;
-use std::{cmp, fmt};
 
 // static fs config
 #[repr(C)]
@@ -40,7 +41,7 @@ impl Fs {
     }
 }
 
-#[cfg_attr(debug_assertions, derive(Debug))]
+// #[derive(Debug)]
 struct Descriptor {
     entry: *const StaticIndexEntry,
 }
@@ -52,6 +53,12 @@ impl Descriptor {
 }
 
 impl StaticIndexEntry {
+    #[allow(dead_code)]
+    fn idx(&self) -> usize {
+        let static_index_start = unsafe { fs.static_index };
+        let cur_index_start = self as *const StaticIndexEntry;
+        unsafe { cur_index_start.sub_ptr(static_index_start) }
+    }
     fn name(&self) -> &'static str {
         let c_str = unsafe { CStr::from_ptr((*self).name) };
         c_str.to_str().unwrap()
@@ -68,7 +75,7 @@ impl StaticIndexEntry {
     fn size(&self) -> usize {
         match self.ty {
             StaticIndexType::ActiveFile => unsafe { self.data.active.1 },
-            StaticIndexType::PassiveFile => todo!(),
+            StaticIndexType::PassiveFile => unsafe { self.data.passive.1 },
             StaticIndexType::Dir => 0,
             StaticIndexType::RuntimeHostDir => 0,
             StaticIndexType::RuntimeHostFile => todo!(),
@@ -79,7 +86,12 @@ impl StaticIndexEntry {
             StaticIndexType::ActiveFile => unsafe {
                 slice::from_raw_parts(self.data.active.0, self.data.active.1)
             },
-            StaticIndexType::PassiveFile => todo!(),
+            StaticIndexType::PassiveFile => {
+                let passive_idx = unsafe { self.data.passive.0 };
+                let passive_len = unsafe { self.data.passive.1 };
+                let data = passive_alloc(passive_idx, 0, passive_len as u32);
+                unsafe { slice::from_raw_parts(data, passive_len) }
+            }
             StaticIndexType::Dir => todo!(),
             StaticIndexType::RuntimeHostDir => todo!(),
             StaticIndexType::RuntimeHostFile => todo!(),
@@ -113,7 +125,7 @@ impl StaticIndexEntry {
     }
 }
 
-#[cfg_attr(debug_assertions, derive(Debug))]
+// #[derive(Debug)]
 #[repr(C)]
 struct StaticIndexEntry {
     name: *const i8,
@@ -125,27 +137,27 @@ struct StaticIndexEntry {
 union StaticFileData {
     /// Active memory data pointer for ActiveFile
     active: (*const u8, usize),
-    /// Passive memory element index for PassiveFile
-    passive: u32,
+    /// Passive memory element index and len for PassiveFile
+    passive: (u32, usize),
     /// Host path string for HostDir / HostFile
     path: *const u8,
     // Index and child entry count for Dir
     dir: (usize, usize),
 }
 
-#[cfg(debug_assertions)]
-impl fmt::Debug for StaticFileData {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format!(
-            "STATIC [{:?}, {:?}]",
-            unsafe { self.dir.0 },
-            unsafe { self.dir.1 }
-        ))?;
-        Ok(())
-    }
-}
+// impl fmt::Debug for StaticFileData {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         f.write_str(&format!(
+//             "STATIC [{:?}, {:?}]",
+//             unsafe { self.dir.0 },
+//             unsafe { self.dir.1 }
+//         ))?;
+//         Ok(())
+//     }
+// }
 
-#[cfg_attr(debug_assertions, derive(Debug), allow(dead_code))]
+// #[derive(Debug)]
+#[allow(dead_code)]
 #[repr(u32)]
 enum StaticIndexType {
     ActiveFile,
@@ -157,8 +169,9 @@ enum StaticIndexType {
 
 // This function gets mutated by the virtualizer
 #[no_mangle]
-pub fn passive_alloc(_passive_idx: u32) -> *const u8 {
-    return _passive_idx as *const u8;
+#[inline(never)]
+pub fn passive_alloc(passive_idx: u32, offset: u32, len: u32) -> *const u8 {
+    return (passive_idx + offset + len) as *const u8;
 }
 
 #[no_mangle]

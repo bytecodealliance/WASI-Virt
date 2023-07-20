@@ -98,8 +98,8 @@ union StaticFileData {
     /// Active memory data pointer for ActiveFile
     active: (u32, u32),
 
-    /// Passive memory element index for PassiveFile
-    passive: u32,
+    /// Passive memory element index and len for PassiveFile
+    passive: (u32, u32),
 
     // TODO: Host passthrough mounts
     // /// Host path string for HostDir / HostFile
@@ -274,7 +274,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
                             (
                                 StaticIndexType::PassiveFile,
                                 StaticFileData {
-                                    passive: passive_idx,
+                                    passive: (passive_idx, bytes.len() as u32),
                                 },
                             )
                         } else {
@@ -297,8 +297,6 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
             Ok(())
         })?;
     }
-
-    dbg!(&static_fs_data);
 
     // now write the linearized static index entry section into the data
     let static_index_addr = data_section.write_slice(static_fs_data.as_slice())?;

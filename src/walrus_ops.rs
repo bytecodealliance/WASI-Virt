@@ -97,14 +97,14 @@ pub(crate) fn bump_stack_global(module: &mut Module, offset: i32) -> Result<u32>
     Ok(new_stack_value as u32)
 }
 
-pub(crate) fn get_realloc_func(module: &mut Module) -> Result<FunctionId> {
+pub(crate) fn get_exported_func(module: &mut Module, name: &str) -> Result<FunctionId> {
     let exported_fn = module
         .exports
         .iter()
-        .find(|expt| expt.name == "cabi_realloc")
-        .with_context(|| format!("Unable to find export 'cabi_realloc'"))?;
+        .find(|expt| expt.name == name)
+        .with_context(|| format!("Unable to find export '{name}'"))?;
     let ExportItem::Function(fid) = exported_fn.item else {
-        bail!("cabi_realloc not a function");
+        bail!("{name} not a function");
     };
     Ok(fid)
 }

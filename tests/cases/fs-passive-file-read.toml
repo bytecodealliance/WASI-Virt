@@ -1,12 +1,12 @@
 component = "file-read"
 
-host-fs-path = "/cases/env-none.toml"
+host-fs-path = "/env-none.toml"
 
 [virt-opts.fs]
 passive-cutoff = 10
 
 [virt-opts.fs.preopens."/"]
-host = "./tests"
+host = "./tests/cases"
 
 [expect]
 file-read = '''component = "get-env"

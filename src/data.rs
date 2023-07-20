@@ -1,8 +1,11 @@
-use crate::walrus_ops::{bump_stack_global, get_memory_id, get_realloc_func};
+use crate::walrus_ops::{
+    bump_stack_global, get_exported_func, get_memory_id, remove_exported_func,
+};
 use anyhow::{bail, Result};
 use std::collections::HashMap;
 use walrus::{
-    ir::BinaryOp, ActiveData, ActiveDataLocation, DataKind, FunctionBuilder, Module, ValType,
+    ActiveData, ActiveDataLocation, DataKind, ElementKind, FunctionBuilder, FunctionId,
+    FunctionKind, InitExpr, Module, ValType,
 };
 
 /// Data section
@@ -128,46 +131,88 @@ impl Data {
 
         // passive segment embedding
         // we create one function for each passive segment, due to
-        let alloc_fid = get_realloc_func(module)?;
+        if self.passive_segments.len() > 0 {
+            let alloc_fid = get_exported_func(module, "cabi_realloc")?;
 
-        let offset_local = module.locals.add(ValType::I32);
-        let len_local = module.locals.add(ValType::I32);
-        for passive_segment in self.passive_segments {
-            let passive_id = module.data.add(DataKind::Passive, passive_segment);
+            let offset_local = module.locals.add(ValType::I32);
+            let len_local = module.locals.add(ValType::I32);
+            let ptr_local = module.locals.add(ValType::I32);
 
-            // construct the passive segment allocation function
+            let mut passive_fids: Vec<Option<FunctionId>> = Vec::new();
+            for passive_segment in self.passive_segments {
+                let passive_id = module.data.add(DataKind::Passive, passive_segment);
+
+                // construct the passive segment allocation function
+                let mut builder = FunctionBuilder::new(
+                    &mut module.types,
+                    &[ValType::I32, ValType::I32],
+                    &[ValType::I32],
+                );
+                builder
+                    .func_body()
+                    // cabi_realloc args
+                    .i32_const(0)
+                    .i32_const(0)
+                    .i32_const(4)
+                    // Last realloc arg is byte length to allocate
+                    .local_get(len_local)
+                    // mem init arg 0 - destination address
+                    .call(alloc_fid)
+                    .local_tee(ptr_local)
+                    // mem init arg 1 - source segment offset
+                    .local_get(offset_local)
+                    // mem init arg 2 - size of initialization
+                    .local_get(len_local)
+                    .memory_init(memory, passive_id)
+                    // return the allocated pointer
+                    .local_get(ptr_local);
+
+                passive_fids.push(Some(
+                    module
+                        .funcs
+                        .add_local(builder.local_func(vec![offset_local, len_local])),
+                ));
+            }
+
+            let passive_tid = module.tables.add_local(
+                passive_fids.len() as u32,
+                Some(passive_fids.len() as u32),
+                ValType::Funcref,
+            );
+            module.elements.add(
+                ElementKind::Active {
+                    table: passive_tid,
+                    offset: InitExpr::Value(walrus::ir::Value::I32(0)),
+                },
+                ValType::Funcref,
+                passive_fids,
+            );
+
+            // main passive call function
+            let passive_fn_alloc_type = module
+                .types
+                .add(&[ValType::I32, ValType::I32], &[ValType::I32]);
+            let passive_idx = module.locals.add(ValType::I32);
             let mut builder = FunctionBuilder::new(
                 &mut module.types,
-                &[ValType::I32, ValType::I32],
+                &[ValType::I32, ValType::I32, ValType::I32],
                 &[ValType::I32],
             );
             builder
                 .func_body()
-                // cabi_realloc args
-                .i32_const(0)
-                .i32_const(0)
-                .i32_const(4)
-                // Last realloc arg is byte length to allocate
-                .local_get(len_local)
-                // mem init arg 0 - destination address
-                .call(alloc_fid)
-                // mem init arg 1 - source segment offset
                 .local_get(offset_local)
-                // mem init arg 2 - size of initialization
                 .local_get(len_local)
-                .memory_init(memory, passive_id);
-            let local_func = builder.local_func(vec![offset_local, len_local]);
+                .local_get(passive_idx)
+                .call_indirect(passive_fn_alloc_type, passive_tid);
 
-            // substitute the local func into the imported func id
-            // let func = module.funcs.get_mut(fid);
-            // func.kind = FunctionKind::Local(local_func);
-
-            // Ok(())
+            // update the existing passive_alloc function export with the new function body
+            let passive_alloc_fid = get_exported_func(module, "passive_alloc")?;
+            let passive_alloc_func = module.funcs.get_mut(passive_alloc_fid);
+            passive_alloc_func.kind =
+                FunctionKind::Local(builder.local_func(vec![passive_idx, offset_local, len_local]));
         }
 
-        // we then put all the passive functions into their own tables
-
-        // finally we fill in the main orchestration function body using call_indirect
+        remove_exported_func(module, "passive_alloc")?;
 
         Ok(())
     }
