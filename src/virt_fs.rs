@@ -36,7 +36,9 @@ pub enum FsEntry {
     /// host path st runtime
     Runtime(String),
     /// Virtual file
-    File(VirtFile),
+    File(Vec<u8>),
+    /// String convenience
+    Source(String),
     /// Virtual directory
     Dir(VirtDir),
 }
@@ -189,11 +191,9 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
     for entry in fs.preopens.values_mut() {
         entry.visit_pre_mut(|entry| {
             match entry {
-                FsEntry::File(file) => {
-                    if let Some(source) = &file.source {
-                        file.bytes = Some(source.as_bytes().to_vec())
-                    }
-                }
+                FsEntry::Source(source) => {
+                    *entry = FsEntry::File(source.as_bytes().to_vec())
+                },
                 FsEntry::Host(host_path) => {
                     // read a directory or file path from the host
                     let metadata = fs::metadata(&host_path)?;
@@ -214,13 +214,10 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
                             bail!("Only files and directories are currently supported for host paths to virtualize");
                         }
                         let bytes = fs::read(&host_path)?;
-                        *entry = FsEntry::File(VirtFile {
-                            bytes: Some(bytes),
-                            source: None,
-                        });
+                        *entry = FsEntry::File(bytes)
                     }
                 }
-                FsEntry::Runtime(_) | FsEntry::Symlink(_) | FsEntry::Dir(_) => {}
+                FsEntry::File(_) | FsEntry::Runtime(_) | FsEntry::Symlink(_) | FsEntry::Dir(_) => {}
             }
             Ok(())
         })?;
@@ -240,9 +237,10 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
         entry.visit_pre(name, &mut |entry, name, _path, remaining_siblings| {
             let name_str_ptr = data_section.string(name)?;
             let (ty, data) = match &entry {
+                // removed during previous step
+                FsEntry::Host(_) | FsEntry::Source(_) => unreachable!(),
                 FsEntry::Symlink(_) => todo!("symlink support"),
                 FsEntry::Runtime(_) => todo!("runtime passthrough mounts"),
-                FsEntry::Host(_) => unreachable!(),
                 FsEntry::Dir(dir) => {
                     let child_cnt = dir.len() as u32;
                     // children will be visited next in preorder and contiguously
@@ -257,35 +255,24 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
                         },
                     )
                 }
-                FsEntry::File(VirtFile { bytes, source }) => {
-                    if let Some(source) = source {
-                        let ptr = data_section.string(source)?;
+                FsEntry::File(bytes) => {
+                    let byte_len = bytes.len();
+                    if byte_len > fs.passive_cutoff.unwrap_or(1024) as usize {
+                        let passive_idx = data_section.passive_bytes(bytes);
                         (
-                            StaticIndexType::ActiveFile,
+                            StaticIndexType::PassiveFile,
                             StaticFileData {
-                                active: (ptr, source.as_bytes().len() as u32),
+                                passive: (passive_idx, bytes.len() as u32),
                             },
                         )
                     } else {
-                        let bytes = bytes.as_ref().context("Must provide either a UTF8 string source or bytes for inline virtual files")?;
-                        let byte_len = bytes.len();
-                        if byte_len > fs.passive_cutoff.unwrap_or(1024) as usize {
-                            let passive_idx = data_section.passive_bytes(bytes);
-                            (
-                                StaticIndexType::PassiveFile,
-                                StaticFileData {
-                                    passive: (passive_idx, bytes.len() as u32),
-                                },
-                            )
-                        } else {
-                            let ptr = data_section.stack_bytes(bytes)?;
-                            (
-                                StaticIndexType::ActiveFile,
-                                StaticFileData {
-                                    active: (ptr, bytes.len() as u32),
-                                },
-                            )
-                        }
+                        let ptr = data_section.stack_bytes(bytes)?;
+                        (
+                            StaticIndexType::ActiveFile,
+                            StaticFileData {
+                                active: (ptr, bytes.len() as u32),
+                            },
+                        )
                     }
                 }
             };

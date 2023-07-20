@@ -53,12 +53,11 @@ impl Descriptor {
 }
 
 impl StaticIndexEntry {
-    #[allow(dead_code)]
-    fn idx(&self) -> usize {
-        let static_index_start = unsafe { fs.static_index };
-        let cur_index_start = self as *const StaticIndexEntry;
-        unsafe { cur_index_start.sub_ptr(static_index_start) }
-    }
+    // fn idx(&self) -> usize {
+    //     let static_index_start = unsafe { fs.static_index };
+    //     let cur_index_start = self as *const StaticIndexEntry;
+    //     unsafe { cur_index_start.sub_ptr(static_index_start) }
+    // }
     fn name(&self) -> &'static str {
         let c_str = unsafe { CStr::from_ptr((*self).name) };
         c_str.to_str().unwrap()
