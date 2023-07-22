@@ -3,7 +3,7 @@ component = "file-read"
 host-fs-path = "/clocks/monotonic-clock.wit"
 
 [virt-opts.fs.preopens."/"]
-host = "./wit/deps"
+virtualize = "./wit/deps"
 
 [expect]
 file-read = '''package wasi:clocks

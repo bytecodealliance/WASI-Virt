@@ -1,8 +1,13 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
+use std::env;
+use std::fs;
+use std::time::SystemTime;
 use virt_env::{create_env_virt, strip_env_virt, VirtEnv};
 use virt_fs::{create_fs_virt, strip_fs_virt, VirtFs};
 use wasm_metadata::Producers;
+use wasm_opt::Feature;
+use wasm_opt::OptimizationOptions;
 use wit_component::metadata;
 use wit_component::ComponentEncoder;
 use wit_component::StringEncoding;
@@ -19,6 +24,8 @@ pub struct VirtOpts {
     pub env: Option<VirtEnv>,
     /// Filesystem virtualization
     pub fs: Option<VirtFs>,
+    /// Disable wasm-opt run if desired
+    pub wasm_opt: Option<bool>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -101,7 +108,29 @@ pub fn create_virt<'a>(opts: &VirtOpts) -> Result<VirtResult> {
 
     module.customs.add(component_section);
 
-    let bytes = module.emit_wasm();
+    let mut bytes = module.emit_wasm();
+
+    // because we rely on dead code ellimination to remove unnecessary adapter code
+    // we save into a temporary file and run wasm-opt before returning
+    // this can be disabled with wasm_opt: false
+    if opts.wasm_opt.unwrap_or(true) {
+        let dir = env::temp_dir();
+        let tmp_input = dir.join(format!("virt.core.input.{}.wasm", timestamp()));
+        let tmp_output = dir.join(format!("virt.core.output.{}.wasm", timestamp()));
+        fs::write(&tmp_input, bytes)
+            .with_context(|| "Unable to write temporary file for wasm-opt call on adapter")?;
+        OptimizationOptions::new_optimize_for_size_aggressively()
+            .enable_feature(Feature::ReferenceTypes)
+            .run(&tmp_input, &tmp_output)
+            .with_context(|| "Unable to apply wasm-opt optimization to virt. This can be disabled with wasm_opt: false.")
+            .or_else(|e| {
+                fs::remove_file(&tmp_input)?;
+                Err(e)
+            })?;
+        bytes = fs::read(&tmp_output)?;
+        fs::remove_file(&tmp_input)?;
+        fs::remove_file(&tmp_output)?;
+    }
 
     // now adapt the virtualized component
     let encoder = ComponentEncoder::default().validate(true).module(&bytes)?;
@@ -111,4 +140,11 @@ pub fn create_virt<'a>(opts: &VirtOpts) -> Result<VirtResult> {
         adapter: encoded,
         fs,
     })
+}
+
+fn timestamp() -> u64 {
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => n.as_secs(),
+        Err(_) => panic!(),
+    }
 }

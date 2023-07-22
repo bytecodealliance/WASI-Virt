@@ -32,6 +32,7 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.7"
 walrus = "0.20.1"
 wasm-metadata = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wasm-opt = "0.113.0"
 wit-component = { git = "https://github.com/bytecodealliance/wasm-tools" }
 
 [build-dependencies]

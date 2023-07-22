@@ -6,7 +6,7 @@ host-fs-path = "/env-none.toml"
 passive-cutoff = 10
 
 [virt-opts.fs.preopens."/"]
-host = "./tests/cases"
+virtualize = "./tests/cases"
 
 [expect]
 file-read = '''component = "get-env"

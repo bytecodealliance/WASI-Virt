@@ -4,15 +4,16 @@ use crate::exports::wasi::filesystem::filesystem::{
     ErrorCode, Filesystem, Modes, NewTimestamp, OpenFlags, PathFlags,
 };
 use crate::exports::wasi::io::streams::{StreamError, Streams};
-// use crate::wasi::cli_base::preopens;
-// use crate::wasi::filesystem::filesystem;
+use crate::wasi::cli_base::preopens;
+use crate::wasi::filesystem::filesystem;
 // use crate::wasi::io::streams;
 
 // for debugging
-// use crate::console;
+use crate::console;
 // use std::fmt;
 
 use crate::VirtAdapter;
+use std::alloc::Layout;
 use std::cmp;
 use std::collections::BTreeMap;
 use std::ffi::CStr;
@@ -25,6 +26,7 @@ pub struct Fs {
     preopens: *const usize,
     static_index_cnt: usize,
     static_index: *const StaticIndexEntry,
+    host_passthrough: bool,
 }
 
 impl Fs {
@@ -43,12 +45,137 @@ impl Fs {
 
 // #[derive(Debug)]
 struct Descriptor {
+    // the static entry referenced by this descriptor
     entry: *const StaticIndexEntry,
+    // the descriptor index of this descriptor
+    fd: u32,
+    // if a host entry, the underlying host descriptor
+    // (if any)
+    host_fd: Option<u32>,
 }
 
 impl Descriptor {
     fn entry(&self) -> &StaticIndexEntry {
         unsafe { self.entry.as_ref() }.unwrap()
+    }
+
+    fn drop(&self) {
+        unsafe {
+            STATE.descriptor_table.remove(&self.fd);
+        }
+        if let Some(host_fd) = self.host_fd {
+            filesystem::drop_descriptor(host_fd);
+        }
+    }
+
+    fn get_bytes<'a>(&mut self, offset: u64, len: u64) -> Result<(Vec<u8>, bool), ErrorCode> {
+        let entry = self.entry();
+        match entry.ty {
+            StaticIndexType::ActiveFile => {
+                if offset as usize == unsafe { entry.data.active.1 } {
+                    return Ok((vec![], true));
+                }
+                if offset as usize > unsafe { entry.data.active.1 } {
+                    return Err(ErrorCode::InvalidSeek);
+                }
+                let read_ptr = unsafe { entry.data.active.0.add(offset as usize) };
+                let read_len = cmp::min(
+                    unsafe { entry.data.active.1 } - offset as usize,
+                    len as usize,
+                );
+                let bytes = unsafe { slice::from_raw_parts(read_ptr, read_len) };
+                Ok((bytes.to_vec(), read_len < len as usize))
+            }
+            StaticIndexType::PassiveFile => {
+                if offset as usize == unsafe { entry.data.passive.1 } {
+                    return Ok((vec![], true));
+                }
+                if offset as usize > unsafe { entry.data.passive.1 } {
+                    return Err(ErrorCode::InvalidSeek);
+                }
+                let read_len = cmp::min(
+                    unsafe { entry.data.passive.1 } - offset as usize,
+                    len as usize,
+                );
+                let data = passive_alloc(
+                    unsafe { entry.data.passive.0 },
+                    offset as u32,
+                    read_len as u32,
+                );
+                let bytes = unsafe { slice::from_raw_parts(data, read_len) };
+                let vec = bytes.to_vec();
+                unsafe { std::alloc::dealloc(data, Layout::from_size_align(1, 4).unwrap()) };
+                Ok((vec, read_len < len as usize))
+            }
+            StaticIndexType::Dir => todo!(),
+            StaticIndexType::RuntimeDir => todo!(),
+            StaticIndexType::RuntimeFile => {
+                if let Some(host_fd) = self.host_fd {
+                    return filesystem::read(host_fd, len, offset).map_err(err_map);
+                }
+
+                let path = unsafe { CStr::from_ptr(entry.data.runtime_path) };
+                let path = path.to_str().unwrap();
+
+                let Some((preopen_fd, subpath)) = FsState::get_host_preopen(path) else {
+                    return Err(ErrorCode::NoEntry);
+                };
+                let host_fd = filesystem::open_at(
+                    preopen_fd,
+                    filesystem::PathFlags::empty(),
+                    subpath,
+                    filesystem::OpenFlags::empty(),
+                    filesystem::DescriptorFlags::READ,
+                    filesystem::Modes::READABLE,
+                )
+                .map_err(err_map)?;
+
+                self.host_fd = Some(host_fd);
+                filesystem::read(host_fd, len, offset).map_err(err_map)
+            }
+        }
+    }
+}
+
+fn err_map(e: filesystem::ErrorCode) -> ErrorCode {
+    match e {
+        filesystem::ErrorCode::Access => ErrorCode::Access,
+        filesystem::ErrorCode::WouldBlock => ErrorCode::WouldBlock,
+        filesystem::ErrorCode::Already => ErrorCode::Already,
+        filesystem::ErrorCode::BadDescriptor => ErrorCode::BadDescriptor,
+        filesystem::ErrorCode::Busy => ErrorCode::Busy,
+        filesystem::ErrorCode::Deadlock => ErrorCode::Deadlock,
+        filesystem::ErrorCode::Quota => ErrorCode::Quota,
+        filesystem::ErrorCode::Exist => ErrorCode::Exist,
+        filesystem::ErrorCode::FileTooLarge => ErrorCode::FileTooLarge,
+        filesystem::ErrorCode::IllegalByteSequence => ErrorCode::IllegalByteSequence,
+        filesystem::ErrorCode::InProgress => ErrorCode::InProgress,
+        filesystem::ErrorCode::Interrupted => ErrorCode::Interrupted,
+        filesystem::ErrorCode::Invalid => ErrorCode::Invalid,
+        filesystem::ErrorCode::Io => ErrorCode::Io,
+        filesystem::ErrorCode::IsDirectory => ErrorCode::IsDirectory,
+        filesystem::ErrorCode::Loop => ErrorCode::Loop,
+        filesystem::ErrorCode::TooManyLinks => ErrorCode::TooManyLinks,
+        filesystem::ErrorCode::MessageSize => ErrorCode::MessageSize,
+        filesystem::ErrorCode::NameTooLong => ErrorCode::NameTooLong,
+        filesystem::ErrorCode::NoDevice => ErrorCode::NoDevice,
+        filesystem::ErrorCode::NoEntry => ErrorCode::NoEntry,
+        filesystem::ErrorCode::NoLock => ErrorCode::NoLock,
+        filesystem::ErrorCode::InsufficientMemory => ErrorCode::InsufficientMemory,
+        filesystem::ErrorCode::InsufficientSpace => ErrorCode::InsufficientSpace,
+        filesystem::ErrorCode::NotDirectory => ErrorCode::NotDirectory,
+        filesystem::ErrorCode::NotEmpty => ErrorCode::NotEmpty,
+        filesystem::ErrorCode::NotRecoverable => ErrorCode::NotRecoverable,
+        filesystem::ErrorCode::Unsupported => ErrorCode::Unsupported,
+        filesystem::ErrorCode::NoTty => ErrorCode::NoTty,
+        filesystem::ErrorCode::NoSuchDevice => ErrorCode::NoSuchDevice,
+        filesystem::ErrorCode::Overflow => ErrorCode::Overflow,
+        filesystem::ErrorCode::NotPermitted => ErrorCode::NotPermitted,
+        filesystem::ErrorCode::Pipe => ErrorCode::Pipe,
+        filesystem::ErrorCode::ReadOnly => ErrorCode::ReadOnly,
+        filesystem::ErrorCode::InvalidSeek => ErrorCode::InvalidSeek,
+        filesystem::ErrorCode::TextFileBusy => ErrorCode::TextFileBusy,
+        filesystem::ErrorCode::CrossDevice => ErrorCode::CrossDevice,
     }
 }
 
@@ -64,36 +191,27 @@ impl StaticIndexEntry {
     }
     fn ty(&self) -> DescriptorType {
         match self.ty {
-            StaticIndexType::RuntimeHostFile => todo!(),
-            StaticIndexType::ActiveFile => DescriptorType::RegularFile,
-            StaticIndexType::PassiveFile => DescriptorType::RegularFile,
-            StaticIndexType::RuntimeHostDir => todo!(),
-            StaticIndexType::Dir => DescriptorType::Directory,
+            StaticIndexType::ActiveFile
+            | StaticIndexType::PassiveFile
+            | StaticIndexType::RuntimeFile => DescriptorType::RegularFile,
+            StaticIndexType::Dir | StaticIndexType::RuntimeDir => DescriptorType::Directory,
         }
     }
-    fn size(&self) -> usize {
+    fn size(&self) -> Result<u64, ErrorCode> {
         match self.ty {
-            StaticIndexType::ActiveFile => unsafe { self.data.active.1 },
-            StaticIndexType::PassiveFile => unsafe { self.data.passive.1 },
-            StaticIndexType::Dir => 0,
-            StaticIndexType::RuntimeHostDir => 0,
-            StaticIndexType::RuntimeHostFile => todo!(),
-        }
-    }
-    fn get_bytes<'a>(&'a self) -> &'a [u8] {
-        match self.ty {
-            StaticIndexType::ActiveFile => unsafe {
-                slice::from_raw_parts(self.data.active.0, self.data.active.1)
-            },
-            StaticIndexType::PassiveFile => {
-                let passive_idx = unsafe { self.data.passive.0 };
-                let passive_len = unsafe { self.data.passive.1 };
-                let data = passive_alloc(passive_idx, 0, passive_len as u32);
-                unsafe { slice::from_raw_parts(data, passive_len) }
+            StaticIndexType::ActiveFile => Ok(unsafe { self.data.active.1 } as u64),
+            StaticIndexType::PassiveFile => Ok(unsafe { self.data.passive.1 } as u64),
+            StaticIndexType::Dir | StaticIndexType::RuntimeDir => Ok(0),
+            StaticIndexType::RuntimeFile => {
+                let path = unsafe { CStr::from_ptr(self.data.runtime_path) };
+                let path = path.to_str().unwrap();
+                let Some((fd, subpath)) = FsState::get_host_preopen(path) else {
+                    return Err(ErrorCode::NoEntry);
+                };
+                let stat = filesystem::stat_at(fd, filesystem::PathFlags::empty(), subpath)
+                    .map_err(err_map)?;
+                Ok(stat.size)
             }
-            StaticIndexType::Dir => todo!(),
-            StaticIndexType::RuntimeHostDir => todo!(),
-            StaticIndexType::RuntimeHostFile => todo!(),
         }
     }
     fn child_list(&self) -> Result<&'static [StaticIndexEntry], ErrorCode> {
@@ -139,7 +257,7 @@ union StaticFileData {
     /// Passive memory element index and len for PassiveFile
     passive: (u32, usize),
     /// Host path string for HostDir / HostFile
-    path: *const u8,
+    runtime_path: *const i8,
     // Index and child entry count for Dir
     dir: (usize, usize),
 }
@@ -162,15 +280,15 @@ enum StaticIndexType {
     ActiveFile,
     PassiveFile,
     Dir,
-    RuntimeHostDir,
-    RuntimeHostFile,
+    RuntimeDir,
+    RuntimeFile,
 }
 
 // This function gets mutated by the virtualizer
 #[no_mangle]
 #[inline(never)]
-pub fn passive_alloc(passive_idx: u32, offset: u32, len: u32) -> *const u8 {
-    return (passive_idx + offset + len) as *const u8;
+pub fn passive_alloc(passive_idx: u32, offset: u32, len: u32) -> *mut u8 {
+    return (passive_idx + offset + len) as *mut u8;
 }
 
 #[no_mangle]
@@ -179,6 +297,7 @@ pub static mut fs: Fs = Fs {
     preopens: 0 as *const usize,                // [byte 4]
     static_index_cnt: 0,                        // [byte 8]
     static_index: 0 as *const StaticIndexEntry, // [byte 12]
+    host_passthrough: false,                    // [byte 16]
 };
 
 // local fs state
@@ -186,6 +305,7 @@ pub struct FsState {
     initialized: bool,
     descriptor_cnt: u32,
     preopen_directories: Vec<u32>,
+    host_preopen_directories: BTreeMap<String, u32>,
     descriptor_table: BTreeMap<u32, Descriptor>,
     stream_cnt: u32,
     stream_table: BTreeMap<u32, Stream>,
@@ -195,6 +315,7 @@ static mut STATE: FsState = FsState {
     initialized: false,
     descriptor_cnt: 3,
     preopen_directories: Vec::new(),
+    host_preopen_directories: BTreeMap::new(),
     descriptor_table: BTreeMap::new(),
     stream_cnt: 0,
     stream_table: BTreeMap::new(),
@@ -218,7 +339,9 @@ impl From<DirStream> for Stream {
 }
 
 struct FileStream {
+    // local file descriptor
     fd: u32,
+    // current offset
     offset: u64,
 }
 
@@ -231,18 +354,15 @@ impl FileStream {
     fn new(fd: u32) -> Self {
         Self { fd, offset: 0 }
     }
-    fn read(&mut self, len: u64) -> Result<Option<Vec<u8>>, StreamError> {
+    fn read(&mut self, len: u64) -> Result<(Vec<u8>, bool), StreamError> {
         let Some(descriptor) = FsState::get_descriptor(self.fd) else {
             return Err(StreamError {});
         };
-        let bytes = descriptor.entry().get_bytes();
-        let read_len = cmp::min(bytes.len() as u64 - self.offset, len);
-        if read_len == 0 {
-            return Ok(None);
-        }
-        let byte_slice = &bytes[self.offset as usize..(self.offset + read_len) as usize];
-        self.offset += read_len;
-        Ok(Some(byte_slice.to_vec()))
+        let (bytes, done) = descriptor
+            .get_bytes(self.offset, len)
+            .map_err(|_| StreamError {})?;
+        self.offset += bytes.len() as u64;
+        Ok((bytes, done))
     }
 }
 
@@ -274,8 +394,12 @@ impl FsState {
         if unsafe { STATE.initialized } {
             return;
         }
-        // TODO: Host passthrough
-        // let _host_preopen_directories = Some(preopens::get_directories());
+        if unsafe { fs.host_passthrough } {
+            let host_preopen_directories = unsafe { &mut STATE.host_preopen_directories };
+            for (fd, name) in preopens::get_directories() {
+                host_preopen_directories.insert(name, fd);
+            }
+        }
         let preopens = Fs::preopens();
         for preopen in preopens {
             let fd = FsState::create_descriptor(preopen, DescriptorFlags::READ);
@@ -283,20 +407,57 @@ impl FsState {
         }
         unsafe { STATE.initialized = true };
     }
+    fn get_host_preopen<'a>(path: &'a str) -> Option<(u32, &'a str)> {
+        let path = if path.starts_with("./") {
+            &path[2..]
+        } else {
+            path
+        };
+        for (preopen_name, fd) in unsafe { &STATE.host_preopen_directories } {
+            let preopen_name = if preopen_name.starts_with("./") {
+                &preopen_name[2..]
+            } else if preopen_name.starts_with(".") {
+                &preopen_name[1..]
+            } else {
+                preopen_name
+            };
+            if path.starts_with(preopen_name) {
+                // ambient relative
+                if preopen_name.len() == 0 {
+                    if path.as_bytes()[0] != b'/' {
+                        return Some((*fd, &path));
+                    }
+                } else {
+                    // root '/' match
+                    if preopen_name == "/" && path.as_bytes()[0] == b'/' {
+                        return Some((*fd, &path[1..]));
+                    }
+                    // exact match
+                    if preopen_name.len() == path.len() {
+                        return Some((*fd, ""));
+                    }
+                    // normal [x]/ match
+                    if path.as_bytes()[preopen_name.len()] == b'/' {
+                        return Some((*fd, &path[preopen_name.len() + 1..]));
+                    }
+                }
+            }
+        }
+        None
+    }
     fn create_descriptor(entry: &StaticIndexEntry, _flags: DescriptorFlags) -> u32 {
         let fd = unsafe { STATE.descriptor_cnt };
         unsafe { STATE.descriptor_cnt += 1 };
-        let descriptor = Descriptor { entry };
+        let descriptor = Descriptor {
+            entry,
+            fd,
+            host_fd: None,
+        };
         assert!(unsafe { STATE.descriptor_table.insert(fd, descriptor) }.is_none());
         fd
     }
-    fn get_descriptor<'a>(fd: u32) -> Option<&'a Descriptor> {
-        unsafe { STATE.descriptor_table.get(&fd) }
-    }
-    fn drop_descriptor(fd: u32) {
-        unsafe {
-            STATE.descriptor_table.remove(&fd);
-        }
+    fn get_descriptor<'a>(fd: u32) -> Option<&'a mut Descriptor> {
+        unsafe { STATE.descriptor_table.get_mut(&fd) }
     }
     fn get_preopen_directories() -> Vec<(u32, String)> {
         FsState::initialize();
@@ -346,7 +507,7 @@ impl Filesystem for VirtAdapter {
         todo!()
     }
     fn sync_data(_: u32) -> Result<(), ErrorCode> {
-        todo!()
+        Err(ErrorCode::Access)
     }
     fn get_flags(_fd: u32) -> Result<DescriptorFlags, ErrorCode> {
         Ok(DescriptorFlags::READ)
@@ -379,7 +540,7 @@ impl Filesystem for VirtAdapter {
         FsState::create_stream(DirStream::new(fd))
     }
     fn sync(_: u32) -> Result<(), ErrorCode> {
-        todo!()
+        Err(ErrorCode::Access)
     }
     fn create_directory_at(_: u32, _: String) -> Result<(), ErrorCode> {
         Err(ErrorCode::Access)
@@ -393,7 +554,7 @@ impl Filesystem for VirtAdapter {
             inode: 0,
             type_: descriptor.entry().ty(),
             link_count: 0,
-            size: descriptor.entry().size() as u64,
+            size: descriptor.entry().size()?,
             data_access_timestamp: Datetime {
                 seconds: 0,
                 nanoseconds: 0,
@@ -418,7 +579,7 @@ impl Filesystem for VirtAdapter {
             inode: 0,
             type_: child.ty(),
             link_count: 0,
-            size: child.size() as u64,
+            size: child.size()?,
             data_access_timestamp: Datetime {
                 seconds: 0,
                 nanoseconds: 0,
@@ -440,7 +601,7 @@ impl Filesystem for VirtAdapter {
         _: NewTimestamp,
         _: NewTimestamp,
     ) -> Result<(), ErrorCode> {
-        todo!()
+        Err(ErrorCode::Access)
     }
     fn link_at(_: u32, _: PathFlags, _: String, _: u32, _: String) -> Result<(), ErrorCode> {
         Err(ErrorCode::Access)
@@ -463,19 +624,19 @@ impl Filesystem for VirtAdapter {
         todo!()
     }
     fn remove_directory_at(_: u32, _: String) -> Result<(), ErrorCode> {
-        todo!()
+        Err(ErrorCode::Access)
     }
     fn rename_at(_: u32, _: String, _: u32, _: String) -> Result<(), ErrorCode> {
-        todo!()
+        Err(ErrorCode::Access)
     }
     fn symlink_at(_: u32, _: String, _: String) -> Result<(), ErrorCode> {
-        todo!()
+        Err(ErrorCode::Access)
     }
     fn access_at(_: u32, _: PathFlags, _: String, _: AccessType) -> Result<(), ErrorCode> {
-        todo!()
+        Err(ErrorCode::Access)
     }
     fn unlink_file_at(_: u32, _: String) -> Result<(), ErrorCode> {
-        todo!()
+        Err(ErrorCode::Access)
     }
     fn change_file_permissions_at(
         _: u32,
@@ -509,7 +670,9 @@ impl Filesystem for VirtAdapter {
         Ok(())
     }
     fn drop_descriptor(fd: u32) {
-        FsState::drop_descriptor(fd);
+        if let Some(descriptor) = FsState::get_descriptor(fd) {
+            descriptor.drop();
+        };
     }
     fn read_directory_entry(sid: u32) -> Result<Option<DirectoryEntry>, ErrorCode> {
         let Some(stream) = FsState::get_stream(sid) else {
@@ -536,13 +699,8 @@ impl Streams for VirtAdapter {
             return Err(StreamError {});
         };
         match stream {
-            Stream::File(filestream) => match filestream.read(len)? {
-                Some(vec) => Ok((vec, false)),
-                None => Ok((vec![], true)),
-            },
-            _ => {
-                return Err(StreamError {});
-            }
+            Stream::File(filestream) => filestream.read(len),
+            _ => Err(StreamError {}),
         }
     }
     fn skip(_: u32, _: u64) -> Result<(u64, bool), StreamError> {

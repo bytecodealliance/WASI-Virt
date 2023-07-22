@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Context, Result};
+use cap_std::ambient_authority;
 use heck::ToSnakeCase;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -10,7 +11,10 @@ use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store, WasmBacktraceDetails,
 };
-use wasmtime_wasi::preview2::{wasi as wasi_preview2, Table, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::preview2::{
+    wasi as wasi_preview2, DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
+};
+use wasmtime_wasi::Dir;
 use wit_component::ComponentEncoder;
 
 wasmtime::component::bindgen!({
@@ -68,7 +72,7 @@ async fn virt_test() -> Result<()> {
         let test_case_name = test_case_file_name.strip_suffix(".toml").unwrap();
 
         // Filtering...
-        // if test_case_name != "fs-nested-dir-read" {
+        // if test_case_name != "fs-host-read" {
         //     continue;
         // }
 
@@ -132,7 +136,12 @@ async fn virt_test() -> Result<()> {
         }
 
         // execute the composed virtualized component test function
-        let mut builder = WasiCtxBuilder::new().inherit_stdio();
+        let mut builder = WasiCtxBuilder::new().inherit_stdio().push_preopened_dir(
+            Dir::open_ambient_dir(".", ambient_authority())?,
+            DirPerms::READ,
+            FilePerms::READ,
+            "/",
+        );
         if let Some(host_env) = &test.host_env {
             let env: Vec<(String, String)> = host_env
                 .iter()

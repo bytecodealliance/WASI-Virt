@@ -32,12 +32,13 @@ pub enum FsEntry {
     /// symlink absolute or relative file path on the virtual filesystem
     Symlink(String),
     /// host path at virtualization time
-    Host(String),
+    Virtualize(String),
     /// host path st runtime
-    Runtime(String),
+    RuntimeDir(String),
+    RuntimeFile(String),
     /// Virtual file
     File(Vec<u8>),
-    /// String convenience
+    /// String (UTF8) file source convenience
     Source(String),
     /// Virtual directory
     Dir(VirtDir),
@@ -51,6 +52,24 @@ pub struct VirtFile {
 }
 
 type VirtDir = BTreeMap<String, FsEntry>;
+
+impl WasiVirt {
+    fn get_or_create_fs(&mut self) -> &mut VirtFs {
+        self.virt_opts.fs.get_or_insert_with(Default::default)
+    }
+
+    pub fn preopen(mut self, name: String, preopen: FsEntry) -> Self {
+        let fs = self.get_or_create_fs();
+        fs.preopens.insert(name, preopen);
+        self
+    }
+
+    pub fn passive_cutoff(mut self, passive_cutoff: usize) -> Self {
+        let fs = self.get_or_create_fs();
+        fs.passive_cutoff = Some(passive_cutoff);
+        self
+    }
+}
 
 #[derive(Debug)]
 struct StaticIndexEntry {
@@ -103,9 +122,9 @@ union StaticFileData {
     /// Passive memory element index and len for PassiveFile
     passive: (u32, u32),
 
-    // TODO: Host passthrough mounts
-    // /// Host path string for HostDir / HostFile
-    // path: u32,
+    /// Host path string for HostDir / HostFile
+    host_path: u32,
+
     /// Pointer and child entry count for Dir
     dir: (u32, u32),
 }
@@ -194,7 +213,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
                 FsEntry::Source(source) => {
                     *entry = FsEntry::File(source.as_bytes().to_vec())
                 },
-                FsEntry::Host(host_path) => {
+                FsEntry::Virtualize(host_path) => {
                     // read a directory or file path from the host
                     let metadata = fs::metadata(&host_path)?;
                     if metadata.is_dir() {
@@ -206,7 +225,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
                             let mut full_path = host_path.clone();
                             full_path.push('/');
                             full_path.push_str(file_name_str);
-                            entries.insert(file_name_str.into(), FsEntry::Host(full_path));
+                            entries.insert(file_name_str.into(), FsEntry::Virtualize(full_path));
                         }
                         *entry = FsEntry::Dir(entries);
                     } else {
@@ -217,7 +236,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
                         *entry = FsEntry::File(bytes)
                     }
                 }
-                FsEntry::File(_) | FsEntry::Runtime(_) | FsEntry::Symlink(_) | FsEntry::Dir(_) => {}
+                FsEntry::File(_) | FsEntry::RuntimeFile(_) | FsEntry::RuntimeDir(_) | FsEntry::Symlink(_) | FsEntry::Dir(_) => {}
             }
             Ok(())
         })?;
@@ -225,6 +244,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
 
     // Create the data section bytes
     let mut data_section = Data::new(get_stack_global(module)? as usize);
+    let mut host_passthrough = false;
 
     // Next we linearize the pre-order directory graph as the static file data
     // Using a pre-order traversal
@@ -238,9 +258,24 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
             let name_str_ptr = data_section.string(name)?;
             let (ty, data) = match &entry {
                 // removed during previous step
-                FsEntry::Host(_) | FsEntry::Source(_) => unreachable!(),
+                FsEntry::Virtualize(_) | FsEntry::Source(_) => unreachable!(),
                 FsEntry::Symlink(_) => todo!("symlink support"),
-                FsEntry::Runtime(_) => todo!("runtime passthrough mounts"),
+                FsEntry::RuntimeFile(path) => {
+                    host_passthrough = true;
+                    let str = data_section.string(path)?;
+                    (
+                        StaticIndexType::RuntimeHostFile,
+                        StaticFileData { host_path: str },
+                    )
+                }
+                FsEntry::RuntimeDir(path) => {
+                    host_passthrough = true;
+                    let str = data_section.string(path)?;
+                    (
+                        StaticIndexType::RuntimeHostDir,
+                        StaticFileData { host_path: str },
+                    )
+                }
                 FsEntry::Dir(dir) => {
                     let child_cnt = dir.len() as u32;
                     // children will be visited next in preorder and contiguously
@@ -309,7 +344,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
 
     // If host fs is disabled, remove its imports entirely
     // replacing it with a stub panic
-    if true {
+    if !host_passthrough {
         stub_fs_virt(module)?;
     }
 
@@ -317,7 +352,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
 
     let preopen_addr = data_section.write_slice(preopen_indices.as_slice())?;
 
-    const FS_STATIC_LEN: usize = 12;
+    const FS_STATIC_LEN: usize = 16;
     if data.value.len() < data_offset + FS_STATIC_LEN {
         let padding = 4 - (data_offset + FS_STATIC_LEN) % 4;
         data.value.resize(data_offset + FS_STATIC_LEN + padding, 0);
@@ -335,6 +370,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
     //     preopens: 0 as *const usize,                // [byte 4]
     //     static_index_cnt: 0,                        // [byte 8]
     //     static_index: 0 as *const StaticIndexEntry, // [byte 12]
+    //     host_passthrough: false,                    // [byte 16]
     // };
     bytes[data_offset..data_offset + 4].copy_from_slice(&(fs.preopens.len() as u32).to_le_bytes());
     bytes[data_offset + 4..data_offset + 8].copy_from_slice(&(preopen_addr as u32).to_le_bytes());
@@ -342,6 +378,9 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
         .copy_from_slice(&(static_fs_data.len() as u32).to_le_bytes());
     bytes[data_offset + 12..data_offset + 16]
         .copy_from_slice(&(static_index_addr as u32).to_le_bytes());
+    if host_passthrough {
+        bytes[data_offset + 16..data_offset + 20].copy_from_slice(&(1 as u32).to_le_bytes());
+    }
 
     data_section.finish(module)?;
 
@@ -370,129 +409,129 @@ fn stub_fs_virt(module: &mut Module) -> Result<()> {
         false,
     )?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "advise", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "sync_data", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "get_flags", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "get_type", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "set_size", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "set_times", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "sync-data", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "get-flags", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "get-type", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "set-size", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "set-times", false)?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "read", false)?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "write", false)?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
-        "read_directory",
+        "read-directory",
         false,
     )?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "sync", false)?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
-        "create_directory_at",
+        "create-directory-at",
         false,
     )?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "stat", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "stat_at", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "set_times_at", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "link_at", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "open_at", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "readlink_at", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "stat-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "set-times-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "link-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "open-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "readlink-at", false)?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
-        "remove_directory_at",
+        "remove-directory-at",
         false,
     )?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "rename_at", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "symlink_at", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "access_at", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "rename-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "symlink-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "access-at", false)?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
-        "unlink_file_at",
-        false,
-    )?;
-    stub_imported_func(
-        module,
-        "wasi:filesystem/filesystem",
-        "change_file_permissions_at",
+        "unlink-file-at",
         false,
     )?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
-        "change_directory_permissions_at",
-        false,
-    )?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "lock_shared", false)?;
-    stub_imported_func(
-        module,
-        "wasi:filesystem/filesystem",
-        "lock_exclusive",
+        "change-file-permissions-at",
         false,
     )?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
-        "try_lock_shared",
+        "change-directory-permissions-at",
+        false,
+    )?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "lock-shared", false)?;
+    stub_imported_func(
+        module,
+        "wasi:filesystem/filesystem",
+        "lock-exclusive",
         false,
     )?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
-        "try_lock_exclusive",
+        "try-lock-shared",
+        false,
+    )?;
+    stub_imported_func(
+        module,
+        "wasi:filesystem/filesystem",
+        "try-lock-exclusive",
         false,
     )?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "unlock", false)?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
-        "drop_descriptor",
+        "drop-descriptor",
         false,
     )?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
-        "read_directory_entry",
+        "read-directory-entry",
         false,
     )?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
-        "drop_directory_entry_stream",
+        "drop-directory-entry-stream",
         false,
     )?;
 
     stub_imported_func(
         module,
         "wasi:io/streams",
-        "drop_directory_entry_stream",
+        "drop-directory-entry-stream",
         false,
     )?;
     stub_imported_func(module, "wasi:io/streams", "read", false)?;
-    stub_imported_func(module, "wasi:io/streams", "blocking_read", false)?;
+    stub_imported_func(module, "wasi:io/streams", "blocking-read", false)?;
     stub_imported_func(module, "wasi:io/streams", "skip", false)?;
-    stub_imported_func(module, "wasi:io/streams", "blocking_skip", false)?;
+    stub_imported_func(module, "wasi:io/streams", "blocking-skip", false)?;
     stub_imported_func(
         module,
         "wasi:io/streams",
-        "subscribe_to_input_stream",
+        "subscribe-to-input-stream",
         false,
     )?;
-    stub_imported_func(module, "wasi:io/streams", "drop_input_stream", false)?;
+    stub_imported_func(module, "wasi:io/streams", "drop-input-stream", false)?;
     stub_imported_func(module, "wasi:io/streams", "write", false)?;
-    stub_imported_func(module, "wasi:io/streams", "blocking_write", false)?;
-    stub_imported_func(module, "wasi:io/streams", "write_zeroes", false)?;
-    stub_imported_func(module, "wasi:io/streams", "blocking_write_zeroes", false)?;
+    stub_imported_func(module, "wasi:io/streams", "blocking-write", false)?;
+    stub_imported_func(module, "wasi:io/streams", "write-zeroes", false)?;
+    stub_imported_func(module, "wasi:io/streams", "blocking-write-zeroes", false)?;
     stub_imported_func(module, "wasi:io/streams", "splice", false)?;
-    stub_imported_func(module, "wasi:io/streams", "blocking_splice", false)?;
+    stub_imported_func(module, "wasi:io/streams", "blocking-splice", false)?;
     stub_imported_func(module, "wasi:io/streams", "forward", false)?;
     stub_imported_func(
         module,
         "wasi:io/streams",
-        "subscribe_to_output_stream",
+        "subscribe-to-output-stream",
         false,
     )?;
-    stub_imported_func(module, "wasi:io/streams", "drop_output_stream", false)?;
+    stub_imported_func(module, "wasi:io/streams", "drop-output-stream", false)?;
     Ok(())
 }
 
