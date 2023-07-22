@@ -15,9 +15,11 @@ use walrus::{
 #[serde(deny_unknown_fields)]
 pub struct VirtEnv {
     /// Set specific environment variable overrides
+    #[serde(default)]
     pub overrides: Vec<(String, String)>,
     /// Define how to embed into the host environment
     /// (Pass-through / encapsulate / allow / deny)
+    #[serde(default)]
     pub host: HostEnv,
 }
 

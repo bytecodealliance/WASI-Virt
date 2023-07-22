@@ -17,6 +17,8 @@ mod virt_env;
 mod virt_fs;
 mod walrus_ops;
 
+pub type VirtualFiles = virt_fs::VirtualFiles;
+
 #[derive(Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct VirtOpts {
@@ -35,7 +37,7 @@ pub struct WasiVirt {
 
 pub struct VirtResult {
     pub adapter: Vec<u8>,
-    pub fs: Option<VirtFs>,
+    pub virtual_files: VirtualFiles,
 }
 
 impl WasiVirt {
@@ -60,11 +62,11 @@ pub fn create_virt<'a>(opts: &VirtOpts) -> Result<VirtResult> {
     } else {
         strip_env_virt(&mut module)?;
     }
-    let fs = if let Some(fs) = &opts.fs {
-        Some(create_fs_virt(&mut module, fs)?)
+    let virtual_files = if let Some(fs) = &opts.fs {
+        create_fs_virt(&mut module, fs)?
     } else {
         strip_fs_virt(&mut module)?;
-        None
+        Default::default()
     };
 
     // decode the component custom section to strip out the unused world exports
@@ -138,7 +140,7 @@ pub fn create_virt<'a>(opts: &VirtOpts) -> Result<VirtResult> {
 
     Ok(VirtResult {
         adapter: encoded,
-        fs,
+        virtual_files,
     })
 }
 

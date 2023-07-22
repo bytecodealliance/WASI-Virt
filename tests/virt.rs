@@ -109,14 +109,7 @@ async fn virt_test() -> Result<()> {
         let virt_opts = test.virt_opts.clone().unwrap_or_default();
         let virt_component = create_virt(&virt_opts)
             .with_context(|| format!("Error creating virtual adapter for {:?}", test_case_path))?;
-        // if let Some(fs) = virt_component.fs {
-        //     for (name, preopen) in fs.preopens {
-        //         preopen.visit_pre(&name, &mut |entry, name, path, _rem| {
-        //             eprintln!("FILE: {} : {}", name, path);
-        //             Ok(())
-        //         })?;
-        //     }
-        // }
+
         fs::write(&virt_component_path, virt_component.adapter)?;
 
         // compose the test component with the defined test virtualization

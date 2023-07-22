@@ -13,7 +13,7 @@ use crate::{
     WasiVirt,
 };
 
-impl WasiVirt {}
+pub type VirtualFiles = BTreeMap<String, String>;
 
 #[derive(Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
@@ -154,21 +154,29 @@ impl fmt::Debug for StaticFileData {
 }
 
 impl FsEntry {
-    fn visit_pre_mut<'a>(&'a mut self, visit: fn(entry: &mut FsEntry) -> Result<()>) -> Result<()> {
-        visit(self)?;
-        self.visit_pre_mut_inner(visit)
+    fn visit_pre_mut<'a, Visitor>(&'a mut self, base_path: &str, visit: &mut Visitor) -> Result<()>
+    where
+        Visitor: FnMut(&mut FsEntry, &str, &str) -> Result<()>,
+    {
+        visit(self, base_path, "")?;
+        self.visit_pre_mut_inner(visit, base_path)
     }
 
-    fn visit_pre_mut_inner<'a>(
+    fn visit_pre_mut_inner<'a, Visitor>(
         &'a mut self,
-        visit: fn(entry: &mut FsEntry) -> Result<()>,
-    ) -> Result<()> {
+        visit: &mut Visitor,
+        base_path: &str,
+    ) -> Result<()>
+    where
+        Visitor: FnMut(&mut FsEntry, &str, &str) -> Result<()>,
+    {
         if let FsEntry::Dir(dir) = self {
-            for sub_entry in dir.values_mut() {
-                visit(sub_entry)?;
+            for (name, sub_entry) in dir.iter_mut() {
+                visit(sub_entry, name, base_path)?;
             }
-            for sub_entry in dir.values_mut() {
-                sub_entry.visit_pre_mut_inner(visit)?;
+            for (name, sub_entry) in dir.iter_mut() {
+                let path = format!("{base_path}{name}");
+                sub_entry.visit_pre_mut_inner(visit, &path)?;
             }
         }
         Ok(())
@@ -203,12 +211,14 @@ impl FsEntry {
     }
 }
 
-pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs> {
+pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtualFiles> {
+    let mut virtual_files = BTreeMap::new();
+
     // First we iterate the options and fill in all HostDir and HostFile entries
     // With inline directory and file entries
     let mut fs = fs.clone();
-    for entry in fs.preopens.values_mut() {
-        entry.visit_pre_mut(|entry| {
+    for (name, entry) in fs.preopens.iter_mut() {
+        entry.visit_pre_mut(name, &mut |entry, name, path| {
             match entry {
                 FsEntry::Source(source) => {
                     *entry = FsEntry::File(source.as_bytes().to_vec())
@@ -225,6 +235,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
                             let mut full_path = host_path.clone();
                             full_path.push('/');
                             full_path.push_str(file_name_str);
+                            virtual_files.insert(format!("{path}{name}/{file_name_str}"), full_path.to_string());
                             entries.insert(file_name_str.into(), FsEntry::Virtualize(full_path));
                         }
                         *entry = FsEntry::Dir(entries);
@@ -385,7 +396,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtFs>
     data_section.finish(module)?;
 
     // return the processed virtualized filesystem
-    Ok(fs)
+    Ok(virtual_files)
 }
 
 fn stub_fs_virt(module: &mut Module) -> Result<()> {
