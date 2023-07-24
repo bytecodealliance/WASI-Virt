@@ -99,7 +99,7 @@ pub fn create_virt<'a>(opts: &VirtOpts) -> Result<VirtResult> {
     }
 
     let mut producers = Producers::default();
-    producers.add("processed-by", "wasi-virt", "0.1.0");
+    producers.add("processed-by", "wasi-virt", env!("CARGO_PKG_VERSION"));
 
     component_section.data = metadata::encode(
         &bindgen.resolve,

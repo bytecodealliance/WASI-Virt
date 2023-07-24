@@ -37,12 +37,12 @@ it into a component that no longer depends on those WASI APIs, or conditionally 
 a configurable way.
 
 For example, consider converting an application to a WebAssembly Component that assumes it can load
-some templates from the filesystem, but that is all it will load.
+read some files from the filesystem, but never needs to write.
 
 Using WASI Virt, those specific file paths can be mounted and virtualized into the component itself as 
-a post-compile operation, while banning the final component from being able to access the filesystem at
-all. The inner program still uses FS calls, but they are virtualized from the target host platform allowing
-this application to run in different environments without filesystem API compat or security concerns.
+a post-compile operation, while banning the final component from being able to access the host's filesystem at
+all. The inner program still imports a wasi filesystem, but the filesystem implementation is provided by another component, rather than in the host environment. The composition of these two components no longer has a
+filesystem import, so it can be run in hosts (or other components) which do not provide a filesystem API.
 
 ### Basic Usage
 

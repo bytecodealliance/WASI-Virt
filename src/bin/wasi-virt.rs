@@ -16,7 +16,7 @@ use wasi_virt::{create_virt, VirtOpts};
 struct Args {
     /// Virtualization TOML configuration
     ///
-    /// As defined in VirtOpts
+    /// As defined in [`VirtOpts`]
     #[arg(short, long, verbatim_doc_comment)]
     config: String,
 
