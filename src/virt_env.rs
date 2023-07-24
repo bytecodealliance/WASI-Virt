@@ -1,9 +1,6 @@
-use crate::{
-    walrus_ops::{
-        bump_stack_global, get_active_data_segment, get_memory_id, remove_exported_func,
-        stub_imported_func,
-    },
-    WasiVirt,
+use crate::walrus_ops::{
+    bump_stack_global, get_active_data_segment, get_memory_id, remove_exported_func,
+    stub_imported_func,
 };
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
@@ -26,52 +23,43 @@ pub struct VirtEnv {
 #[derive(Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum HostEnv {
-    /// Apart from the overrides, pass through all environment
-    /// variables from the host
-    #[default]
-    All,
     /// Fully encapsulate the environment, removing all host
     /// environment import checks
+    #[default]
     None,
+    /// Apart from the overrides, pass through all environment
+    /// variables from the host
+    All,
     /// Only allow the provided environment variable keys
     Allow(Vec<String>),
     /// Allow all environment variables, except the provided keys
     Deny(Vec<String>),
 }
 
-impl WasiVirt {
-    fn get_or_create_env(&mut self) -> &mut VirtEnv {
-        self.virt_opts.env.get_or_insert_with(Default::default)
-    }
-
-    pub fn env_host_allow(mut self, allow_list: &[&str]) -> Self {
-        let env = self.get_or_create_env();
-        env.host = HostEnv::Allow(allow_list.iter().map(|s| s.to_string()).collect());
+impl VirtEnv {
+    pub fn allow(&mut self, allow_list: &[String]) -> &mut Self {
+        self.host = HostEnv::Allow(allow_list.iter().map(|s| s.to_string()).collect());
         self
     }
 
-    pub fn env_host_deny(mut self, deny_list: &[&str]) -> Self {
-        let env = self.get_or_create_env();
-        env.host = HostEnv::Deny(deny_list.iter().map(|s| s.to_string()).collect());
+    pub fn deny(&mut self, deny_list: &[&str]) -> &mut Self {
+        self.host = HostEnv::Deny(deny_list.iter().map(|s| s.to_string()).collect());
         self
     }
 
-    pub fn env_host_all(mut self) -> Self {
-        let env = self.get_or_create_env();
-        env.host = HostEnv::All;
+    pub fn allow_all(&mut self) -> &mut Self {
+        self.host = HostEnv::All;
         self
     }
 
-    pub fn env_host_none(mut self) -> Self {
-        let env = self.get_or_create_env();
-        env.host = HostEnv::None;
+    pub fn deny_all(&mut self) -> &mut Self {
+        self.host = HostEnv::None;
         self
     }
 
-    pub fn env_overrides(mut self, overrides: &[(&str, &str)]) -> Self {
-        let env = self.get_or_create_env();
+    pub fn overrides(&mut self, overrides: &[(&str, &str)]) -> &mut Self {
         for (key, val) in overrides {
-            env.overrides.push((key.to_string(), val.to_string()));
+            self.overrides.push((key.to_string(), val.to_string()));
         }
         self
     }

@@ -25,7 +25,7 @@ Subsystem support:
 
 While current virtualization support is limited, the goal for this project is to support a wide range of WASI virtualization use cases.
 
-### Explainer
+## Explainer
 
 When wanting to run WebAssembly Components depending on WASI APIs in other environments it can provide
 a point of friction having to port WASI interop to every target platform.
@@ -44,22 +44,71 @@ a post-compile operation, while banning the final component from being able to a
 all. The inner program still imports a wasi filesystem, but the filesystem implementation is provided by another component, rather than in the host environment. The composition of these two components no longer has a
 filesystem import, so it can be run in hosts (or other components) which do not provide a filesystem API.
 
-### Basic Usage
+## Basic Usage
+
+```
+cargo install wasi-virt
+```
+
+### Env Virtualization
+
+```
+# Encapsulating a component
+wasi-virt component.wasm -o virt.wasm
+
+# Setting specific env vars (while disallowing all host env var access):
+wasi-virt component.wasm -e CUSTOM=VAR -o virt.wasm
+
+# Setting env vars with all host env vars allowed:
+wasi-virt component.wasm -e CUSTOM=VAR --allow-env -o virt.wasm
+
+# Setting env vars with restricted host env var access:
+wasi-virt component.wasm -e CUSTOM=VAR --allow-env=SOME,ENV_VARS -o virt.wasm
+```
+
+### FS Virtualization
+
+```
+# Mounting a virtual directory
+# (Globs all files in local-dir and virtualizes them)
+wasi-virt component.wasm --mount /=./local-dir -o virt.wasm
+
+# Providing a host preopen mapping
+wasi-virt component.wasm --preopen /=/restricted/path -o virt.wasm
+
+# Providing both host and virtual preopens
+wasi-virt component.wasm --mount /virt-dir=./local --preopen /host-dir=/host/path -o virt.wasm
+```
+
+By default, all virtualizations encapsulate the host virtualization, unless explicitly enabling
+host passthrough via `--allow-env` or `--preopen`.
+
+In all of the above examples, the `component.wasm` argument is optional. If omitted, then the virtualized
+adapter is output into `virt.wasm`, which can be composed into any component with:
+
+```
+wasm-tools compose component.wasm -d virt.wasm -o component.virt.wasm
+```
+
+## API
 
 ```rs
 use std::fs;
 use wasi_virt::{WasiVirt, FsEntry};
 
 fn main() {
-    let virt_component_bytes = WasiVirt::new()
-        // provide an allow list of host env vars
-        .env_host_allow(&["PUBLIC_ENV_VAR"])
-        // provide custom env overrides
-        .env_overrides(&[("SOME", "ENV"), ("VAR", "OVERRIDES")])
+    let virt = WasiVirt::new();
+    virt.env()
+      // provide an allow list of host env vars
+      .allow(&["PUBLIC_ENV_VAR"])
+      // provide custom env overrides
+      .overrides(&[("SOME", "ENV"), ("VAR", "OVERRIDES")]);
+        
+    virt.fs()
         // mount and virtualize a local directory recursively
-        .fs_preopen("/dir", FsEntry::Virtualize("/local/dir"))
+        .virtual_preopen("/dir", "/local/dir")
         // create a virtual directory containing some virtual files
-        .fs_preopen("/another-dir", FsEntry::Dir(BTreeMap::from([
+        .preopen("/another-dir", FsEntry::Dir(BTreeMap::from([
           // create a virtual file from the given UTF8 source
           ("file.txt", FsEntry::Source("Hello world")),
           // create a virtual file read from a local file at
@@ -68,65 +117,15 @@ fn main() {
           // create a virtual file which reads from a given file
           // path at runtime using the runtime host filesystem API
           ("host.txt", FsEntry::RuntimeFile("/runtime/host/path.txt"))
-        ])))
-        .create()
-        .unwrap();
+        ])));
+
+    let virt_component_bytes = virt.finish().unwrap();
     fs::write("virt.component.wasm", virt_component_bytes).unwrap();
 }
 ```
 
-With the created `virt.component.wasm` component, this can now be composed into a component with the `wasm-tools compose` "definitions" feature:
-
-```
-wasm-tools compose mycomponent.wasm -d virt.component.wasm -o out.component.wasm
-```
-
-When configuring a virtualization that does not fall back to the host, imports to the subsystem will be entirely stripped from the component.
-
-## CLI
-
-A CLI is also provided in this crate supporting:
-
-```
-wasi-virt config.toml -o virt.wasm
-```
-
-### Configuration
-
-With the configuration file format:
-
-```
-### Environment Virtualization
-[env]
-### Set environment variable values:
-overrides = [["CUSTOM", "VAL"]]
-### Enable environment vars for the host:
-host = "all"
-### Alternatively create an allow list:
-# [env.host]
-# allow = ["ENV_KEY"]
-### or deny list:
-# [env.host]
-# deny = ["ENV_KEY"]
-
-### FS Virtualization
-
-### Create a virtual directory with file.txt from
-### the provided inline UTF8 string, and with another.wasm
-### inlined into the virtual adapter from the local filesystem
-### path at virtualization time:
-[fs.preopens."/".dir]
-"file.txt" = { source = "inner contents" }
-"another.wasm" = { virtualize = "/local/path/to/another.wasm" }
-
-### Mount a local directory as a virtualized directory:
-[fs.preopens."/dir"]
-virtualize = "/local/path"
-
-### Mount a passthrough runtime host directory:
-[fs.preopens."/runtime-host"]
-runtime = "/runtime/path"
-```
+When calling a subsystem for the first time, its virtualization will be enabled. Subsystems
+not used or configured at all will be omitted from the virtualization entirely.
 
 # License
 
