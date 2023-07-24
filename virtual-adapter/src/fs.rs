@@ -9,7 +9,7 @@ use crate::wasi::filesystem::filesystem;
 // use crate::wasi::io::streams;
 
 // for debugging
-use crate::console;
+// use crate::console;
 // use std::fmt;
 
 use crate::VirtAdapter;
@@ -524,8 +524,15 @@ impl Filesystem for VirtAdapter {
     fn set_times(_: u32, _: NewTimestamp, _: NewTimestamp) -> Result<(), ErrorCode> {
         Err(ErrorCode::Access)
     }
-    fn read(_: u32, _: u64, _: u64) -> Result<(Vec<u8>, bool), ErrorCode> {
-        todo!()
+    fn read(fd: u32, len: u64, offset: u64) -> Result<(Vec<u8>, bool), ErrorCode> {
+        let sid = VirtAdapter::read_via_stream(fd, offset)?;
+        let stream = FsState::get_stream(sid).unwrap();
+        let Stream::File(filestream) = stream else {
+            unreachable!()
+        };
+        let result = filestream.read(len).map_err(|_| ErrorCode::Io)?;
+        FsState::drop_stream(sid);
+        Ok(result)
     }
     fn write(_: u32, _: Vec<u8>, _: u64) -> Result<u64, ErrorCode> {
         Err(ErrorCode::Access)
@@ -691,8 +698,8 @@ impl Filesystem for VirtAdapter {
 }
 
 impl Streams for VirtAdapter {
-    fn read(_: u32, _: u64) -> Result<(Vec<u8>, bool), StreamError> {
-        todo!()
+    fn read(sid: u32, len: u64) -> Result<(Vec<u8>, bool), StreamError> {
+        VirtAdapter::blocking_read(sid, len)
     }
     fn blocking_read(sid: u32, len: u64) -> Result<(Vec<u8>, bool), StreamError> {
         let Some(stream) = FsState::get_stream(sid) else {
