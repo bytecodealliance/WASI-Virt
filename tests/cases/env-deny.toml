@@ -1,13 +1,13 @@
 component = "get-env"
 
-[host_env]
+[host-env]
 PRIVATE_TOKEN = "PRIVATE"
 PUBLIC_VAR = "VAL"
 
-[virt_opts.env]
+[virt-opts.env]
 overrides = [["CUSTOM", "VAL"]]
 
-[virt_opts.env.host]
+[virt-opts.env.host]
 deny = ["PRIVATE_TOKEN"]
 
 [expect]

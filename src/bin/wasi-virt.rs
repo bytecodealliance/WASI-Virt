@@ -16,17 +16,7 @@ use wasi_virt::{create_virt, VirtOpts};
 struct Args {
     /// Virtualization TOML configuration
     ///
-    /// Example configuration:
-    ///  
-    ///   [env]
-    ///   host = "All" # or "None"
-    ///   overrides = [["CUSTOM", "VAL"]]
-    ///
-    /// Alternatively, allow or deny env keys for the host can be configured via:
-    ///
-    ///   [env.host]
-    ///   Allow = ["ENV_KEY"] # Or Deny = ...
-    ///
+    /// As defined in [`VirtOpts`]
     #[arg(short, long, verbatim_doc_comment)]
     config: String,
 
@@ -42,7 +32,14 @@ fn main() -> Result<()> {
 
     let virt_component = create_virt(&virt_cfg)?;
 
-    fs::write(args.out, virt_component)?;
+    if virt_component.virtual_files.len() > 0 {
+        println!("Virtualized files from local filesystem:\n");
+        for (virtual_path, original_path) in virt_component.virtual_files {
+            println!("  - {virtual_path} : {original_path}");
+        }
+    }
+
+    fs::write(args.out, virt_component.adapter)?;
 
     Ok(())
 }
