@@ -5,7 +5,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::process::Command;
 use std::{fs, path::PathBuf};
-use wasi_virt::{create_virt, VirtOpts};
+use wasi_virt::WasiVirt;
 use wasm_compose::composer::ComponentComposer;
 use wasmtime::{
     component::{Component, Linker},
@@ -57,7 +57,7 @@ struct TestCase {
     component: String,
     host_env: Option<BTreeMap<String, String>>,
     host_fs_path: Option<String>,
-    virt_opts: Option<VirtOpts>,
+    virt_opts: Option<WasiVirt>,
     expect: TestExpectation,
 }
 
@@ -107,7 +107,8 @@ async fn virt_test() -> Result<()> {
         let mut virt_component_path = generated_path.join(test_case_name);
         virt_component_path.set_extension("virt.wasm");
         let virt_opts = test.virt_opts.clone().unwrap_or_default();
-        let virt_component = create_virt(&virt_opts)
+        let virt_component = virt_opts
+            .finish()
             .with_context(|| format!("Error creating virtual adapter for {:?}", test_case_path))?;
 
         fs::write(&virt_component_path, virt_component.adapter)?;

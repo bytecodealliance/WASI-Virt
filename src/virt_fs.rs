@@ -10,7 +10,6 @@ use crate::{
     walrus_ops::{
         get_active_data_segment, get_stack_global, remove_exported_func, stub_imported_func,
     },
-    WasiVirt,
 };
 
 pub type VirtualFiles = BTreeMap<String, String>;
@@ -53,20 +52,24 @@ pub struct VirtFile {
 
 type VirtDir = BTreeMap<String, FsEntry>;
 
-impl WasiVirt {
-    fn get_or_create_fs(&mut self) -> &mut VirtFs {
-        self.virt_opts.fs.get_or_insert_with(Default::default)
-    }
-
-    pub fn preopen(mut self, name: String, preopen: FsEntry) -> Self {
-        let fs = self.get_or_create_fs();
-        fs.preopens.insert(name, preopen);
+impl VirtFs {
+    pub fn preopen(&mut self, name: String, preopen: FsEntry) -> &mut Self {
+        self.preopens.insert(name, preopen);
         self
     }
 
-    pub fn passive_cutoff(mut self, passive_cutoff: usize) -> Self {
-        let fs = self.get_or_create_fs();
-        fs.passive_cutoff = Some(passive_cutoff);
+    pub fn host_preopen(&mut self, name: String, dir: String) -> &mut Self {
+        self.preopens.insert(name, FsEntry::RuntimeDir(dir));
+        self
+    }
+
+    pub fn virtual_preopen(&mut self, name: String, dir: String) -> &mut Self {
+        self.preopens.insert(name, FsEntry::Virtualize(dir));
+        self
+    }
+
+    pub fn passive_cutoff(&mut self, passive_cutoff: usize) -> &mut Self {
+        self.passive_cutoff = Some(passive_cutoff);
         self
     }
 }
@@ -175,7 +178,7 @@ impl FsEntry {
                 visit(sub_entry, name, base_path)?;
             }
             for (name, sub_entry) in dir.iter_mut() {
-                let path = format!("{base_path}{name}");
+                let path = format!("{base_path}/{name}");
                 sub_entry.visit_pre_mut_inner(visit, &path)?;
             }
         }
@@ -201,7 +204,7 @@ impl FsEntry {
                     visit(sub_entry, name, base_path, len - idx - 1)?;
                 }
                 for (name, sub_entry) in dir {
-                    let path = format!("{base_path}{name}");
+                    let path = format!("{base_path}/{name}");
                     sub_entry.visit_pre_inner(visit, &path)?;
                 }
             }
@@ -233,9 +236,11 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<Virtual
                             let file_name = entry.file_name();
                             let file_name_str = file_name.to_str().unwrap();
                             let mut full_path = host_path.clone();
-                            full_path.push('/');
+                            if !full_path.ends_with('/') {
+                                full_path.push('/');
+                            }
                             full_path.push_str(file_name_str);
-                            virtual_files.insert(format!("{path}{name}/{file_name_str}"), full_path.to_string());
+                            virtual_files.insert(format!("{path}{}{name}/{file_name_str}", if path.len() > 0 { "/" } else { "" }), full_path.to_string());
                             entries.insert(file_name_str.into(), FsEntry::Virtualize(full_path));
                         }
                         *entry = FsEntry::Dir(entries);
