@@ -44,6 +44,7 @@ struct Args {
     #[arg(long, num_args(0..), use_value_delimiter(true), require_equals(true), value_name("ENV_VAR"))]
     allow_env: Option<Vec<String>>,
 
+    /// Set environment variable overrides
     #[arg(short, long, use_value_delimiter(true), value_name("ENV=VAR"), value_parser = parse_key_val::<String, String>)]
     env: Option<Vec<(String, String)>>,
 
@@ -51,9 +52,11 @@ struct Args {
     #[arg(long)]
     allow_fs: Option<bool>,
 
+    /// Configure runtime preopen mappings
     #[arg(long, value_name("preopen=hostpreopen"), value_parser = parse_key_val::<String, String>)]
     preopen: Option<Vec<(String, String)>>,
 
+    /// Mount a virtual directory globbed from the local filesystem
     #[arg(long, value_name("preopen=virtualdir"), value_parser = parse_key_val::<String, String>)]
     mount: Option<Vec<(String, String)>>,
 

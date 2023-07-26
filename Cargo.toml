@@ -33,10 +33,10 @@ clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.7"
 walrus = "0.20.1"
-wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools", branch = "main" }
-wasm-metadata = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wasm-compose = "0.4.0"
+wasm-metadata = "0.10.1"
 wasm-opt = "0.113.0"
-wit-component = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wit-component = "0.13.1"
 
 [build-dependencies]
 anyhow = "1"
@@ -46,8 +46,8 @@ anyhow = "1"
 async-std = { version = "1", features = ["attributes"] }
 cap-std = "1.0.12"
 heck =  { version = "0.4" }
-wasmtime = { version = "10.0.1", features = ["component-model"] }
-wasmtime-wasi =  "10.0.1"
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", features = ["component-model"] }
+wasmtime-wasi =  { git = "https://github.com/bytecodealliance/wasmtime" }
 
 [workspace.dependencies]
 anyhow = "1"

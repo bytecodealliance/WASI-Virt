@@ -11,9 +11,8 @@ use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store, WasmBacktraceDetails,
 };
-use wasmtime_wasi::preview2::{
-    wasi as wasi_preview2, DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
-};
+use wasmtime_wasi::preview2::command::add_to_linker;
+use wasmtime_wasi::preview2::{DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi::Dir;
 use wit_component::ComponentEncoder;
 
@@ -103,7 +102,10 @@ async fn virt_test() -> Result<()> {
             .validate(true)
             .module(&component_core)?;
         encoder = encoder.adapter("wasi_snapshot_preview1", wasi_adapter.as_slice())?;
-        fs::write(&generated_component_path, encoder.encode()?)?;
+        fs::write(
+            &generated_component_path,
+            encoder.encode().with_context(|| "Encoding component")?,
+        )?;
 
         // create the test case specific virtualization
         let mut virt_component_path = generated_path.join(test_case_name);
@@ -188,7 +190,7 @@ async fn virt_test() -> Result<()> {
             Ok(())
         })?;
 
-        wasi_preview2::command::add_to_linker(&mut linker)?;
+        add_to_linker(&mut linker)?;
         let mut store = Store::new(&engine, CommandCtx { table, wasi });
 
         let (instance, _instance) =

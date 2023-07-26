@@ -85,24 +85,30 @@ pub struct VirtFile {
 type VirtDir = BTreeMap<String, FsEntry>;
 
 impl VirtFs {
+    /// Deny host preopens at runtime
     pub fn deny_host_preopens(&mut self) {
         self.host_preopens = false;
     }
+    /// Allow host preopens at runtime
     pub fn allow_host_preopens(&mut self) {
         self.host_preopens = true;
     }
+    /// Add a preopen entry
     pub fn preopen(&mut self, name: String, preopen: FsEntry) -> &mut Self {
         self.preopens.insert(name, preopen);
         self
     }
+    /// Add a runtime preopen host mapping
     pub fn host_preopen(&mut self, name: String, dir: String) -> &mut Self {
         self.preopens.insert(name, FsEntry::RuntimeDir(dir));
         self
     }
+    /// Add a preopen virtualized local directory (which will be globbed)
     pub fn virtual_preopen(&mut self, name: String, dir: String) -> &mut Self {
         self.preopens.insert(name, FsEntry::Virtualize(dir));
         self
     }
+    /// Set the passive cutoff size in bytes for creating Wasm passive segments
     pub fn passive_cutoff(&mut self, passive_cutoff: usize) -> &mut Self {
         self.passive_cutoff = Some(passive_cutoff);
         self
