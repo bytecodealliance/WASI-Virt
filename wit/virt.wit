@@ -14,6 +14,12 @@ world virtual-adapter {
   export wasi:cli-base/environment
   export wasi:filesystem/filesystem
   export wasi:cli-base/preopens
+  import wasi:cli-base/stdin
+  import wasi:cli-base/stdout
+  import wasi:cli-base/stderr
+  export wasi:cli-base/stdin
+  export wasi:cli-base/stdout
+  export wasi:cli-base/stderr
 }
 
 world virtual-base {
@@ -27,13 +33,20 @@ world virtual-env {
   export wasi:cli-base/environment
 }
 
-world virtual-fs {
+world virtual-io {
   import wasi:cli-base/preopens
   import wasi:filesystem/filesystem
   import wasi:io/streams
   export wasi:io/streams
   export wasi:filesystem/filesystem
   export wasi:cli-base/preopens
+  import wasi:cli-base/stdin
+  import wasi:cli-base/stdout
+  import wasi:cli-base/stderr
+  export wasi:cli-base/stdin
+  export wasi:cli-base/stdout
+  export wasi:cli-base/stderr
+  import wasi:poll/poll
 }
 
 world virt-test {

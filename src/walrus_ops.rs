@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use walrus::{
     ir::Value, ActiveData, ActiveDataLocation, Data, DataKind, ExportItem, Function,
     FunctionBuilder, FunctionId, FunctionKind, GlobalKind, ImportKind, ImportedFunction, InitExpr,
-    MemoryId, Module,
+    MemoryId, Module, ValType,
 };
 
 pub(crate) fn get_active_data_start(data: &Data, mem: MemoryId) -> Result<u32> {
@@ -107,6 +107,21 @@ pub(crate) fn get_exported_func(module: &mut Module, name: &str) -> Result<Funct
         bail!("{name} not a function");
     };
     Ok(fid)
+}
+
+pub(crate) fn add_stub_exported_func(
+    module: &mut Module,
+    export_name: &str,
+    params: Vec<ValType>,
+    results: Vec<ValType>,
+) -> Result<()> {
+    let mut builder = FunctionBuilder::new(&mut module.types, &params, &results);
+    builder.func_body().unreachable();
+    let local_func = builder.local_func(vec![]);
+    let fid = module.funcs.add_local(local_func);
+    module.exports.add(export_name, ExportItem::Function(fid));
+
+    Ok(())
 }
 
 pub(crate) fn stub_imported_func(

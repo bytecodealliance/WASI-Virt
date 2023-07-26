@@ -14,40 +14,44 @@
 
 The virtualized component can be composed into a WASI Preview2 component with `wasm-tools compose`, providing fully-configurable WASI virtualization with host pass through or full encapsulation as needed.
 
-Subsystem support:
+Supports all of the current WASI subsystems:
 
-- [x] Environment virtualization
-- [x] Filesystem virtualization
-- [ ] Stdio
+- [x] Environment: Set environment variables, configure host environment variable permissions
+- [x] Filesystem: Mount a read-only filesystem, configure host filesystem pass-through
+- [x] Stdio: Currently only supports disabling
 - [ ] Sockets
 - [ ] Clocks
-- [ ] [Your suggestion here](https://github.com/bytecodealliance/WASI-Virt/issues/new)
+- [x] Exit
+- [ ] Random
 
 While current virtualization support is limited, the goal for this project is to support a wide range of WASI virtualization use cases.
 
+Have an unhandled use case? Post a [virtualization suggestion](https://github.com/bytecodealliance/WASI-Virt/issues/new).
+
 ## Explainer
 
-When wanting to run WebAssembly Components depending on WASI APIs in other environments it can provide
-a point of friction having to port WASI interop to every target platform.
+When wanting to run WebAssembly Components depending on WASI APIs in other environments it can provide a point of friction having to port WASI interop to every target platform.
 
 In addition having full unrestricted access to core operating system APIs is a security concern.
 
-WASI Virt allows taking a component that depends on WASI APIs and using a virtualized adapter to convert
-it into a component that no longer depends on those WASI APIs, or conditionally only depends on them in 
-a configurable way.
+WASI Virt allows taking a component that depends on WASI APIs and using a virtualized adapter to convert it into a component that no longer depends on those WASI APIs, or conditionally only depends on them in a configurable way.
 
-For example, consider converting an application to a WebAssembly Component that assumes it can load
-read some files from the filesystem, but never needs to write.
+For example, consider converting an application to a WebAssembly Component that assumes it can load read some files from the filesystem, but never needs to write.
 
-Using WASI Virt, those specific file paths can be mounted and virtualized into the component itself as 
-a post-compile operation, while banning the final component from being able to access the host's filesystem at
-all. The inner program still imports a wasi filesystem, but the filesystem implementation is provided by another component, rather than in the host environment. The composition of these two components no longer has a
-filesystem import, so it can be run in hosts (or other components) which do not provide a filesystem API.
+Using WASI Virt, those specific file paths can be mounted and virtualized into the component itself as a post-compile operation, while banning the final component from being able to access the host's filesystem at all. The inner program still imports a wasi filesystem, but the filesystem implementation is provided by another component, rather than in the host environment. The composition of these two components no longer has a filesystem import, so it can be run in hosts (or other components) which do not provide a filesystem API.
 
 ## Basic Usage
 
 ```
 cargo install wasi-virt
+```
+
+By default, all virtualizations encapsulate the host virtualization, unless explicitly enabling host passthrough via `--allow-env` or `--preopen`.
+
+In all of the following examples, the `component.wasm` argument is optional. If omitted, then the virtualized adapter is output into `virt.wasm`, which can be composed into any component with:
+
+```
+wasm-tools compose component.wasm -d virt.wasm -o component.virt.wasm
 ```
 
 ### Env Virtualization
@@ -80,24 +84,36 @@ wasi-virt component.wasm --preopen /=/restricted/path -o virt.wasm
 wasi-virt component.wasm --mount /virt-dir=./local --preopen /host-dir=/host/path -o virt.wasm
 ```
 
-By default, all virtualizations encapsulate the host virtualization, unless explicitly enabling
-host passthrough via `--allow-env` or `--preopen`.
-
-In all of the above examples, the `component.wasm` argument is optional. If omitted, then the virtualized
-adapter is output into `virt.wasm`, which can be composed into any component with:
+### Stdio Virtualization
 
 ```
-wasm-tools compose component.wasm -d virt.wasm -o component.virt.wasm
+# Ignore all stdio entirely
+wasi-virt --allow-stdio
+
+# Throw an error if attempting any stdio
+# (this is the default)
+wasi-virt --deny-stdio
+
+# Provide stdin as an inline string
+wasi-virt --stdin=test
+
+# Provide stdio
 ```
 
 ## API
+
+When using the virtualization API, subsystems are passthrough by default instead of deny by default.
 
 ```rs
 use std::fs;
 use wasi_virt::{WasiVirt, FsEntry};
 
 fn main() {
-    let virt = WasiVirt::new();
+    let mut virt = WasiVirt::new_reactor();
+
+    // ignore stdio
+    virt.stdio().ignore();
+
     virt.env()
       // provide an allow list of host env vars
       .allow(&["PUBLIC_ENV_VAR"])
@@ -124,8 +140,19 @@ fn main() {
 }
 ```
 
-When calling a subsystem for the first time, its virtualization will be enabled. Subsystems
-not used or configured at all will be omitted from the virtualization entirely.
+When calling a subsystem for the first time, its virtualization will be enabled. Subsystems not used or configured at all will be omitted from the virtualization entirely.
+
+## Contributing
+
+To build, run `./build-adapter.sh` which builds the master `virtual-adapter` component, followed by `cargo build` to build
+the virtualization tooling (located in `src`).
+
+Tests can be run with `cargo test`, which runs the tests in `tests/virt.rs`.
+
+Test components are built from the `tests/components` directory, and run against the configurations provided in `tests/cases`.
+
+To update WASI, `lib/wasi_snapshot_preview1.reactor.wasm` needs
+to be updated to the latest Wasmtime build, and the `wit/deps` folder needs to be updated with the latest WASI definitions.
 
 # License
 

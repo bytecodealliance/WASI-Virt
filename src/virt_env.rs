@@ -65,7 +65,7 @@ impl VirtEnv {
     }
 }
 
-pub fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> {
+pub(crate) fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> {
     let env_ptr_addr = {
         let env_ptr_export = module
             .exports
@@ -208,7 +208,7 @@ pub fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> 
     Ok(())
 }
 
-fn stub_env_virt(module: &mut Module) -> Result<()> {
+pub(crate) fn stub_env_virt(module: &mut Module) -> Result<()> {
     stub_imported_func(module, "wasi:cli-base/environment", "get-arguments", true)?;
     stub_imported_func(module, "wasi:cli-base/environment", "get-environment", true)?;
     Ok(())

@@ -733,6 +733,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "do-everything"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "rand",
+ "wit-bindgen",
+]
+
+[[package]]
 name = "either"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
