@@ -7,17 +7,42 @@ use walrus::{ir::Value, ExportItem, GlobalKind, InitExpr, Module};
 
 use crate::{
     data::{Data, WasmEncode},
-    walrus_ops::{
-        get_active_data_segment, get_stack_global, remove_exported_func, stub_imported_func,
-    },
+    walrus_ops::{get_active_data_segment, get_stack_global, stub_imported_func},
 };
 
 pub type VirtualFiles = BTreeMap<String, String>;
 
 #[derive(Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct VirtStdio {
+    pub stdin: bool,
+    pub stdout: bool,
+    pub stderr: bool,
+}
+
+impl VirtStdio {
+    pub fn stdin(&mut self, allow: bool) -> &mut Self {
+        self.stdin = allow;
+        self
+    }
+    pub fn stdout(&mut self, allow: bool) -> &mut Self {
+        self.stdout = allow;
+        self
+    }
+    pub fn stderr(&mut self, allow: bool) -> &mut Self {
+        self.stderr = allow;
+        self
+    }
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct VirtFs {
+    /// Enable verbatim host preopens
+    #[serde(default)]
+    pub host_preopens: bool,
     /// Filesystem state to virtualize
+    #[serde(default)]
     pub preopens: BTreeMap<String, FsEntry>,
     /// A cutoff size in bytes, above which
     /// files will be treated as passive segments.
@@ -214,8 +239,36 @@ impl FsEntry {
     }
 }
 
-pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<VirtualFiles> {
+// io flags
+const FLAGS_ENABLE_STDIN: u32 = 1;
+const FLAGS_ENABLE_STDOUT: u32 = 2;
+const FLAGS_ENABLE_STDERR: u32 = 4;
+const FLAGS_HOST_PREOPENS: u32 = 8;
+const FLAGS_HOST_PASSTHROUGH: u32 = 16;
+
+pub(crate) fn create_io_virt<'a>(
+    module: &'a mut Module,
+    fs: &VirtFs,
+    stdio: &VirtStdio,
+) -> Result<VirtualFiles> {
     let mut virtual_files = BTreeMap::new();
+    let mut flags: u32 = 0;
+
+    if fs.host_preopens {
+        flags |= FLAGS_HOST_PREOPENS;
+    }
+    if stdio.stdin {
+        flags |= FLAGS_ENABLE_STDIN;
+    }
+    if stdio.stdout {
+        flags |= FLAGS_ENABLE_STDOUT;
+    }
+    if stdio.stderr {
+        flags |= FLAGS_ENABLE_STDERR;
+    }
+    if !stdio.stdin && !stdio.stdout && !stdio.stderr {
+        stub_stdio_virt(module)?;
+    }
 
     // First we iterate the options and fill in all HostDir and HostFile entries
     // With inline directory and file entries
@@ -260,7 +313,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<Virtual
 
     // Create the data section bytes
     let mut data_section = Data::new(get_stack_global(module)? as usize);
-    let mut host_passthrough = false;
+    let mut fs_passthrough = fs.host_preopens;
 
     // Next we linearize the pre-order directory graph as the static file data
     // Using a pre-order traversal
@@ -277,7 +330,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<Virtual
                 FsEntry::Virtualize(_) | FsEntry::Source(_) => unreachable!(),
                 FsEntry::Symlink(_) => todo!("symlink support"),
                 FsEntry::RuntimeFile(path) => {
-                    host_passthrough = true;
+                    fs_passthrough = true;
                     let str = data_section.string(path)?;
                     (
                         StaticIndexType::RuntimeHostFile,
@@ -285,7 +338,7 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<Virtual
                     )
                 }
                 FsEntry::RuntimeDir(path) => {
-                    host_passthrough = true;
+                    fs_passthrough = true;
                     let str = data_section.string(path)?;
                     (
                         StaticIndexType::RuntimeHostDir,
@@ -341,30 +394,32 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<Virtual
 
     let memory = module.memories.iter().nth(0).unwrap().id();
 
-    let fs_ptr_addr = {
-        let fs_ptr_export = module
+    let io_ptr_addr = {
+        let io_ptr_export = module
             .exports
             .iter()
-            .find(|expt| expt.name.as_str() == "fs")
-            .context("Adapter 'fs' is not exported")?;
-        let ExportItem::Global(fs_ptr_global) = fs_ptr_export.item else {
-            bail!("Adapter 'fs' not a global");
+            .find(|expt| expt.name.as_str() == "io")
+            .context("Virt adapter 'io' is not exported")?;
+        let ExportItem::Global(io_ptr_global) = io_ptr_export.item else {
+            bail!("Virt adapter 'io' not a global");
         };
-        let GlobalKind::Local(InitExpr::Value(Value::I32(fs_ptr_addr))) =
-            &module.globals.get(fs_ptr_global).kind
+        let GlobalKind::Local(InitExpr::Value(Value::I32(io_ptr_addr))) =
+            &module.globals.get(io_ptr_global).kind
         else {
-            bail!("Adapter 'fs' not a local I32 global value");
+            bail!("Virt adapter 'io' not a local I32 global value");
         };
-        *fs_ptr_addr as u32
+        *io_ptr_addr as u32
     };
 
     // If host fs is disabled, remove its imports entirely
     // replacing it with a stub panic
-    if !host_passthrough {
-        stub_fs_virt(module)?;
+    if !fs_passthrough {
+        stub_io_virt(module)?;
+    } else {
+        flags |= FLAGS_HOST_PASSTHROUGH;
     }
 
-    let (data, data_offset) = get_active_data_segment(module, memory, fs_ptr_addr)?;
+    let (data, data_offset) = get_active_data_segment(module, memory, io_ptr_addr)?;
 
     let preopen_addr = data_section.write_slice(preopen_indices.as_slice())?;
 
@@ -378,15 +433,15 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<Virtual
 
     // In the existing static data segment, update the static data options.
     //
-    // From virtual-adapter/src/fs.rs:
+    // From virtual-adapter/src/io.rs:
     //
     // #[repr(C)]
-    // pub static mut fs: Fs = Fs {
+    // pub static mut io: Io = Io {
     //     preopen_cnt: 0,                             // [byte 0]
     //     preopens: 0 as *const usize,                // [byte 4]
     //     static_index_cnt: 0,                        // [byte 8]
     //     static_index: 0 as *const StaticIndexEntry, // [byte 12]
-    //     host_passthrough: false,                    // [byte 16]
+    //     flags: 0                                    // [byte 16]
     // };
     bytes[data_offset..data_offset + 4].copy_from_slice(&(fs.preopens.len() as u32).to_le_bytes());
     bytes[data_offset + 4..data_offset + 8].copy_from_slice(&(preopen_addr as u32).to_le_bytes());
@@ -394,9 +449,8 @@ pub fn create_fs_virt<'a>(module: &'a mut Module, fs: &VirtFs) -> Result<Virtual
         .copy_from_slice(&(static_fs_data.len() as u32).to_le_bytes());
     bytes[data_offset + 12..data_offset + 16]
         .copy_from_slice(&(static_index_addr as u32).to_le_bytes());
-    if host_passthrough {
-        bytes[data_offset + 16..data_offset + 20].copy_from_slice(&(1 as u32).to_le_bytes());
-    }
+
+    bytes[data_offset + 16..data_offset + 20].copy_from_slice(&flags.to_le_bytes());
 
     data_section.finish(module)?;
 
@@ -551,71 +605,15 @@ fn stub_fs_virt(module: &mut Module) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn strip_fs_virt(module: &mut Module) -> Result<()> {
+fn stub_stdio_virt(module: &mut Module) -> Result<()> {
+    stub_imported_func(module, "wasi:cli-base/stdin", "get-stdin", false)?;
+    stub_imported_func(module, "wasi:cli-base/stdout", "get-stdout", false)?;
+    stub_imported_func(module, "wasi:cli-base/stderr", "get-stderr", false)?;
+    Ok(())
+}
+
+pub(crate) fn stub_io_virt(module: &mut Module) -> Result<()> {
+    stub_stdio_virt(module)?;
     stub_fs_virt(module)?;
-
-    remove_exported_func(module, "wasi:cli-base/preopens#get-directories")?;
-
-    remove_exported_func(module, "wasi:filesystem/filesystem#read-via-stream")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#write-via-stream")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#append-via-stream")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#advise")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#sync-data")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#get-flags")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#get-type")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#set-size")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#set-times")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#read")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#write")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#read-directory")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#sync")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#create-directory-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#stat")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#stat-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#set-times-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#link-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#open-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#readlink-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#remove-directory-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#rename-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#symlink-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#access-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#unlink-file-at")?;
-    remove_exported_func(
-        module,
-        "wasi:filesystem/filesystem#change-file-permissions-at",
-    )?;
-    remove_exported_func(
-        module,
-        "wasi:filesystem/filesystem#change-directory-permissions-at",
-    )?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#lock-shared")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#lock-exclusive")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#try-lock-shared")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#try-lock-exclusive")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#unlock")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#drop-descriptor")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#read-directory-entry")?;
-    remove_exported_func(
-        module,
-        "wasi:filesystem/filesystem#drop-directory-entry-stream",
-    )?;
-
-    remove_exported_func(module, "wasi:io/streams#read")?;
-    remove_exported_func(module, "wasi:io/streams#blocking-read")?;
-    remove_exported_func(module, "wasi:io/streams#skip")?;
-    remove_exported_func(module, "wasi:io/streams#blocking-skip")?;
-    remove_exported_func(module, "wasi:io/streams#subscribe-to-input-stream")?;
-    remove_exported_func(module, "wasi:io/streams#drop-input-stream")?;
-    remove_exported_func(module, "wasi:io/streams#write")?;
-    remove_exported_func(module, "wasi:io/streams#blocking-write")?;
-    remove_exported_func(module, "wasi:io/streams#write-zeroes")?;
-    remove_exported_func(module, "wasi:io/streams#blocking-write-zeroes")?;
-    remove_exported_func(module, "wasi:io/streams#splice")?;
-    remove_exported_func(module, "wasi:io/streams#blocking-splice")?;
-    remove_exported_func(module, "wasi:io/streams#forward")?;
-    remove_exported_func(module, "wasi:io/streams#subscribe-to-output-stream")?;
-    remove_exported_func(module, "wasi:io/streams#drop-output-stream")?;
-
     Ok(())
 }

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::{env, error::Error, fs, path::PathBuf, time::SystemTime};
-use wasi_virt::WasiVirt;
+use wasi_virt::{VirtExit, WasiVirt};
 use wasm_compose::composer::ComponentComposer;
 
 #[derive(Parser, Debug)]
@@ -20,6 +20,10 @@ struct Args {
     /// As defined in [`VirtOpts`]
     #[arg(short, long, verbatim_doc_comment)]
     config: Option<String>,
+
+    /// Allow the component to exit
+    #[arg(long)]
+    allow_exit: Option<bool>,
 
     // ENV
     /// Allow host access to all environment variables, or to a specific comma-separated list of variable names.
@@ -78,6 +82,13 @@ fn main() -> Result<()> {
 
     // By default, we virtualize all subsystems
     // This ensures full encapsulation in the default (no argument) case
+
+    // exit
+    virt_opts.exit(if args.allow_exit.unwrap_or_default() {
+        VirtExit::Passthrough
+    } else {
+        Default::default()
+    });
 
     // env options
     let env = virt_opts.env();

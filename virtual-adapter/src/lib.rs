@@ -1,7 +1,7 @@
 #![no_main]
 
 mod env;
-mod fs;
+mod io;
 
 wit_bindgen::generate!({
     path: "../wit",
