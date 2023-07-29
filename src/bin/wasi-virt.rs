@@ -25,6 +25,20 @@ struct Args {
     #[arg(long)]
     allow_exit: Option<bool>,
 
+    // STDIO
+    /// Enable all stdio
+    #[arg(long)]
+    allow_stdio: Option<bool>,
+    /// Enable stdin
+    #[arg(long)]
+    allow_stdin: Option<bool>,
+    /// Enable stdout
+    #[arg(long)]
+    allow_stdout: Option<bool>,
+    /// Enable stderr
+    #[arg(long)]
+    allow_stderr: Option<bool>,
+
     // ENV
     /// Allow host access to all environment variables, or to a specific comma-separated list of variable names.
     #[arg(long, num_args(0..), use_value_delimiter(true), require_equals(true), value_name("ENV_VAR"))]
@@ -40,6 +54,11 @@ struct Args {
     #[arg(long, value_name("preopen=virtualdir"), value_parser = parse_key_val::<String, String>)]
     mount: Option<Vec<(String, String)>>,
 
+    // CLOCKS
+
+    // SOCKETS
+
+    //
     /// Wasm binary to compose the virtualization with
     /// If not provided, the virtualization component itself will only generated.
     #[arg(required(false))]
@@ -82,6 +101,20 @@ fn main() -> Result<()> {
 
     // By default, we virtualize all subsystems
     // This ensures full encapsulation in the default (no argument) case
+
+    // stdio
+    virt_opts.stdio().stdin(
+        args.allow_stdin
+            .unwrap_or(args.allow_stdio.unwrap_or(false)),
+    );
+    virt_opts.stdio().stdout(
+        args.allow_stdout
+            .unwrap_or(args.allow_stdio.unwrap_or(false)),
+    );
+    virt_opts.stdio().stderr(
+        args.allow_stderr
+            .unwrap_or(args.allow_stdio.unwrap_or(false)),
+    );
 
     // exit
     virt_opts.exit(if args.allow_exit.unwrap_or_default() {

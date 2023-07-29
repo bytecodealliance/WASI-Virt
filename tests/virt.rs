@@ -70,9 +70,10 @@ async fn virt_test() -> Result<()> {
         let test_case_path = test_case.path();
         let test_case_file_name = test_case.file_name().to_string_lossy().to_string();
         let test_case_name = test_case_file_name.strip_suffix(".toml").unwrap();
+        println!("- {:?}", test_case_path);
 
         // Filtering...
-        // if test_case_name != "env-allow" {
+        // if test_case_name != "passthrough" {
         //     continue;
         // }
 
@@ -108,6 +109,7 @@ async fn virt_test() -> Result<()> {
         virt_component_path.set_extension("virt.wasm");
         let mut virt_opts = test.virt_opts.clone().unwrap_or_default();
         virt_opts.exit(Default::default());
+        // virt_opts.wasm_opt = Some(false);
 
         let virt_component = virt_opts
             .finish()

@@ -4,13 +4,14 @@ use std::env;
 use std::fs;
 use std::time::SystemTime;
 use virt_env::{create_env_virt, strip_env_virt};
-use virt_io::create_io_virt;
-use virt_io::stub_io_virt;
+use virt_io::strip_clocks_virt;
+use virt_io::strip_fs_virt;
+use virt_io::strip_http_virt;
+use virt_io::strip_stdio_virt;
 use virt_io::VirtStdio;
-use walrus::Module;
+use virt_io::{create_io_virt, strip_io_virt};
 use walrus::ValType;
 use walrus_ops::add_stub_exported_func;
-use walrus_ops::remove_exported_func;
 use wasm_metadata::Producers;
 use wasm_opt::Feature;
 use wasm_opt::OptimizationOptions;
@@ -54,6 +55,12 @@ pub struct WasiVirt {
     pub stdio: Option<VirtStdio>,
     /// Exit virtualization
     pub exit: Option<VirtExit>,
+    /// Clocks virtualization
+    #[serde(default)]
+    pub clocks: bool,
+    /// Http virtualization
+    #[serde(default)]
+    pub http: bool,
     /// Disable wasm-opt run if desired
     pub wasm_opt: Option<bool>,
 }
@@ -66,6 +73,14 @@ pub struct VirtResult {
 impl WasiVirt {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn clocks(&mut self) {
+        self.clocks = true;
+    }
+
+    pub fn http(&mut self) {
+        self.http = true;
     }
 
     pub fn exit(&mut self, virt_exit: VirtExit) {
@@ -95,29 +110,10 @@ impl WasiVirt {
         let mut module = config.parse(virt_adapter)?;
         module.name = Some("wasi_virt".into());
 
-        let mut has_io = false;
-
+        // very few subsystems are fully independent of io, these are them
         if let Some(env) = &self.env {
             create_env_virt(&mut module, env)?;
-        } else {
-            strip_env_virt(&mut module)?;
         }
-
-        let virtual_files = if self.fs.is_some() || self.stdio.is_some() {
-            has_io = true;
-            // pull in one io subsystem -> pull in all io subsystems
-            // (due to virtualization wrapping required for streams + poll)
-            self.fs();
-            self.stdio();
-            create_io_virt(
-                &mut module,
-                self.fs.as_ref().unwrap(),
-                self.stdio.as_ref().unwrap(),
-            )?
-        } else {
-            Default::default()
-        };
-
         if matches!(self.exit, Some(VirtExit::Unreachable)) {
             add_stub_exported_func(
                 &mut module,
@@ -127,9 +123,14 @@ impl WasiVirt {
             )?;
         }
 
-        if !has_io {
-            strip_io_virt(&mut module)?;
-        }
+        let has_io = self.fs.is_some() || self.stdio.is_some();
+
+        let virtual_files = if has_io {
+            // io virt is managed through a singular io configuration
+            create_io_virt(&mut module, self.fs.as_ref(), self.stdio.as_ref())?
+        } else {
+            Default::default()
+        };
 
         // decode the component custom section to strip out the unused world exports
         // before reencoding.
@@ -152,12 +153,51 @@ impl WasiVirt {
 
         let env_world = bindgen.resolve.select_world(*pkg_id, Some("virtual-env"))?;
         let io_world = bindgen.resolve.select_world(*pkg_id, Some("virtual-io"))?;
+        // let exit_world = bindgen
+        //     .resolve
+        //     .select_world(*pkg_id, Some("virtual-exit"))?;
+        let fs_world = bindgen.resolve.select_world(*pkg_id, Some("virtual-fs"))?;
+        let stdio_world = bindgen
+            .resolve
+            .select_world(*pkg_id, Some("virtual-stdio"))?;
+        let clocks_world = bindgen
+            .resolve
+            .select_world(*pkg_id, Some("virtual-clocks"))?;
+        let http_world = bindgen
+            .resolve
+            .select_world(*pkg_id, Some("virtual-http"))?;
 
         if self.env.is_some() {
             bindgen.resolve.merge_worlds(env_world, base_world)?;
+        } else {
+            strip_env_virt(&mut module)?;
         }
         if has_io {
             bindgen.resolve.merge_worlds(io_world, base_world)?;
+
+            // io subsystems have io dependence due to streams + poll
+            if self.clocks {
+                bindgen.resolve.merge_worlds(clocks_world, base_world)?;
+            } else {
+                strip_clocks_virt(&mut module)?;
+            }
+            if self.http {
+                bindgen.resolve.merge_worlds(http_world, base_world)?;
+            } else {
+                strip_http_virt(&mut module)?;
+            }
+            if self.stdio.is_some() {
+                bindgen.resolve.merge_worlds(stdio_world, base_world)?;
+            } else {
+                strip_stdio_virt(&mut module)?;
+            }
+            if self.fs.is_some() {
+                bindgen.resolve.merge_worlds(fs_world, base_world)?;
+            } else {
+                strip_fs_virt(&mut module)?;
+            }
+        } else {
+            strip_io_virt(&mut module)?;
         }
 
         let mut producers = Producers::default();
@@ -212,73 +252,4 @@ fn timestamp() -> u64 {
         Ok(n) => n.as_secs(),
         Err(_) => panic!(),
     }
-}
-
-fn strip_io_virt(module: &mut Module) -> Result<()> {
-    stub_io_virt(module)?;
-
-    remove_exported_func(module, "wasi:cli-base/preopens#get-directories")?;
-
-    remove_exported_func(module, "wasi:filesystem/filesystem#read-via-stream")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#write-via-stream")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#append-via-stream")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#advise")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#sync-data")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#get-flags")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#get-type")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#set-size")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#set-times")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#read")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#write")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#read-directory")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#sync")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#create-directory-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#stat")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#stat-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#set-times-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#link-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#open-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#readlink-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#remove-directory-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#rename-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#symlink-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#access-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#unlink-file-at")?;
-    remove_exported_func(
-        module,
-        "wasi:filesystem/filesystem#change-file-permissions-at",
-    )?;
-    remove_exported_func(
-        module,
-        "wasi:filesystem/filesystem#change-directory-permissions-at",
-    )?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#lock-shared")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#lock-exclusive")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#try-lock-shared")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#try-lock-exclusive")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#unlock")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#drop-descriptor")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#read-directory-entry")?;
-    remove_exported_func(
-        module,
-        "wasi:filesystem/filesystem#drop-directory-entry-stream",
-    )?;
-
-    remove_exported_func(module, "wasi:io/streams#read")?;
-    remove_exported_func(module, "wasi:io/streams#blocking-read")?;
-    remove_exported_func(module, "wasi:io/streams#skip")?;
-    remove_exported_func(module, "wasi:io/streams#blocking-skip")?;
-    remove_exported_func(module, "wasi:io/streams#subscribe-to-input-stream")?;
-    remove_exported_func(module, "wasi:io/streams#drop-input-stream")?;
-    remove_exported_func(module, "wasi:io/streams#write")?;
-    remove_exported_func(module, "wasi:io/streams#blocking-write")?;
-    remove_exported_func(module, "wasi:io/streams#write-zeroes")?;
-    remove_exported_func(module, "wasi:io/streams#blocking-write-zeroes")?;
-    remove_exported_func(module, "wasi:io/streams#splice")?;
-    remove_exported_func(module, "wasi:io/streams#blocking-splice")?;
-    remove_exported_func(module, "wasi:io/streams#forward")?;
-    remove_exported_func(module, "wasi:io/streams#subscribe-to-output-stream")?;
-    remove_exported_func(module, "wasi:io/streams#drop-output-stream")?;
-
-    Ok(())
 }

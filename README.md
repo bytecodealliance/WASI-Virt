@@ -18,15 +18,15 @@ Supports all of the current WASI subsystems:
 
 - [x] Environment: Set environment variables, configure host environment variable permissions
 - [x] Filesystem: Mount a read-only filesystem, configure host filesystem pass-through
-- [x] Stdio: Currently only supports disabling
-- [ ] Sockets
-- [ ] Clocks
-- [x] Exit
-- [ ] Random
+- [x] Stdio: Allow / Ignore
+- [ ] Sockets: Allow / Ignore
+- [ ] Clocks: Allow / Ignore
+- [x] Exit: Allow / Ignore
+- [ ] Random: Allow / Ignore
 
 While current virtualization support is limited, the goal for this project is to support a wide range of WASI virtualization use cases.
 
-Have an unhandled use case? Post a [virtualization suggestion](https://github.com/bytecodealliance/WASI-Virt/issues/new).
+Have an unhandled use case? Post a virtualization [suggestion](https://github.com/bytecodealliance/WASI-Virt/issues/new).
 
 ## Explainer
 

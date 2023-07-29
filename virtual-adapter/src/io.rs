@@ -2,11 +2,22 @@ use crate::exports::wasi::cli_base::preopens::Preopens;
 use crate::exports::wasi::cli_base::stderr::Stderr;
 use crate::exports::wasi::cli_base::stdin::Stdin;
 use crate::exports::wasi::cli_base::stdout::Stdout;
+use crate::exports::wasi::clocks::monotonic_clock::MonotonicClock;
 use crate::exports::wasi::filesystem::filesystem::{
     AccessType, Advice, Datetime, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry,
     ErrorCode, Filesystem, Modes, NewTimestamp, OpenFlags, PathFlags,
 };
-use crate::exports::wasi::io::streams::{StreamError, Streams};
+use crate::exports::wasi::http::types::{
+    Error, Fields, Headers, Method, Scheme, StatusCode, Trailers, Types,
+};
+use crate::exports::wasi::io::streams::{InputStream, OutputStream, StreamError, Streams};
+use crate::exports::wasi::poll::poll::Poll;
+// use crate::exports::wasi::sockets::ip_name_lookup::{
+//     IpAddressFamily, IpNameLookup, Network, ResolveAddressStream,
+// };
+// use crate::exports::wasi::sockets::tcp::ErrorCode as NetworkErrorCode;
+// use crate::exports::wasi::sockets::tcp::{IpSocketAddress, ShutdownType, Tcp, TcpSocket};
+// use crate::exports::wasi::sockets::udp::{Datagram, Udp, UdpSocket};
 
 use crate::wasi::cli_base::preopens;
 use crate::wasi::cli_base::stderr;
@@ -14,6 +25,15 @@ use crate::wasi::cli_base::stdin;
 use crate::wasi::cli_base::stdout;
 use crate::wasi::filesystem::filesystem;
 use crate::wasi::io::streams;
+
+// these are all the subsystems which touch streams + poll
+use crate::wasi::clocks::monotonic_clock;
+use crate::wasi::http::types;
+use crate::wasi::poll::poll;
+//use crate::wasi::sockets::ip_name_lookup;
+//use crate::wasi::sockets::network;
+//use crate::wasi::sockets::tcp;
+//use crate::wasi::sockets::udp;
 
 use crate::VirtAdapter;
 
@@ -28,11 +48,11 @@ use std::ffi::CStr;
 use std::slice;
 
 // io flags
-const FLAGS_ENABLE_STDIN: u32 = 1;
-const FLAGS_ENABLE_STDOUT: u32 = 2;
-const FLAGS_ENABLE_STDERR: u32 = 4;
-const FLAGS_HOST_PREOPENS: u32 = 8;
-const FLAGS_HOST_PASSTHROUGH: u32 = 16;
+const FLAGS_ENABLE_STDIN: u32 = 1 << 0;
+const FLAGS_ENABLE_STDOUT: u32 = 1 << 1;
+const FLAGS_ENABLE_STDERR: u32 = 1 << 2;
+const FLAGS_HOST_PREOPENS: u32 = 1 << 3;
+const FLAGS_HOST_PASSTHROUGH: u32 = 1 << 4;
 
 // static fs config
 #[repr(C)]
@@ -379,6 +399,13 @@ pub struct IoState {
     descriptor_table: BTreeMap<u32, Descriptor>,
     stream_cnt: u32,
     stream_table: BTreeMap<u32, Stream>,
+    poll_cnt: u32,
+    poll_table: BTreeMap<u32, PollTarget>,
+}
+
+enum PollTarget {
+    Null,
+    Host(u32),
 }
 
 static mut STATE: IoState = IoState {
@@ -389,6 +416,8 @@ static mut STATE: IoState = IoState {
     descriptor_table: BTreeMap::new(),
     stream_cnt: 0,
     stream_table: BTreeMap::new(),
+    poll_cnt: 0,
+    poll_table: BTreeMap::new(),
 };
 
 enum Stream {
@@ -507,6 +536,11 @@ impl IoState {
             unsafe { STATE.preopen_directories.push(entry) }
         }
 
+        // we have one virtual pollable at poll 0 which is a null pollable
+        // this is just an immediately resolving pollable
+        unsafe { STATE.poll_cnt += 1 };
+        unsafe { STATE.poll_table.insert(0, PollTarget::Null) };
+
         unsafe { STATE.initialized = true };
     }
     fn get_host_preopen<'a>(path: &'a str) -> Option<(u32, &'a str)> {
@@ -571,6 +605,15 @@ impl IoState {
             Some(stream) => Ok(stream),
             None => Err(StreamError {}),
         }
+    }
+    fn new_poll(target: PollTarget) -> u32 {
+        let pid = unsafe { STATE.poll_cnt };
+        unsafe { STATE.poll_cnt += 1 };
+        unsafe { STATE.poll_table.insert(pid, target) };
+        pid
+    }
+    fn get_poll<'a>(pid: u32) -> Option<&'a mut PollTarget> {
+        unsafe { STATE.poll_table.get_mut(&pid) }
     }
 }
 
@@ -907,7 +950,9 @@ impl Streams for VirtAdapter {
         match stream {
             Stream::Null => 0,
             Stream::StaticFile(_) | Stream::StaticDir(_) => 0,
-            Stream::Host(sid) => streams::subscribe_to_input_stream(*sid),
+            Stream::Host(sid) => {
+                IoState::new_poll(PollTarget::Host(streams::subscribe_to_input_stream(*sid)))
+            }
         }
     }
     fn drop_input_stream(sid: u32) {
@@ -1020,7 +1065,9 @@ impl Streams for VirtAdapter {
         match stream {
             Stream::Null => 0,
             Stream::StaticFile(_) | Stream::StaticDir(_) => 0,
-            Stream::Host(sid) => streams::subscribe_to_output_stream(*sid),
+            Stream::Host(sid) => {
+                IoState::new_poll(PollTarget::Host(streams::subscribe_to_output_stream(*sid)))
+            }
         }
     }
     fn drop_output_stream(sid: u32) {
@@ -1058,3 +1105,492 @@ impl Stderr for VirtAdapter {
         2
     }
 }
+
+impl Poll for VirtAdapter {
+    fn drop_pollable(pid: u32) {
+        let Some(poll) = IoState::get_poll(pid) else {
+            return;
+        };
+        match poll {
+            PollTarget::Null => {}
+            PollTarget::Host(host_pid) => poll::drop_pollable(*host_pid),
+        }
+        unsafe { STATE.poll_table.remove(&pid) };
+    }
+    fn poll_oneoff(list: Vec<u32>) -> Vec<u8> {
+        let has_host_polls = list
+            .iter()
+            .find(|&&pid| matches!(IoState::get_poll(pid), Some(PollTarget::Host(_))))
+            .is_some();
+        let has_virt_polls = list
+            .iter()
+            .find(|&&pid| matches!(IoState::get_poll(pid), Some(PollTarget::Null)))
+            .is_some();
+        if has_host_polls && !has_virt_polls {
+            return poll::poll_oneoff(&list);
+        }
+        if has_virt_polls {
+            return std::iter::repeat(1).take(list.len()).collect();
+        }
+        let mut host_polls = Vec::new();
+        for pid in &list {
+            if let Some(PollTarget::Host(host_pid)) = IoState::get_poll(*pid) {
+                host_polls.push(*host_pid);
+            }
+        }
+        let host_ready = poll::poll_oneoff(&host_polls);
+        let mut ready = Vec::with_capacity(list.len());
+        let mut host_idx = 0;
+        for pid in &list {
+            match IoState::get_poll(*pid).unwrap() {
+                PollTarget::Null => {
+                    ready.push(1);
+                }
+                PollTarget::Host(_) => {
+                    ready.push(host_ready[host_idx]);
+                    host_idx += 1;
+                }
+            }
+        }
+        ready
+    }
+}
+
+impl MonotonicClock for VirtAdapter {
+    fn now() -> u64 {
+        monotonic_clock::now()
+    }
+    fn resolution() -> u64 {
+        monotonic_clock::resolution()
+    }
+    fn subscribe(when: u64, absolute: bool) -> u32 {
+        let host_pid = monotonic_clock::subscribe(when, absolute);
+        IoState::new_poll(PollTarget::Host(host_pid))
+    }
+}
+
+impl Types for VirtAdapter {
+    fn drop_fields(fields: Fields) {
+        types::drop_fields(fields)
+    }
+    fn new_fields(entries: Vec<(String, String)>) -> Fields {
+        types::new_fields(&entries)
+    }
+    fn fields_get(fields: Fields, name: String) -> Vec<String> {
+        types::fields_get(fields, &name)
+    }
+    fn fields_set(fields: Fields, name: String, value: Vec<String>) {
+        types::fields_set(fields, &name, value.as_slice())
+    }
+    fn fields_delete(fields: Fields, name: String) {
+        types::fields_delete(fields, &name)
+    }
+    fn fields_append(fields: Fields, name: String, value: String) {
+        types::fields_append(fields, &name, &value)
+    }
+    fn fields_entries(fields: Fields) -> Vec<(String, String)> {
+        types::fields_entries(fields)
+    }
+    fn fields_clone(fields: Fields) -> Fields {
+        types::fields_clone(fields)
+    }
+    fn finish_incoming_stream(s: InputStream) -> Option<Trailers> {
+        types::finish_incoming_stream(s)
+    }
+    fn finish_outgoing_stream(s: OutputStream, trailers: Option<Trailers>) {
+        types::finish_outgoing_stream(s, trailers)
+    }
+    fn drop_incoming_request(request: u32) {
+        types::drop_incoming_request(request)
+    }
+    fn drop_outgoing_request(request: u32) {
+        types::drop_outgoing_request(request)
+    }
+    fn incoming_request_method(request: u32) -> Method {
+        method_map_rev(types::incoming_request_method(request))
+    }
+    fn incoming_request_path(request: u32) -> String {
+        types::incoming_request_path(request)
+    }
+    fn incoming_request_query(request: u32) -> String {
+        types::incoming_request_query(request)
+    }
+    fn incoming_request_scheme(request: u32) -> Option<Scheme> {
+        types::incoming_request_scheme(request).map(scheme_map_rev)
+    }
+    fn incoming_request_authority(request: u32) -> String {
+        types::incoming_request_authority(request)
+    }
+    fn incoming_request_headers(request: u32) -> Headers {
+        types::incoming_request_headers(request)
+    }
+    fn incoming_request_consume(request: u32) -> Result<InputStream, ()> {
+        types::incoming_request_consume(request)
+    }
+    fn new_outgoing_request(
+        method: Method,
+        path: String,
+        query: String,
+        scheme: Option<Scheme>,
+        authority: String,
+        headers: Headers,
+    ) -> u32 {
+        types::new_outgoing_request(
+            &method_map(method),
+            &path,
+            &query,
+            scheme.map(|s| scheme_map(s)).as_ref(),
+            &authority,
+            headers,
+        )
+    }
+    fn outgoing_request_write(request: u32) -> Result<OutputStream, ()> {
+        types::outgoing_request_write(request)
+    }
+    fn drop_response_outparam(response: u32) {
+        types::drop_response_outparam(response)
+    }
+    fn set_response_outparam(response: Result<u32, Error>) -> Result<(), ()> {
+        match response {
+            Ok(res) => types::set_response_outparam(Ok(res)),
+            Err(err) => {
+                let err = http_err_map(err);
+                types::set_response_outparam(Err(&err))
+            }
+        }
+    }
+    fn drop_incoming_response(response: u32) {
+        types::drop_incoming_response(response)
+    }
+    fn drop_outgoing_response(response: u32) {
+        types::drop_outgoing_response(response)
+    }
+    fn incoming_response_status(response: u32) -> StatusCode {
+        types::incoming_response_status(response)
+    }
+    fn incoming_response_headers(response: u32) -> Headers {
+        types::incoming_response_headers(response)
+    }
+    fn incoming_response_consume(response: u32) -> Result<InputStream, ()> {
+        types::incoming_response_consume(response)
+    }
+    fn new_outgoing_response(status_code: StatusCode, headers: Headers) -> u32 {
+        types::new_outgoing_response(status_code, headers)
+    }
+    fn outgoing_response_write(response: u32) -> Result<OutputStream, ()> {
+        types::outgoing_response_write(response)
+    }
+    fn drop_future_incoming_response(f: u32) {
+        types::drop_future_incoming_response(f)
+    }
+    fn future_incoming_response_get(f: u32) -> Option<Result<u32, Error>> {
+        types::future_incoming_response_get(f).map(|o| o.map_err(http_err_map_rev))
+    }
+    fn listen_to_future_incoming_response(f: u32) -> u32 {
+        types::listen_to_future_incoming_response(f)
+    }
+}
+
+fn scheme_map(scheme: Scheme) -> types::Scheme {
+    match scheme {
+        Scheme::Http => types::Scheme::Http,
+        Scheme::Https => types::Scheme::Https,
+        Scheme::Other(s) => types::Scheme::Other(s),
+    }
+}
+
+fn scheme_map_rev(scheme: types::Scheme) -> Scheme {
+    match scheme {
+        types::Scheme::Http => Scheme::Http,
+        types::Scheme::Https => Scheme::Https,
+        types::Scheme::Other(s) => Scheme::Other(s),
+    }
+}
+
+fn method_map_rev(method: types::Method) -> Method {
+    match method {
+        types::Method::Get => Method::Get,
+        types::Method::Head => Method::Head,
+        types::Method::Post => Method::Post,
+        types::Method::Put => Method::Put,
+        types::Method::Delete => Method::Delete,
+        types::Method::Connect => Method::Connect,
+        types::Method::Options => Method::Options,
+        types::Method::Trace => Method::Trace,
+        types::Method::Patch => Method::Patch,
+        types::Method::Other(s) => Method::Other(s),
+    }
+}
+
+fn method_map(method: Method) -> types::Method {
+    match method {
+        Method::Get => types::Method::Get,
+        Method::Head => types::Method::Head,
+        Method::Post => types::Method::Post,
+        Method::Put => types::Method::Put,
+        Method::Delete => types::Method::Delete,
+        Method::Connect => types::Method::Connect,
+        Method::Options => types::Method::Options,
+        Method::Trace => types::Method::Trace,
+        Method::Patch => types::Method::Patch,
+        Method::Other(s) => types::Method::Other(s),
+    }
+}
+
+fn http_err_map(err: Error) -> types::Error {
+    match err {
+        Error::InvalidUrl(s) => types::Error::InvalidUrl(s),
+        Error::TimeoutError(s) => types::Error::TimeoutError(s),
+        Error::ProtocolError(s) => types::Error::ProtocolError(s),
+        Error::UnexpectedError(s) => types::Error::UnexpectedError(s),
+    }
+}
+
+fn http_err_map_rev(err: types::Error) -> Error {
+    match err {
+        types::Error::InvalidUrl(s) => Error::InvalidUrl(s),
+        types::Error::TimeoutError(s) => Error::TimeoutError(s),
+        types::Error::ProtocolError(s) => Error::ProtocolError(s),
+        types::Error::UnexpectedError(s) => Error::UnexpectedError(s),
+    }
+}
+
+// impl IpNameLookup for VirtAdapter {
+//     fn resolve_addresses(
+//         network: Network,
+//         name: String,
+//         address_family: Option<IpAddressFamily>,
+//         include_unavailable: bool,
+//     ) -> Result<ip_name_lookup::ResolveAddressStream, network::ErrorCode> {
+//         ip_name_lookup::resolve_addresses(network, &name, address_family, include_unavailable)
+//     }
+//     fn resolve_next_address(
+//         this: ResolveAddressStream,
+//     ) -> Result<Option<ip_name_lookup::IpAddress>, network::ErrorCode> {
+//         ip_name_lookup::resolve_next_address(this)
+//     }
+//     fn drop_resolve_address_stream(this: ResolveAddressStream) {
+//         ip_name_lookup::drop_resolve_address_stream(this)
+//     }
+//     fn subscribe(this: ResolveAddressStream) -> u32 {
+//         ip_name_lookup::subscribe(this)
+//     }
+// }
+
+// impl Tcp for VirtAdapter {
+//     fn start_bind(
+//         this: TcpSocket,
+//         network: Network,
+//         local_address: IpSocketAddress,
+//     ) -> Result<(), NetworkErrorCode> {
+//         tcp::start_bind(this, network, local_address)
+//     }
+//     fn finish_bind(this: TcpSocket) -> Result<(), NetworkErrorCode> {
+//         tcp::finish_bind(this)
+//     }
+//     fn start_connect(
+//         this: TcpSocket,
+//         network: Network,
+//         remote_address: IpSocketAddress,
+//     ) -> Result<(), NetworkErrorCode> {
+//         tcp::start_connect(this, network, remote_address)
+//     }
+//     fn finish_connect(this: TcpSocket) -> Result<(InputStream, OutputStream), NetworkErrorCode> {
+//         tcp::finish_connect(this)
+//     }
+//     fn start_listen(this: TcpSocket, network: Network) -> Result<(), NetworkErrorCode> {
+//         tcp::start_listen(this, network)
+//     }
+//     fn finish_listen(this: TcpSocket) -> Result<(), NetworkErrorCode> {
+//         tcp::finish_listen(this)
+//     }
+//     fn accept(
+//         this: TcpSocket,
+//     ) -> Result<(tcp::TcpSocket, InputStream, OutputStream), NetworkErrorCode> {
+//         tcp::accept(this)
+//     }
+//     fn local_address(this: TcpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
+//         tcp::local_address(this)
+//     }
+//     fn remote_address(this: TcpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
+//         tcp::remote_address(this)
+//     }
+//     fn address_family(this: TcpSocket) -> IpAddressFamily {
+//         tcp::address_family(this)
+//     }
+//     fn ipv6_only(this: TcpSocket) -> Result<bool, NetworkErrorCode> {
+//         tcp::ipv6_only(this)
+//     }
+//     fn set_ipv6_only(this: TcpSocket, value: bool) -> Result<(), NetworkErrorCode> {
+//         tcp::set_ipv6_only(this, value)
+//     }
+//     fn set_listen_backlog_size(this: TcpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+//         tcp::set_listen_backlog_size(this, value)
+//     }
+//     fn keep_alive(this: TcpSocket) -> Result<bool, NetworkErrorCode> {
+//         tcp::keep_alive(this)
+//     }
+//     fn set_keep_alive(this: TcpSocket, value: bool) -> Result<(), NetworkErrorCode> {
+//         tcp::set_keep_alive(this, value)
+//     }
+//     fn no_delay(this: TcpSocket) -> Result<bool, NetworkErrorCode> {
+//         tcp::no_delay(this)
+//     }
+//     fn set_no_delay(this: TcpSocket, value: bool) -> Result<(), NetworkErrorCode> {
+//         tcp::set_no_delay(this, value)
+//     }
+//     fn unicast_hop_limit(this: TcpSocket) -> Result<u8, NetworkErrorCode> {
+//         tcp::unicast_hop_limit(this)
+//     }
+//     fn set_unicast_hop_limit(this: TcpSocket, value: u8) -> Result<(), NetworkErrorCode> {
+//         tcp::set_unicast_hop_limit(this, value)
+//     }
+//     fn receive_buffer_size(this: TcpSocket) -> Result<u64, NetworkErrorCode> {
+//         tcp::receive_buffer_size(this)
+//     }
+//     fn set_receive_buffer_size(this: TcpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+//         tcp::set_receive_buffer_size(this, value)
+//     }
+//     fn send_buffer_size(this: TcpSocket) -> Result<u64, NetworkErrorCode> {
+//         tcp::send_buffer_size(this)
+//     }
+//     fn set_send_buffer_size(this: TcpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+//         tcp::set_send_buffer_size(this, value)
+//     }
+//     fn subscribe(this: TcpSocket) -> u32 {
+//         tcp::subscribe(this)
+//     }
+//     fn shutdown(this: TcpSocket, shutdown_type: ShutdownType) -> Result<(), NetworkErrorCode> {
+//         tcp::shutdown(
+//             this,
+//             match shutdown_type {
+//                 ShutdownType::Receive => tcp::ShutdownType::Receive,
+//                 ShutdownType::Send => tcp::ShutdownType::Send,
+//                 ShutdownType::Both => tcp::ShutdownType::Both,
+//             },
+//         )
+//     }
+//     fn drop_tcp_socket(this: TcpSocket) {
+//         tcp::drop_tcp_socket(this)
+//     }
+// }
+
+// fn network_err_map(err: NetworkErrorCode) -> network::ErrorCode {
+//     match err {
+//         NetworkErrorCode::Unknown => network::ErrorCode::Unknown,
+//         NetworkErrorCode::AccessDenied => network::ErrorCode::AccessDenied,
+//         NetworkErrorCode::NotSupported => network::ErrorCode::NotSupported,
+//         NetworkErrorCode::OutOfMemory => network::ErrorCode::OutOfMemory,
+//         NetworkErrorCode::Timeout => network::ErrorCode::Timeout,
+//         NetworkErrorCode::ConcurrencyConflict => network::ErrorCode::ConcurrencyConflict,
+//         NetworkErrorCode::NotInProgress => network::ErrorCode::NotInProgress,
+//         NetworkErrorCode::WouldBlock => network::ErrorCode::WouldBlock,
+//         NetworkErrorCode::AddressFamilyNotSupported => {
+//             network::ErrorCode::AddressFamilyNotSupported
+//         }
+//         NetworkErrorCode::AddressFamilyMismatch => network::ErrorCode::AddressFamilyMismatch,
+//         NetworkErrorCode::InvalidRemoteAddress => network::ErrorCode::InvalidRemoteAddress,
+//         NetworkErrorCode::Ipv4OnlyOperation => network::ErrorCode::Ipv4OnlyOperation,
+//         NetworkErrorCode::Ipv6OnlyOperation => network::ErrorCode::Ipv6OnlyOperation,
+//         NetworkErrorCode::NewSocketLimit => network::ErrorCode::NewSocketLimit,
+//         NetworkErrorCode::AlreadyAttached => network::ErrorCode::AlreadyAttached,
+//         NetworkErrorCode::AlreadyBound => network::ErrorCode::AlreadyBound,
+//         NetworkErrorCode::AlreadyConnected => network::ErrorCode::AlreadyConnected,
+//         NetworkErrorCode::NotBound => network::ErrorCode::NotBound,
+//         NetworkErrorCode::NotConnected => network::ErrorCode::NotConnected,
+//         NetworkErrorCode::AddressNotBindable => network::ErrorCode::AddressNotBindable,
+//         NetworkErrorCode::AddressInUse => network::ErrorCode::AddressInUse,
+//         NetworkErrorCode::EphemeralPortsExhausted => network::ErrorCode::EphemeralPortsExhausted,
+//         NetworkErrorCode::RemoteUnreachable => network::ErrorCode::RemoteUnreachable,
+//         NetworkErrorCode::AlreadyListening => network::ErrorCode::AlreadyListening,
+//         NetworkErrorCode::NotListening => network::ErrorCode::NotListening,
+//         NetworkErrorCode::ConnectionRefused => network::ErrorCode::ConnectionRefused,
+//         NetworkErrorCode::ConnectionReset => network::ErrorCode::ConnectionReset,
+//         NetworkErrorCode::DatagramTooLarge => network::ErrorCode::DatagramTooLarge,
+//         NetworkErrorCode::InvalidName => network::ErrorCode::InvalidName,
+//         NetworkErrorCode::NameUnresolvable => network::ErrorCode::NameUnresolvable,
+//         NetworkErrorCode::TemporaryResolverFailure => network::ErrorCode::TemporaryResolverFailure,
+//         NetworkErrorCode::PermanentResolverFailure => network::ErrorCode::PermanentResolverFailure,
+//     }
+// }
+
+// impl Udp for VirtAdapter {
+//     fn start_bind(
+//         this: UdpSocket,
+//         network: Network,
+//         local_address: IpSocketAddress,
+//     ) -> Result<(), NetworkErrorCode> {
+//         udp::start_bind(this, network, local_address)
+//     }
+//     fn finish_bind(this: UdpSocket) -> Result<(), NetworkErrorCode> {
+//         udp::finish_bind(this)
+//     }
+//     fn start_connect(
+//         this: UdpSocket,
+//         network: Network,
+//         remote_address: IpSocketAddress,
+//     ) -> Result<(), NetworkErrorCode> {
+//         udp::start_connect(this, network, remote_address)
+//     }
+//     fn finish_connect(this: UdpSocket) -> Result<(), NetworkErrorCode> {
+//         udp::finish_connect(this)
+//     }
+//     fn receive(this: UdpSocket) -> Result<Datagram, NetworkErrorCode> {
+//         match udp::receive(this) {
+//             Ok(datagram) => Ok(Datagram {
+//                 data: datagram.data,
+//                 remote_address: datagram.remote_address,
+//             }),
+//             Err(err) => Err(network_err_map(err)),
+//         }
+//     }
+//     fn send(this: UdpSocket, datagram: Datagram) -> Result<(), NetworkErrorCode> {
+//         udp::send(
+//             this,
+//             &udp::Datagram {
+//                 data: datagram.data,
+//                 remote_address: datagram.remote_address,
+//             },
+//         )
+//         .map_err(network_err_map)
+//     }
+//     fn local_address(this: UdpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
+//         udp::local_address(this)
+//     }
+//     fn remote_address(this: UdpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
+//         udp::remote_address(this)
+//     }
+//     fn address_family(this: UdpSocket) -> IpAddressFamily {
+//         udp::address_family(this)
+//     }
+//     fn ipv6_only(this: UdpSocket) -> Result<bool, NetworkErrorCode> {
+//         udp::ipv6_only(this)
+//     }
+//     fn set_ipv6_only(this: UdpSocket, value: bool) -> Result<(), NetworkErrorCode> {
+//         udp::set_ipv6_only(this, value)
+//     }
+//     fn unicast_hop_limit(this: UdpSocket) -> Result<u8, NetworkErrorCode> {
+//         udp::unicast_hop_limit(this)
+//     }
+//     fn set_unicast_hop_limit(this: UdpSocket, value: u8) -> Result<(), NetworkErrorCode> {
+//         udp::set_unicast_hop_limit(this, value)
+//     }
+//     fn receive_buffer_size(this: UdpSocket) -> Result<u64, NetworkErrorCode> {
+//         udp::receive_buffer_size(this)
+//     }
+//     fn set_receive_buffer_size(this: UdpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+//         udp::set_receive_buffer_size(this, value)
+//     }
+//     fn send_buffer_size(this: UdpSocket) -> Result<u64, NetworkErrorCode> {
+//         udp::send_buffer_size(this)
+//     }
+//     fn set_send_buffer_size(this: UdpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+//         udp::set_send_buffer_size(this, value)
+//     }
+//     fn subscribe(this: UdpSocket) -> u32 {
+//         udp::subscribe(this)
+//     }
+//     fn drop_udp_socket(this: UdpSocket) {
+//         udp::drop_udp_socket(this)
+//     }
+// }
