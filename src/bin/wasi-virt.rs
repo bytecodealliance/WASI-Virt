@@ -48,6 +48,9 @@ struct Args {
     env: Option<Vec<(String, String)>>,
 
     // FS
+    #[arg(long)]
+    allow_fs: Option<bool>,
+
     #[arg(long, value_name("preopen=hostpreopen"), value_parser = parse_key_val::<String, String>)]
     preopen: Option<Vec<(String, String)>>,
 
@@ -55,10 +58,25 @@ struct Args {
     mount: Option<Vec<(String, String)>>,
 
     // CLOCKS
+    #[arg(long)]
+    allow_clocks: Option<bool>,
+
+    // HTTP
+    #[arg(long)]
+    allow_http: Option<bool>,
+
+    // RANDOM
+    #[arg(long)]
+    allow_random: Option<bool>,
 
     // SOCKETS
+    #[arg(long)]
+    allow_sockets: Option<bool>,
 
-    //
+    // Enable all subsystem passthrough
+    #[arg(long)]
+    allow_all: Option<bool>,
+
     /// Wasm binary to compose the virtualization with
     /// If not provided, the virtualization component itself will only generated.
     #[arg(required(false))]
@@ -101,20 +119,28 @@ fn main() -> Result<()> {
 
     // By default, we virtualize all subsystems
     // This ensures full encapsulation in the default (no argument) case
+    let allow_all = args.allow_all.unwrap_or(false);
+    let allow_stdio = args.allow_stdio.unwrap_or(allow_all);
+
+    // clocks
+    virt_opts.clocks(args.allow_clocks.unwrap_or(allow_all));
+
+    // http
+    virt_opts.clocks(args.allow_http.unwrap_or(allow_all));
+
+    // random
+    virt_opts.clocks(args.allow_random.unwrap_or(allow_all));
 
     // stdio
-    virt_opts.stdio().stdin(
-        args.allow_stdin
-            .unwrap_or(args.allow_stdio.unwrap_or(false)),
-    );
-    virt_opts.stdio().stdout(
-        args.allow_stdout
-            .unwrap_or(args.allow_stdio.unwrap_or(false)),
-    );
-    virt_opts.stdio().stderr(
-        args.allow_stderr
-            .unwrap_or(args.allow_stdio.unwrap_or(false)),
-    );
+    virt_opts
+        .stdio()
+        .stdin(args.allow_stdin.unwrap_or(allow_stdio));
+    virt_opts
+        .stdio()
+        .stdout(args.allow_stdout.unwrap_or(allow_stdio));
+    virt_opts
+        .stdio()
+        .stderr(args.allow_stderr.unwrap_or(allow_stdio));
 
     // exit
     virt_opts.exit(if args.allow_exit.unwrap_or_default() {
@@ -132,7 +158,11 @@ fn main() -> Result<()> {
         Some(allow_env) => {
             env.allow(&allow_env);
         }
-        None => {}
+        None => {
+            if allow_all {
+                env.allow_all();
+            }
+        }
     };
     if let Some(env_overrides) = args.env {
         env.overrides = env_overrides;
@@ -149,6 +179,9 @@ fn main() -> Result<()> {
         for (preopen, mountdir) in mounts {
             fs.virtual_preopen(preopen, mountdir);
         }
+    }
+    if args.allow_fs.unwrap_or(allow_all) {
+        fs.allow_host_preopens();
     }
 
     let virt_component = virt_opts.finish()?;

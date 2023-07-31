@@ -79,21 +79,21 @@ pub struct VirtFile {
 type VirtDir = BTreeMap<String, FsEntry>;
 
 impl VirtFs {
+    pub fn allow_host_preopens(&mut self) {
+        self.host_preopens = true;
+    }
     pub fn preopen(&mut self, name: String, preopen: FsEntry) -> &mut Self {
         self.preopens.insert(name, preopen);
         self
     }
-
     pub fn host_preopen(&mut self, name: String, dir: String) -> &mut Self {
         self.preopens.insert(name, FsEntry::RuntimeDir(dir));
         self
     }
-
     pub fn virtual_preopen(&mut self, name: String, dir: String) -> &mut Self {
         self.preopens.insert(name, FsEntry::Virtualize(dir));
         self
     }
-
     pub fn passive_cutoff(&mut self, passive_cutoff: usize) -> &mut Self {
         self.passive_cutoff = Some(passive_cutoff);
         self
@@ -828,6 +828,7 @@ pub(crate) fn strip_io_virt(module: &mut Module) -> Result<()> {
     strip_clocks_virt(module)?;
     strip_http_virt(module)?;
     strip_stdio_virt(module)?;
+    strip_sockets_virt(module)?;
 
     remove_exported_func(module, "wasi:io/streams#read")?;
     remove_exported_func(module, "wasi:io/streams#blocking-read")?;
@@ -847,60 +848,133 @@ pub(crate) fn strip_io_virt(module: &mut Module) -> Result<()> {
 
     remove_exported_func(module, "wasi:poll/poll#drop-pollable")?;
     remove_exported_func(module, "wasi:poll/poll#poll-oneoff")?;
+    Ok(())
+}
 
-    // remove_exported_func(module, "wasi:sockets/ip-name-lookup#resolve-addresses")?;
-    // remove_exported_func(module, "wasi:sockets/ip-name-lookup#resolve-next-address")?;
-    // remove_exported_func(
-    //     module,
-    //     "wasi:sockets/ip-name-lookup#drop-resolve-address-stream",
-    // )?;
-    // remove_exported_func(module, "wasi:sockets/ip-name-lookup#subscribe")?;
+pub(crate) fn strip_sockets_virt(module: &mut Module) -> Result<()> {
+    remove_exported_func(module, "wasi:sockets/ip-name-lookup#resolve-addresses")?;
+    remove_exported_func(module, "wasi:sockets/ip-name-lookup#resolve-next-address")?;
+    remove_exported_func(
+        module,
+        "wasi:sockets/ip-name-lookup#drop-resolve-address-stream",
+    )?;
+    remove_exported_func(module, "wasi:sockets/ip-name-lookup#subscribe")?;
 
-    // remove_exported_func(module, "wasi:sockets/tcp#start-bind")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#finish-bind")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#start-connect")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#finish-connect")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#start-listen")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#finish-listen")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#accept")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#local-address")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#remote-address")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#address-family")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#ipv6-only")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#set-ipv6-only")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#set-listen-backlog-size")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#keep-alive")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#set-keep-alive")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#no-delay")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#set-no-delay")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#unicast-hop-limit")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#set-unicast-hop-limit")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#receive-buffer-size")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#set-receive-buffer-size")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#send-buffer-size")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#set-send-buffer-size")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#subscribe")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#shutdown")?;
-    // remove_exported_func(module, "wasi:sockets/tcp#drop-tcp-socket")?;
+    remove_exported_func(module, "wasi:sockets/tcp#start-bind")?;
+    remove_exported_func(module, "wasi:sockets/tcp#finish-bind")?;
+    remove_exported_func(module, "wasi:sockets/tcp#start-connect")?;
+    remove_exported_func(module, "wasi:sockets/tcp#finish-connect")?;
+    remove_exported_func(module, "wasi:sockets/tcp#start-listen")?;
+    remove_exported_func(module, "wasi:sockets/tcp#finish-listen")?;
+    remove_exported_func(module, "wasi:sockets/tcp#accept")?;
+    remove_exported_func(module, "wasi:sockets/tcp#local-address")?;
+    remove_exported_func(module, "wasi:sockets/tcp#remote-address")?;
+    remove_exported_func(module, "wasi:sockets/tcp#address-family")?;
+    remove_exported_func(module, "wasi:sockets/tcp#ipv6-only")?;
+    remove_exported_func(module, "wasi:sockets/tcp#set-ipv6-only")?;
+    remove_exported_func(module, "wasi:sockets/tcp#set-listen-backlog-size")?;
+    remove_exported_func(module, "wasi:sockets/tcp#keep-alive")?;
+    remove_exported_func(module, "wasi:sockets/tcp#set-keep-alive")?;
+    remove_exported_func(module, "wasi:sockets/tcp#no-delay")?;
+    remove_exported_func(module, "wasi:sockets/tcp#set-no-delay")?;
+    remove_exported_func(module, "wasi:sockets/tcp#unicast-hop-limit")?;
+    remove_exported_func(module, "wasi:sockets/tcp#set-unicast-hop-limit")?;
+    remove_exported_func(module, "wasi:sockets/tcp#receive-buffer-size")?;
+    remove_exported_func(module, "wasi:sockets/tcp#set-receive-buffer-size")?;
+    remove_exported_func(module, "wasi:sockets/tcp#send-buffer-size")?;
+    remove_exported_func(module, "wasi:sockets/tcp#set-send-buffer-size")?;
+    remove_exported_func(module, "wasi:sockets/tcp#subscribe")?;
+    remove_exported_func(module, "wasi:sockets/tcp#shutdown")?;
+    remove_exported_func(module, "wasi:sockets/tcp#drop-tcp-socket")?;
 
-    // remove_exported_func(module, "wasi:sockets/udp#start-bind")?;
-    // remove_exported_func(module, "wasi:sockets/udp#finish-bind")?;
-    // remove_exported_func(module, "wasi:sockets/udp#start-connect")?;
-    // remove_exported_func(module, "wasi:sockets/udp#finish-connect")?;
-    // remove_exported_func(module, "wasi:sockets/udp#receive")?;
-    // remove_exported_func(module, "wasi:sockets/udp#send")?;
-    // remove_exported_func(module, "wasi:sockets/udp#local-address")?;
-    // remove_exported_func(module, "wasi:sockets/udp#remote-address")?;
-    // remove_exported_func(module, "wasi:sockets/udp#address-family")?;
-    // remove_exported_func(module, "wasi:sockets/udp#ipv6-only")?;
-    // remove_exported_func(module, "wasi:sockets/udp#set-ipv6-only")?;
-    // remove_exported_func(module, "wasi:sockets/udp#unicast-hop-limit")?;
-    // remove_exported_func(module, "wasi:sockets/udp#set-unicast-hop-limit")?;
-    // remove_exported_func(module, "wasi:sockets/udp#receive-buffer-size")?;
-    // remove_exported_func(module, "wasi:sockets/udp#set-receive-buffer-size")?;
-    // remove_exported_func(module, "wasi:sockets/udp#send-buffer-size")?;
-    // remove_exported_func(module, "wasi:sockets/udp#set-send-buffer-size")?;
-    // remove_exported_func(module, "wasi:sockets/udp#subscribe")?;
-    // remove_exported_func(module, "wasi:sockets/udp#drop-udp-socket")?;
+    remove_exported_func(module, "wasi:sockets/udp#start-bind")?;
+    remove_exported_func(module, "wasi:sockets/udp#finish-bind")?;
+    remove_exported_func(module, "wasi:sockets/udp#start-connect")?;
+    remove_exported_func(module, "wasi:sockets/udp#finish-connect")?;
+    remove_exported_func(module, "wasi:sockets/udp#receive")?;
+    remove_exported_func(module, "wasi:sockets/udp#send")?;
+    remove_exported_func(module, "wasi:sockets/udp#local-address")?;
+    remove_exported_func(module, "wasi:sockets/udp#remote-address")?;
+    remove_exported_func(module, "wasi:sockets/udp#address-family")?;
+    remove_exported_func(module, "wasi:sockets/udp#ipv6-only")?;
+    remove_exported_func(module, "wasi:sockets/udp#set-ipv6-only")?;
+    remove_exported_func(module, "wasi:sockets/udp#unicast-hop-limit")?;
+    remove_exported_func(module, "wasi:sockets/udp#set-unicast-hop-limit")?;
+    remove_exported_func(module, "wasi:sockets/udp#receive-buffer-size")?;
+    remove_exported_func(module, "wasi:sockets/udp#set-receive-buffer-size")?;
+    remove_exported_func(module, "wasi:sockets/udp#send-buffer-size")?;
+    remove_exported_func(module, "wasi:sockets/udp#set-send-buffer-size")?;
+    remove_exported_func(module, "wasi:sockets/udp#subscribe")?;
+    remove_exported_func(module, "wasi:sockets/udp#drop-udp-socket")?;
+    Ok(())
+}
+
+pub(crate) fn stub_sockets_virt(module: &mut Module) -> Result<()> {
+    stub_imported_func(
+        module,
+        "wasi:sockets/ip-name-lookup",
+        "resolve-addresses",
+        false,
+    )?;
+    stub_imported_func(
+        module,
+        "wasi:sockets/ip-name-lookup",
+        "resolve-next-address",
+        false,
+    )?;
+    stub_imported_func(
+        module,
+        "wasi:sockets/ip-name-lookup",
+        "drop-resolve-address-stream",
+        false,
+    )?;
+    stub_imported_func(module, "wasi:sockets/ip-name-lookup", "subscribe", false)?;
+
+    stub_imported_func(module, "wasi:sockets/tcp", "start-bind", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "finish-bind", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "start-connect", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "finish-connect", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "start-listen", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "finish-listen", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "accept", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "local-address", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "remote-address", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "address-family", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "ipv6-only", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-ipv6-only", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-listen-backlog-size", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "keep-alive", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-keep-alive", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "no-delay", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-no-delay", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "unicast-hop-limit", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-unicast-hop-limit", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "receive-buffer-size", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-receive-buffer-size", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "send-buffer-size", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-send-buffer-size", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "subscribe", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "shutdown", false)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "drop-tcp-socket", false)?;
+
+    stub_imported_func(module, "wasi:sockets/udp", "start-bind", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "finish-bind", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "start-connect", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "finish-connect", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "receive", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "send", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "local-address", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "remote-address", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "address-family", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "ipv6-only", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "set-ipv6-only", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "unicast-hop-limit", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "set-unicast-hop-limit", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "receive-buffer-size", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "set-receive-buffer-size", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "send-buffer-size", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "set-send-buffer-size", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "subscribe", false)?;
+    stub_imported_func(module, "wasi:sockets/udp", "drop-udp-socket", false)?;
     Ok(())
 }

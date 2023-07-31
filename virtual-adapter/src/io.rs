@@ -12,12 +12,12 @@ use crate::exports::wasi::http::types::{
 };
 use crate::exports::wasi::io::streams::{InputStream, OutputStream, StreamError, Streams};
 use crate::exports::wasi::poll::poll::Poll;
-// use crate::exports::wasi::sockets::ip_name_lookup::{
-//     IpAddressFamily, IpNameLookup, Network, ResolveAddressStream,
-// };
-// use crate::exports::wasi::sockets::tcp::ErrorCode as NetworkErrorCode;
-// use crate::exports::wasi::sockets::tcp::{IpSocketAddress, ShutdownType, Tcp, TcpSocket};
-// use crate::exports::wasi::sockets::udp::{Datagram, Udp, UdpSocket};
+use crate::exports::wasi::sockets::ip_name_lookup::{
+    IpAddressFamily, IpNameLookup, Network, ResolveAddressStream,
+};
+use crate::exports::wasi::sockets::tcp::ErrorCode as NetworkErrorCode;
+use crate::exports::wasi::sockets::tcp::{IpSocketAddress, ShutdownType, Tcp, TcpSocket};
+use crate::exports::wasi::sockets::udp::{Datagram, Udp, UdpSocket};
 
 use crate::wasi::cli_base::preopens;
 use crate::wasi::cli_base::stderr;
@@ -30,10 +30,10 @@ use crate::wasi::io::streams;
 use crate::wasi::clocks::monotonic_clock;
 use crate::wasi::http::types;
 use crate::wasi::poll::poll;
-//use crate::wasi::sockets::ip_name_lookup;
-//use crate::wasi::sockets::network;
-//use crate::wasi::sockets::tcp;
-//use crate::wasi::sockets::udp;
+use crate::wasi::sockets::ip_name_lookup;
+use crate::wasi::sockets::network;
+use crate::wasi::sockets::tcp;
+use crate::wasi::sockets::udp;
 
 use crate::VirtAdapter;
 
@@ -1355,242 +1355,242 @@ fn http_err_map_rev(err: types::Error) -> Error {
     }
 }
 
-// impl IpNameLookup for VirtAdapter {
-//     fn resolve_addresses(
-//         network: Network,
-//         name: String,
-//         address_family: Option<IpAddressFamily>,
-//         include_unavailable: bool,
-//     ) -> Result<ip_name_lookup::ResolveAddressStream, network::ErrorCode> {
-//         ip_name_lookup::resolve_addresses(network, &name, address_family, include_unavailable)
-//     }
-//     fn resolve_next_address(
-//         this: ResolveAddressStream,
-//     ) -> Result<Option<ip_name_lookup::IpAddress>, network::ErrorCode> {
-//         ip_name_lookup::resolve_next_address(this)
-//     }
-//     fn drop_resolve_address_stream(this: ResolveAddressStream) {
-//         ip_name_lookup::drop_resolve_address_stream(this)
-//     }
-//     fn subscribe(this: ResolveAddressStream) -> u32 {
-//         ip_name_lookup::subscribe(this)
-//     }
-// }
+impl IpNameLookup for VirtAdapter {
+    fn resolve_addresses(
+        network: Network,
+        name: String,
+        address_family: Option<IpAddressFamily>,
+        include_unavailable: bool,
+    ) -> Result<ip_name_lookup::ResolveAddressStream, network::ErrorCode> {
+        ip_name_lookup::resolve_addresses(network, &name, address_family, include_unavailable)
+    }
+    fn resolve_next_address(
+        this: ResolveAddressStream,
+    ) -> Result<Option<ip_name_lookup::IpAddress>, network::ErrorCode> {
+        ip_name_lookup::resolve_next_address(this)
+    }
+    fn drop_resolve_address_stream(this: ResolveAddressStream) {
+        ip_name_lookup::drop_resolve_address_stream(this)
+    }
+    fn subscribe(this: ResolveAddressStream) -> u32 {
+        ip_name_lookup::subscribe(this)
+    }
+}
 
-// impl Tcp for VirtAdapter {
-//     fn start_bind(
-//         this: TcpSocket,
-//         network: Network,
-//         local_address: IpSocketAddress,
-//     ) -> Result<(), NetworkErrorCode> {
-//         tcp::start_bind(this, network, local_address)
-//     }
-//     fn finish_bind(this: TcpSocket) -> Result<(), NetworkErrorCode> {
-//         tcp::finish_bind(this)
-//     }
-//     fn start_connect(
-//         this: TcpSocket,
-//         network: Network,
-//         remote_address: IpSocketAddress,
-//     ) -> Result<(), NetworkErrorCode> {
-//         tcp::start_connect(this, network, remote_address)
-//     }
-//     fn finish_connect(this: TcpSocket) -> Result<(InputStream, OutputStream), NetworkErrorCode> {
-//         tcp::finish_connect(this)
-//     }
-//     fn start_listen(this: TcpSocket, network: Network) -> Result<(), NetworkErrorCode> {
-//         tcp::start_listen(this, network)
-//     }
-//     fn finish_listen(this: TcpSocket) -> Result<(), NetworkErrorCode> {
-//         tcp::finish_listen(this)
-//     }
-//     fn accept(
-//         this: TcpSocket,
-//     ) -> Result<(tcp::TcpSocket, InputStream, OutputStream), NetworkErrorCode> {
-//         tcp::accept(this)
-//     }
-//     fn local_address(this: TcpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
-//         tcp::local_address(this)
-//     }
-//     fn remote_address(this: TcpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
-//         tcp::remote_address(this)
-//     }
-//     fn address_family(this: TcpSocket) -> IpAddressFamily {
-//         tcp::address_family(this)
-//     }
-//     fn ipv6_only(this: TcpSocket) -> Result<bool, NetworkErrorCode> {
-//         tcp::ipv6_only(this)
-//     }
-//     fn set_ipv6_only(this: TcpSocket, value: bool) -> Result<(), NetworkErrorCode> {
-//         tcp::set_ipv6_only(this, value)
-//     }
-//     fn set_listen_backlog_size(this: TcpSocket, value: u64) -> Result<(), NetworkErrorCode> {
-//         tcp::set_listen_backlog_size(this, value)
-//     }
-//     fn keep_alive(this: TcpSocket) -> Result<bool, NetworkErrorCode> {
-//         tcp::keep_alive(this)
-//     }
-//     fn set_keep_alive(this: TcpSocket, value: bool) -> Result<(), NetworkErrorCode> {
-//         tcp::set_keep_alive(this, value)
-//     }
-//     fn no_delay(this: TcpSocket) -> Result<bool, NetworkErrorCode> {
-//         tcp::no_delay(this)
-//     }
-//     fn set_no_delay(this: TcpSocket, value: bool) -> Result<(), NetworkErrorCode> {
-//         tcp::set_no_delay(this, value)
-//     }
-//     fn unicast_hop_limit(this: TcpSocket) -> Result<u8, NetworkErrorCode> {
-//         tcp::unicast_hop_limit(this)
-//     }
-//     fn set_unicast_hop_limit(this: TcpSocket, value: u8) -> Result<(), NetworkErrorCode> {
-//         tcp::set_unicast_hop_limit(this, value)
-//     }
-//     fn receive_buffer_size(this: TcpSocket) -> Result<u64, NetworkErrorCode> {
-//         tcp::receive_buffer_size(this)
-//     }
-//     fn set_receive_buffer_size(this: TcpSocket, value: u64) -> Result<(), NetworkErrorCode> {
-//         tcp::set_receive_buffer_size(this, value)
-//     }
-//     fn send_buffer_size(this: TcpSocket) -> Result<u64, NetworkErrorCode> {
-//         tcp::send_buffer_size(this)
-//     }
-//     fn set_send_buffer_size(this: TcpSocket, value: u64) -> Result<(), NetworkErrorCode> {
-//         tcp::set_send_buffer_size(this, value)
-//     }
-//     fn subscribe(this: TcpSocket) -> u32 {
-//         tcp::subscribe(this)
-//     }
-//     fn shutdown(this: TcpSocket, shutdown_type: ShutdownType) -> Result<(), NetworkErrorCode> {
-//         tcp::shutdown(
-//             this,
-//             match shutdown_type {
-//                 ShutdownType::Receive => tcp::ShutdownType::Receive,
-//                 ShutdownType::Send => tcp::ShutdownType::Send,
-//                 ShutdownType::Both => tcp::ShutdownType::Both,
-//             },
-//         )
-//     }
-//     fn drop_tcp_socket(this: TcpSocket) {
-//         tcp::drop_tcp_socket(this)
-//     }
-// }
+impl Tcp for VirtAdapter {
+    fn start_bind(
+        this: TcpSocket,
+        network: Network,
+        local_address: IpSocketAddress,
+    ) -> Result<(), NetworkErrorCode> {
+        tcp::start_bind(this, network, local_address)
+    }
+    fn finish_bind(this: TcpSocket) -> Result<(), NetworkErrorCode> {
+        tcp::finish_bind(this)
+    }
+    fn start_connect(
+        this: TcpSocket,
+        network: Network,
+        remote_address: IpSocketAddress,
+    ) -> Result<(), NetworkErrorCode> {
+        tcp::start_connect(this, network, remote_address)
+    }
+    fn finish_connect(this: TcpSocket) -> Result<(InputStream, OutputStream), NetworkErrorCode> {
+        tcp::finish_connect(this)
+    }
+    fn start_listen(this: TcpSocket, network: Network) -> Result<(), NetworkErrorCode> {
+        tcp::start_listen(this, network)
+    }
+    fn finish_listen(this: TcpSocket) -> Result<(), NetworkErrorCode> {
+        tcp::finish_listen(this)
+    }
+    fn accept(
+        this: TcpSocket,
+    ) -> Result<(tcp::TcpSocket, InputStream, OutputStream), NetworkErrorCode> {
+        tcp::accept(this)
+    }
+    fn local_address(this: TcpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
+        tcp::local_address(this)
+    }
+    fn remote_address(this: TcpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
+        tcp::remote_address(this)
+    }
+    fn address_family(this: TcpSocket) -> IpAddressFamily {
+        tcp::address_family(this)
+    }
+    fn ipv6_only(this: TcpSocket) -> Result<bool, NetworkErrorCode> {
+        tcp::ipv6_only(this)
+    }
+    fn set_ipv6_only(this: TcpSocket, value: bool) -> Result<(), NetworkErrorCode> {
+        tcp::set_ipv6_only(this, value)
+    }
+    fn set_listen_backlog_size(this: TcpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+        tcp::set_listen_backlog_size(this, value)
+    }
+    fn keep_alive(this: TcpSocket) -> Result<bool, NetworkErrorCode> {
+        tcp::keep_alive(this)
+    }
+    fn set_keep_alive(this: TcpSocket, value: bool) -> Result<(), NetworkErrorCode> {
+        tcp::set_keep_alive(this, value)
+    }
+    fn no_delay(this: TcpSocket) -> Result<bool, NetworkErrorCode> {
+        tcp::no_delay(this)
+    }
+    fn set_no_delay(this: TcpSocket, value: bool) -> Result<(), NetworkErrorCode> {
+        tcp::set_no_delay(this, value)
+    }
+    fn unicast_hop_limit(this: TcpSocket) -> Result<u8, NetworkErrorCode> {
+        tcp::unicast_hop_limit(this)
+    }
+    fn set_unicast_hop_limit(this: TcpSocket, value: u8) -> Result<(), NetworkErrorCode> {
+        tcp::set_unicast_hop_limit(this, value)
+    }
+    fn receive_buffer_size(this: TcpSocket) -> Result<u64, NetworkErrorCode> {
+        tcp::receive_buffer_size(this)
+    }
+    fn set_receive_buffer_size(this: TcpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+        tcp::set_receive_buffer_size(this, value)
+    }
+    fn send_buffer_size(this: TcpSocket) -> Result<u64, NetworkErrorCode> {
+        tcp::send_buffer_size(this)
+    }
+    fn set_send_buffer_size(this: TcpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+        tcp::set_send_buffer_size(this, value)
+    }
+    fn subscribe(this: TcpSocket) -> u32 {
+        tcp::subscribe(this)
+    }
+    fn shutdown(this: TcpSocket, shutdown_type: ShutdownType) -> Result<(), NetworkErrorCode> {
+        tcp::shutdown(
+            this,
+            match shutdown_type {
+                ShutdownType::Receive => tcp::ShutdownType::Receive,
+                ShutdownType::Send => tcp::ShutdownType::Send,
+                ShutdownType::Both => tcp::ShutdownType::Both,
+            },
+        )
+    }
+    fn drop_tcp_socket(this: TcpSocket) {
+        tcp::drop_tcp_socket(this)
+    }
+}
 
-// fn network_err_map(err: NetworkErrorCode) -> network::ErrorCode {
-//     match err {
-//         NetworkErrorCode::Unknown => network::ErrorCode::Unknown,
-//         NetworkErrorCode::AccessDenied => network::ErrorCode::AccessDenied,
-//         NetworkErrorCode::NotSupported => network::ErrorCode::NotSupported,
-//         NetworkErrorCode::OutOfMemory => network::ErrorCode::OutOfMemory,
-//         NetworkErrorCode::Timeout => network::ErrorCode::Timeout,
-//         NetworkErrorCode::ConcurrencyConflict => network::ErrorCode::ConcurrencyConflict,
-//         NetworkErrorCode::NotInProgress => network::ErrorCode::NotInProgress,
-//         NetworkErrorCode::WouldBlock => network::ErrorCode::WouldBlock,
-//         NetworkErrorCode::AddressFamilyNotSupported => {
-//             network::ErrorCode::AddressFamilyNotSupported
-//         }
-//         NetworkErrorCode::AddressFamilyMismatch => network::ErrorCode::AddressFamilyMismatch,
-//         NetworkErrorCode::InvalidRemoteAddress => network::ErrorCode::InvalidRemoteAddress,
-//         NetworkErrorCode::Ipv4OnlyOperation => network::ErrorCode::Ipv4OnlyOperation,
-//         NetworkErrorCode::Ipv6OnlyOperation => network::ErrorCode::Ipv6OnlyOperation,
-//         NetworkErrorCode::NewSocketLimit => network::ErrorCode::NewSocketLimit,
-//         NetworkErrorCode::AlreadyAttached => network::ErrorCode::AlreadyAttached,
-//         NetworkErrorCode::AlreadyBound => network::ErrorCode::AlreadyBound,
-//         NetworkErrorCode::AlreadyConnected => network::ErrorCode::AlreadyConnected,
-//         NetworkErrorCode::NotBound => network::ErrorCode::NotBound,
-//         NetworkErrorCode::NotConnected => network::ErrorCode::NotConnected,
-//         NetworkErrorCode::AddressNotBindable => network::ErrorCode::AddressNotBindable,
-//         NetworkErrorCode::AddressInUse => network::ErrorCode::AddressInUse,
-//         NetworkErrorCode::EphemeralPortsExhausted => network::ErrorCode::EphemeralPortsExhausted,
-//         NetworkErrorCode::RemoteUnreachable => network::ErrorCode::RemoteUnreachable,
-//         NetworkErrorCode::AlreadyListening => network::ErrorCode::AlreadyListening,
-//         NetworkErrorCode::NotListening => network::ErrorCode::NotListening,
-//         NetworkErrorCode::ConnectionRefused => network::ErrorCode::ConnectionRefused,
-//         NetworkErrorCode::ConnectionReset => network::ErrorCode::ConnectionReset,
-//         NetworkErrorCode::DatagramTooLarge => network::ErrorCode::DatagramTooLarge,
-//         NetworkErrorCode::InvalidName => network::ErrorCode::InvalidName,
-//         NetworkErrorCode::NameUnresolvable => network::ErrorCode::NameUnresolvable,
-//         NetworkErrorCode::TemporaryResolverFailure => network::ErrorCode::TemporaryResolverFailure,
-//         NetworkErrorCode::PermanentResolverFailure => network::ErrorCode::PermanentResolverFailure,
-//     }
-// }
+fn network_err_map(err: NetworkErrorCode) -> network::ErrorCode {
+    match err {
+        NetworkErrorCode::Unknown => network::ErrorCode::Unknown,
+        NetworkErrorCode::AccessDenied => network::ErrorCode::AccessDenied,
+        NetworkErrorCode::NotSupported => network::ErrorCode::NotSupported,
+        NetworkErrorCode::OutOfMemory => network::ErrorCode::OutOfMemory,
+        NetworkErrorCode::Timeout => network::ErrorCode::Timeout,
+        NetworkErrorCode::ConcurrencyConflict => network::ErrorCode::ConcurrencyConflict,
+        NetworkErrorCode::NotInProgress => network::ErrorCode::NotInProgress,
+        NetworkErrorCode::WouldBlock => network::ErrorCode::WouldBlock,
+        NetworkErrorCode::AddressFamilyNotSupported => {
+            network::ErrorCode::AddressFamilyNotSupported
+        }
+        NetworkErrorCode::AddressFamilyMismatch => network::ErrorCode::AddressFamilyMismatch,
+        NetworkErrorCode::InvalidRemoteAddress => network::ErrorCode::InvalidRemoteAddress,
+        NetworkErrorCode::Ipv4OnlyOperation => network::ErrorCode::Ipv4OnlyOperation,
+        NetworkErrorCode::Ipv6OnlyOperation => network::ErrorCode::Ipv6OnlyOperation,
+        NetworkErrorCode::NewSocketLimit => network::ErrorCode::NewSocketLimit,
+        NetworkErrorCode::AlreadyAttached => network::ErrorCode::AlreadyAttached,
+        NetworkErrorCode::AlreadyBound => network::ErrorCode::AlreadyBound,
+        NetworkErrorCode::AlreadyConnected => network::ErrorCode::AlreadyConnected,
+        NetworkErrorCode::NotBound => network::ErrorCode::NotBound,
+        NetworkErrorCode::NotConnected => network::ErrorCode::NotConnected,
+        NetworkErrorCode::AddressNotBindable => network::ErrorCode::AddressNotBindable,
+        NetworkErrorCode::AddressInUse => network::ErrorCode::AddressInUse,
+        NetworkErrorCode::EphemeralPortsExhausted => network::ErrorCode::EphemeralPortsExhausted,
+        NetworkErrorCode::RemoteUnreachable => network::ErrorCode::RemoteUnreachable,
+        NetworkErrorCode::AlreadyListening => network::ErrorCode::AlreadyListening,
+        NetworkErrorCode::NotListening => network::ErrorCode::NotListening,
+        NetworkErrorCode::ConnectionRefused => network::ErrorCode::ConnectionRefused,
+        NetworkErrorCode::ConnectionReset => network::ErrorCode::ConnectionReset,
+        NetworkErrorCode::DatagramTooLarge => network::ErrorCode::DatagramTooLarge,
+        NetworkErrorCode::InvalidName => network::ErrorCode::InvalidName,
+        NetworkErrorCode::NameUnresolvable => network::ErrorCode::NameUnresolvable,
+        NetworkErrorCode::TemporaryResolverFailure => network::ErrorCode::TemporaryResolverFailure,
+        NetworkErrorCode::PermanentResolverFailure => network::ErrorCode::PermanentResolverFailure,
+    }
+}
 
-// impl Udp for VirtAdapter {
-//     fn start_bind(
-//         this: UdpSocket,
-//         network: Network,
-//         local_address: IpSocketAddress,
-//     ) -> Result<(), NetworkErrorCode> {
-//         udp::start_bind(this, network, local_address)
-//     }
-//     fn finish_bind(this: UdpSocket) -> Result<(), NetworkErrorCode> {
-//         udp::finish_bind(this)
-//     }
-//     fn start_connect(
-//         this: UdpSocket,
-//         network: Network,
-//         remote_address: IpSocketAddress,
-//     ) -> Result<(), NetworkErrorCode> {
-//         udp::start_connect(this, network, remote_address)
-//     }
-//     fn finish_connect(this: UdpSocket) -> Result<(), NetworkErrorCode> {
-//         udp::finish_connect(this)
-//     }
-//     fn receive(this: UdpSocket) -> Result<Datagram, NetworkErrorCode> {
-//         match udp::receive(this) {
-//             Ok(datagram) => Ok(Datagram {
-//                 data: datagram.data,
-//                 remote_address: datagram.remote_address,
-//             }),
-//             Err(err) => Err(network_err_map(err)),
-//         }
-//     }
-//     fn send(this: UdpSocket, datagram: Datagram) -> Result<(), NetworkErrorCode> {
-//         udp::send(
-//             this,
-//             &udp::Datagram {
-//                 data: datagram.data,
-//                 remote_address: datagram.remote_address,
-//             },
-//         )
-//         .map_err(network_err_map)
-//     }
-//     fn local_address(this: UdpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
-//         udp::local_address(this)
-//     }
-//     fn remote_address(this: UdpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
-//         udp::remote_address(this)
-//     }
-//     fn address_family(this: UdpSocket) -> IpAddressFamily {
-//         udp::address_family(this)
-//     }
-//     fn ipv6_only(this: UdpSocket) -> Result<bool, NetworkErrorCode> {
-//         udp::ipv6_only(this)
-//     }
-//     fn set_ipv6_only(this: UdpSocket, value: bool) -> Result<(), NetworkErrorCode> {
-//         udp::set_ipv6_only(this, value)
-//     }
-//     fn unicast_hop_limit(this: UdpSocket) -> Result<u8, NetworkErrorCode> {
-//         udp::unicast_hop_limit(this)
-//     }
-//     fn set_unicast_hop_limit(this: UdpSocket, value: u8) -> Result<(), NetworkErrorCode> {
-//         udp::set_unicast_hop_limit(this, value)
-//     }
-//     fn receive_buffer_size(this: UdpSocket) -> Result<u64, NetworkErrorCode> {
-//         udp::receive_buffer_size(this)
-//     }
-//     fn set_receive_buffer_size(this: UdpSocket, value: u64) -> Result<(), NetworkErrorCode> {
-//         udp::set_receive_buffer_size(this, value)
-//     }
-//     fn send_buffer_size(this: UdpSocket) -> Result<u64, NetworkErrorCode> {
-//         udp::send_buffer_size(this)
-//     }
-//     fn set_send_buffer_size(this: UdpSocket, value: u64) -> Result<(), NetworkErrorCode> {
-//         udp::set_send_buffer_size(this, value)
-//     }
-//     fn subscribe(this: UdpSocket) -> u32 {
-//         udp::subscribe(this)
-//     }
-//     fn drop_udp_socket(this: UdpSocket) {
-//         udp::drop_udp_socket(this)
-//     }
-// }
+impl Udp for VirtAdapter {
+    fn start_bind(
+        this: UdpSocket,
+        network: Network,
+        local_address: IpSocketAddress,
+    ) -> Result<(), NetworkErrorCode> {
+        udp::start_bind(this, network, local_address)
+    }
+    fn finish_bind(this: UdpSocket) -> Result<(), NetworkErrorCode> {
+        udp::finish_bind(this)
+    }
+    fn start_connect(
+        this: UdpSocket,
+        network: Network,
+        remote_address: IpSocketAddress,
+    ) -> Result<(), NetworkErrorCode> {
+        udp::start_connect(this, network, remote_address)
+    }
+    fn finish_connect(this: UdpSocket) -> Result<(), NetworkErrorCode> {
+        udp::finish_connect(this)
+    }
+    fn receive(this: UdpSocket) -> Result<Datagram, NetworkErrorCode> {
+        match udp::receive(this) {
+            Ok(datagram) => Ok(Datagram {
+                data: datagram.data,
+                remote_address: datagram.remote_address,
+            }),
+            Err(err) => Err(network_err_map(err)),
+        }
+    }
+    fn send(this: UdpSocket, datagram: Datagram) -> Result<(), NetworkErrorCode> {
+        udp::send(
+            this,
+            &udp::Datagram {
+                data: datagram.data,
+                remote_address: datagram.remote_address,
+            },
+        )
+        .map_err(network_err_map)
+    }
+    fn local_address(this: UdpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
+        udp::local_address(this)
+    }
+    fn remote_address(this: UdpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
+        udp::remote_address(this)
+    }
+    fn address_family(this: UdpSocket) -> IpAddressFamily {
+        udp::address_family(this)
+    }
+    fn ipv6_only(this: UdpSocket) -> Result<bool, NetworkErrorCode> {
+        udp::ipv6_only(this)
+    }
+    fn set_ipv6_only(this: UdpSocket, value: bool) -> Result<(), NetworkErrorCode> {
+        udp::set_ipv6_only(this, value)
+    }
+    fn unicast_hop_limit(this: UdpSocket) -> Result<u8, NetworkErrorCode> {
+        udp::unicast_hop_limit(this)
+    }
+    fn set_unicast_hop_limit(this: UdpSocket, value: u8) -> Result<(), NetworkErrorCode> {
+        udp::set_unicast_hop_limit(this, value)
+    }
+    fn receive_buffer_size(this: UdpSocket) -> Result<u64, NetworkErrorCode> {
+        udp::receive_buffer_size(this)
+    }
+    fn set_receive_buffer_size(this: UdpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+        udp::set_receive_buffer_size(this, value)
+    }
+    fn send_buffer_size(this: UdpSocket) -> Result<u64, NetworkErrorCode> {
+        udp::send_buffer_size(this)
+    }
+    fn set_send_buffer_size(this: UdpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+        udp::set_send_buffer_size(this, value)
+    }
+    fn subscribe(this: UdpSocket) -> u32 {
+        udp::subscribe(this)
+    }
+    fn drop_udp_socket(this: UdpSocket) {
+        udp::drop_udp_socket(this)
+    }
+}

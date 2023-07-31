@@ -26,12 +26,12 @@ world virtual-adapter {
   export wasi:clocks/monotonic-clock
   import wasi:http/types
   export wasi:http/types
-  // import wasi:sockets/ip-name-lookup
-  // export wasi:sockets/ip-name-lookup
-  // import wasi:sockets/tcp
-  // export wasi:sockets/tcp
-  // import wasi:sockets/udp
-  // export wasi:sockets/udp
+  import wasi:sockets/ip-name-lookup
+  export wasi:sockets/ip-name-lookup
+  import wasi:sockets/tcp
+  export wasi:sockets/tcp
+  import wasi:sockets/udp
+  export wasi:sockets/udp
 }
 
 world virtual-base {
@@ -50,12 +50,6 @@ world virtual-io {
   export wasi:io/streams
   import wasi:poll/poll
   export wasi:poll/poll
-  // import wasi:sockets/ip-name-lookup
-  // export wasi:sockets/ip-name-lookup
-  // import wasi:sockets/tcp
-  // export wasi:sockets/tcp
-  // import wasi:sockets/udp
-  // export wasi:sockets/udp
 }
 
 world virtual-exit {
@@ -87,6 +81,15 @@ world virtual-clocks {
 world virtual-http {
   import wasi:http/types
   export wasi:http/types
+}
+
+world virtual-sockets {
+  import wasi:sockets/ip-name-lookup
+  export wasi:sockets/ip-name-lookup
+  import wasi:sockets/tcp
+  export wasi:sockets/tcp
+  import wasi:sockets/udp
+  export wasi:sockets/udp
 }
 
 world virt-test {

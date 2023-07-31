@@ -7,7 +7,11 @@ use virt_env::{create_env_virt, strip_env_virt};
 use virt_io::strip_clocks_virt;
 use virt_io::strip_fs_virt;
 use virt_io::strip_http_virt;
+use virt_io::strip_sockets_virt;
 use virt_io::strip_stdio_virt;
+use virt_io::stub_clocks_virt;
+use virt_io::stub_http_virt;
+use virt_io::stub_sockets_virt;
 use virt_io::VirtStdio;
 use virt_io::{create_io_virt, strip_io_virt};
 use walrus::ValType;
@@ -56,11 +60,11 @@ pub struct WasiVirt {
     /// Exit virtualization
     pub exit: Option<VirtExit>,
     /// Clocks virtualization
-    #[serde(default)]
-    pub clocks: bool,
+    pub clocks: Option<bool>,
     /// Http virtualization
-    #[serde(default)]
-    pub http: bool,
+    pub http: Option<bool>,
+    /// Sockets virtualization
+    pub sockets: Option<bool>,
     /// Disable wasm-opt run if desired
     pub wasm_opt: Option<bool>,
 }
@@ -75,12 +79,16 @@ impl WasiVirt {
         Self::default()
     }
 
-    pub fn clocks(&mut self) {
-        self.clocks = true;
+    pub fn clocks(&mut self, allow: bool) {
+        self.clocks = Some(allow);
     }
 
-    pub fn http(&mut self) {
-        self.http = true;
+    pub fn http(&mut self, allow: bool) {
+        self.http = Some(allow);
+    }
+
+    pub fn sockets(&mut self, allow: bool) {
+        self.sockets = Some(allow);
     }
 
     pub fn exit(&mut self, virt_exit: VirtExit) {
@@ -114,6 +122,8 @@ impl WasiVirt {
         if let Some(env) = &self.env {
             create_env_virt(&mut module, env)?;
         }
+
+        // exit virtualization is not built into the adapter but just created dynamically here
         if matches!(self.exit, Some(VirtExit::Unreachable)) {
             add_stub_exported_func(
                 &mut module,
@@ -123,7 +133,11 @@ impl WasiVirt {
             )?;
         }
 
-        let has_io = self.fs.is_some() || self.stdio.is_some();
+        let has_io = self.fs.is_some()
+            || self.stdio.is_some()
+            || self.clocks.is_some()
+            || self.http.is_some()
+            || self.sockets.is_some();
 
         let virtual_files = if has_io {
             // io virt is managed through a singular io configuration
@@ -153,9 +167,9 @@ impl WasiVirt {
 
         let env_world = bindgen.resolve.select_world(*pkg_id, Some("virtual-env"))?;
         let io_world = bindgen.resolve.select_world(*pkg_id, Some("virtual-io"))?;
-        // let exit_world = bindgen
-        //     .resolve
-        //     .select_world(*pkg_id, Some("virtual-exit"))?;
+        let exit_world = bindgen
+            .resolve
+            .select_world(*pkg_id, Some("virtual-exit"))?;
         let fs_world = bindgen.resolve.select_world(*pkg_id, Some("virtual-fs"))?;
         let stdio_world = bindgen
             .resolve
@@ -166,23 +180,35 @@ impl WasiVirt {
         let http_world = bindgen
             .resolve
             .select_world(*pkg_id, Some("virtual-http"))?;
+        let sockets_world = bindgen
+            .resolve
+            .select_world(*pkg_id, Some("virtual-sockets"))?;
 
         if self.env.is_some() {
             bindgen.resolve.merge_worlds(env_world, base_world)?;
         } else {
             strip_env_virt(&mut module)?;
         }
+        if self.exit.is_some() {
+            bindgen.resolve.merge_worlds(exit_world, base_world)?;
+        }
         if has_io {
             bindgen.resolve.merge_worlds(io_world, base_world)?;
 
             // io subsystems have io dependence due to streams + poll
-            if self.clocks {
+            if let Some(clocks) = self.clocks {
                 bindgen.resolve.merge_worlds(clocks_world, base_world)?;
+                if !clocks {
+                    stub_clocks_virt(&mut module)?;
+                }
             } else {
                 strip_clocks_virt(&mut module)?;
             }
-            if self.http {
+            if let Some(http) = self.http {
                 bindgen.resolve.merge_worlds(http_world, base_world)?;
+                if !http {
+                    stub_http_virt(&mut module)?;
+                }
             } else {
                 strip_http_virt(&mut module)?;
             }
@@ -195,6 +221,14 @@ impl WasiVirt {
                 bindgen.resolve.merge_worlds(fs_world, base_world)?;
             } else {
                 strip_fs_virt(&mut module)?;
+            }
+            if let Some(sockets) = self.sockets {
+                bindgen.resolve.merge_worlds(sockets_world, base_world)?;
+                if !sockets {
+                    stub_sockets_virt(&mut module)?;
+                }
+            } else {
+                strip_sockets_virt(&mut module)?;
             }
         } else {
             strip_io_virt(&mut module)?;
