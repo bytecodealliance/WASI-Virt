@@ -911,6 +911,7 @@ pub(crate) fn strip_io_virt(module: &mut Module) -> Result<()> {
 }
 
 pub(crate) fn strip_sockets_virt(module: &mut Module) -> Result<()> {
+    stub_sockets_virt(module)?;
     remove_exported_func(module, "wasi:sockets/ip-name-lookup#resolve-addresses")?;
     remove_exported_func(module, "wasi:sockets/ip-name-lookup#resolve-next-address")?;
     remove_exported_func(

@@ -126,10 +126,15 @@ fn main() -> Result<()> {
     virt_opts.clocks(args.allow_clocks.unwrap_or(allow_all));
 
     // http
-    virt_opts.clocks(args.allow_http.unwrap_or(allow_all));
+    virt_opts.http(args.allow_http.unwrap_or(allow_all));
+
+    // TODO: These need completing
 
     // random
-    virt_opts.clocks(args.allow_random.unwrap_or(allow_all));
+    // virt_opts.random(args.allow_random.unwrap_or(allow_all));
+
+    // sockets
+    // virt_opts.sockets(args.allow_sockets.unwrap_or(allow_all));
 
     // stdio
     virt_opts

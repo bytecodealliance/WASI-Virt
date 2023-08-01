@@ -31,7 +31,6 @@ use crate::wasi::clocks::monotonic_clock;
 use crate::wasi::http::types;
 use crate::wasi::poll::poll;
 use crate::wasi::sockets::ip_name_lookup;
-use crate::wasi::sockets::network;
 use crate::wasi::sockets::tcp;
 use crate::wasi::sockets::udp;
 
@@ -1361,12 +1360,12 @@ impl IpNameLookup for VirtAdapter {
         name: String,
         address_family: Option<IpAddressFamily>,
         include_unavailable: bool,
-    ) -> Result<ip_name_lookup::ResolveAddressStream, network::ErrorCode> {
+    ) -> Result<ip_name_lookup::ResolveAddressStream, NetworkErrorCode> {
         ip_name_lookup::resolve_addresses(network, &name, address_family, include_unavailable)
     }
     fn resolve_next_address(
         this: ResolveAddressStream,
-    ) -> Result<Option<ip_name_lookup::IpAddress>, network::ErrorCode> {
+    ) -> Result<Option<ip_name_lookup::IpAddress>, NetworkErrorCode> {
         ip_name_lookup::resolve_next_address(this)
     }
     fn drop_resolve_address_stream(this: ResolveAddressStream) {
@@ -1475,45 +1474,6 @@ impl Tcp for VirtAdapter {
     }
 }
 
-fn network_err_map(err: NetworkErrorCode) -> network::ErrorCode {
-    match err {
-        NetworkErrorCode::Unknown => network::ErrorCode::Unknown,
-        NetworkErrorCode::AccessDenied => network::ErrorCode::AccessDenied,
-        NetworkErrorCode::NotSupported => network::ErrorCode::NotSupported,
-        NetworkErrorCode::OutOfMemory => network::ErrorCode::OutOfMemory,
-        NetworkErrorCode::Timeout => network::ErrorCode::Timeout,
-        NetworkErrorCode::ConcurrencyConflict => network::ErrorCode::ConcurrencyConflict,
-        NetworkErrorCode::NotInProgress => network::ErrorCode::NotInProgress,
-        NetworkErrorCode::WouldBlock => network::ErrorCode::WouldBlock,
-        NetworkErrorCode::AddressFamilyNotSupported => {
-            network::ErrorCode::AddressFamilyNotSupported
-        }
-        NetworkErrorCode::AddressFamilyMismatch => network::ErrorCode::AddressFamilyMismatch,
-        NetworkErrorCode::InvalidRemoteAddress => network::ErrorCode::InvalidRemoteAddress,
-        NetworkErrorCode::Ipv4OnlyOperation => network::ErrorCode::Ipv4OnlyOperation,
-        NetworkErrorCode::Ipv6OnlyOperation => network::ErrorCode::Ipv6OnlyOperation,
-        NetworkErrorCode::NewSocketLimit => network::ErrorCode::NewSocketLimit,
-        NetworkErrorCode::AlreadyAttached => network::ErrorCode::AlreadyAttached,
-        NetworkErrorCode::AlreadyBound => network::ErrorCode::AlreadyBound,
-        NetworkErrorCode::AlreadyConnected => network::ErrorCode::AlreadyConnected,
-        NetworkErrorCode::NotBound => network::ErrorCode::NotBound,
-        NetworkErrorCode::NotConnected => network::ErrorCode::NotConnected,
-        NetworkErrorCode::AddressNotBindable => network::ErrorCode::AddressNotBindable,
-        NetworkErrorCode::AddressInUse => network::ErrorCode::AddressInUse,
-        NetworkErrorCode::EphemeralPortsExhausted => network::ErrorCode::EphemeralPortsExhausted,
-        NetworkErrorCode::RemoteUnreachable => network::ErrorCode::RemoteUnreachable,
-        NetworkErrorCode::AlreadyListening => network::ErrorCode::AlreadyListening,
-        NetworkErrorCode::NotListening => network::ErrorCode::NotListening,
-        NetworkErrorCode::ConnectionRefused => network::ErrorCode::ConnectionRefused,
-        NetworkErrorCode::ConnectionReset => network::ErrorCode::ConnectionReset,
-        NetworkErrorCode::DatagramTooLarge => network::ErrorCode::DatagramTooLarge,
-        NetworkErrorCode::InvalidName => network::ErrorCode::InvalidName,
-        NetworkErrorCode::NameUnresolvable => network::ErrorCode::NameUnresolvable,
-        NetworkErrorCode::TemporaryResolverFailure => network::ErrorCode::TemporaryResolverFailure,
-        NetworkErrorCode::PermanentResolverFailure => network::ErrorCode::PermanentResolverFailure,
-    }
-}
-
 impl Udp for VirtAdapter {
     fn start_bind(
         this: UdpSocket,
@@ -1541,7 +1501,7 @@ impl Udp for VirtAdapter {
                 data: datagram.data,
                 remote_address: datagram.remote_address,
             }),
-            Err(err) => Err(network_err_map(err)),
+            Err(err) => Err(err),
         }
     }
     fn send(this: UdpSocket, datagram: Datagram) -> Result<(), NetworkErrorCode> {
@@ -1552,7 +1512,6 @@ impl Udp for VirtAdapter {
                 remote_address: datagram.remote_address,
             },
         )
-        .map_err(network_err_map)
     }
     fn local_address(this: UdpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
         udp::local_address(this)
