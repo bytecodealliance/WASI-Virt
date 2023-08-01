@@ -13,7 +13,7 @@ use crate::exports::wasi::http::types::{
 use crate::exports::wasi::io::streams::{InputStream, OutputStream, StreamError, Streams};
 use crate::exports::wasi::poll::poll::Poll;
 use crate::exports::wasi::sockets::ip_name_lookup::{
-    IpAddressFamily, IpNameLookup, Network, ResolveAddressStream,
+    IpAddress, IpAddressFamily, IpNameLookup, Network, ResolveAddressStream,
 };
 use crate::exports::wasi::sockets::tcp::ErrorCode as NetworkErrorCode;
 use crate::exports::wasi::sockets::tcp::{IpSocketAddress, ShutdownType, Tcp, TcpSocket};
@@ -1365,7 +1365,7 @@ impl IpNameLookup for VirtAdapter {
     }
     fn resolve_next_address(
         this: ResolveAddressStream,
-    ) -> Result<Option<ip_name_lookup::IpAddress>, NetworkErrorCode> {
+    ) -> Result<Option<IpAddress>, NetworkErrorCode> {
         ip_name_lookup::resolve_next_address(this)
     }
     fn drop_resolve_address_stream(this: ResolveAddressStream) {
