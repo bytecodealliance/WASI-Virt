@@ -53,7 +53,7 @@ wasi-virt component.wasm -o virt.wasm
 
 By default the virtualization will deny all subsystems, and will panic on any attempt to use any subsystem.
 
-In all of the examples, the `component.wasm` is the component being virtualized. This argument is optional. If omitted, then the virtualized adapter is output into `virt.wasm`, which can be composed into any component with:
+In all of the examples, the `component.wasm` is the component being virtualized and `virt.wasm` the output component with its virtualization. The `component.wasm` argument is optional. If omitted, then the virtualized adapter is output into `virt.wasm`, which can be composed into any arbitrary component with:
 
 ```sh
 wasm-tools compose component.wasm -d virt.wasm -o component.virt.wasm
