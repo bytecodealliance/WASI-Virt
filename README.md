@@ -42,7 +42,7 @@ Using WASI Virt, those specific file paths can be mounted and virtualized into t
 
 ## Basic Usage
 
-```
+```sh
 cargo install --git https://github.com/bytecodealliance/wasi-virt
 ```
 
@@ -50,7 +50,7 @@ By default, all virtualizations encapsulate the host virtualization, unless expl
 
 In all of the following examples, the `component.wasm` argument is optional. If omitted, then the virtualized adapter is output into `virt.wasm`, which can be composed into any component with:
 
-```
+```sh
 wasm-tools compose component.wasm -d virt.wasm -o component.virt.wasm
 ```
 
@@ -63,14 +63,14 @@ Allowing all subsystems can be achieved with `--allow-all`.
 
 ### Clocks
 
-```
+```sh
 # Create a component which just allows clocks, but no other interfaces
 wasi-virt component.wasm --allow-clocks -o virt.wasm
 ```
 
 ### Env
 
-```
+```sh
 # Encapsulating a component
 wasi-virt component.wasm -o virt.wasm
 
@@ -86,14 +86,14 @@ wasi-virt component.wasm -e CUSTOM=VAR --allow-env=SOME,ENV_VARS -o virt.wasm
 
 ### Exit
 
-```
+```sh
 # Create a component which is allowed to exit (terminate execution without a panic and unwind)
 wasi-virt component.wasm --allow-exit -o virt.wasm
 ```
 
 ### FS
 
-```
+```sh
 # Mounting a virtual directory
 # (Globs all files in local-dir and virtualizes them)
 wasi-virt component.wasm --mount /=./local-dir -o virt.wasm
@@ -107,21 +107,21 @@ wasi-virt component.wasm --mount /virt-dir=./local --preopen /host-dir=/host/pat
 
 ### Random
 
-```
+```sh
 # Allow random number generation
 wasi-virt component.wasm --allow-random -o virt.wasm
 ```
 
 ### Sockets
 
-```
+```sh
 # Allow socket APIs
 wasi-virt component.wasm --allow-sockets -o virt.wasm
 ```
 
 ### Stdio
 
-```
+```sh
 # Ignore all stdio entirely
 wasi-virt component.wasm --allow-stdio -o virt.wasm
 
