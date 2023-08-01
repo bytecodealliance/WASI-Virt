@@ -46,20 +46,20 @@ Using WASI Virt, those specific file paths can be mounted and virtualized into t
 cargo install --git https://github.com/bytecodealliance/wasi-virt
 ```
 
-By default, all virtualizations encapsulate the host virtualization, unless explicitly enabling host passthrough via `--allow-env` or `--preopen`.
+```sh
+# Encapsulating a component
+wasi-virt component.wasm -o virt.wasm
+```
 
-In all of the following examples, the `component.wasm` argument is optional. If omitted, then the virtualized adapter is output into `virt.wasm`, which can be composed into any component with:
+By default the virtualization will deny all subsystems, and will panic on any attempt to use any subsystem.
+
+In all of the examples, the `component.wasm` is the component being virtualized. This argument is optional. If omitted, then the virtualized adapter is output into `virt.wasm`, which can be composed into any component with:
 
 ```sh
 wasm-tools compose component.wasm -d virt.wasm -o component.virt.wasm
 ```
 
-By default the virtualization will deny all subsystems, and will panic on any attempt
-to use any subsystem.
-
-Configuring a subsystem virtualization will enable it, or subsystems can be fully enabled via `--allow-fs`, `--allow-env` etc by subsystem.
-
-Allowing all subsystems can be achieved with `--allow-all`.
+Configuring a subsystem virtualization will enable it, or subsystems can be fully enabled via `--allow-fs`, `--allow-env` etc by subsystem. Allowing all subsystems can be achieved with `--allow-all`.
 
 ### Clocks
 
@@ -71,9 +71,6 @@ wasi-virt component.wasm --allow-clocks -o virt.wasm
 ### Env
 
 ```sh
-# Encapsulating a component
-wasi-virt component.wasm -o virt.wasm
-
 # Setting specific env vars (while disallowing all host env var access):
 wasi-virt component.wasm -e CUSTOM=VAR -o virt.wasm
 
