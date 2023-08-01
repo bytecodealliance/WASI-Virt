@@ -182,7 +182,9 @@ impl WasiVirt {
             .resolve
             .select_world(*pkg_id, Some("virtual-exit"))?;
         let fs_world = bindgen.resolve.select_world(*pkg_id, Some("virtual-fs"))?;
-        let random_world = bindgen.resolve.select_world(*pkg_id, Some("virtual-random"))?;
+        let random_world = bindgen
+            .resolve
+            .select_world(*pkg_id, Some("virtual-random"))?;
         let stdio_world = bindgen
             .resolve
             .select_world(*pkg_id, Some("virtual-stdio"))?;
