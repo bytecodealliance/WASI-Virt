@@ -3,19 +3,21 @@ use serde::Deserialize;
 use std::env;
 use std::fs;
 use std::time::SystemTime;
+use virt_deny::deny_exit_virt;
+use virt_deny::deny_random_virt;
+use virt_deny::deny_sockets_virt;
+use virt_deny::{deny_clocks_virt, deny_http_virt};
 use virt_env::{create_env_virt, strip_env_virt};
 use virt_io::{
     create_io_virt, strip_clocks_virt, strip_fs_virt, strip_http_virt, strip_io_virt,
-    strip_sockets_virt, strip_stdio_virt, stub_clocks_virt, stub_http_virt, stub_sockets_virt,
-    VirtStdio,
+    strip_sockets_virt, strip_stdio_virt, VirtStdio,
 };
-use walrus::ValType;
-use walrus_ops::add_stub_exported_func;
 use wasm_metadata::Producers;
 use wasm_opt::{Feature, OptimizationOptions};
 use wit_component::{metadata, ComponentEncoder, StringEncoding};
 
 mod data;
+mod virt_deny;
 mod virt_env;
 mod virt_io;
 mod walrus_ops;
@@ -203,47 +205,13 @@ impl WasiVirt {
         if let Some(exit) = self.exit {
             if !exit {
                 bindgen.resolve.merge_worlds(exit_world, base_world)?;
-                add_stub_exported_func(
-                    &mut module,
-                    "wasi:cli-base/exit#exit",
-                    vec![ValType::I32],
-                    vec![],
-                )?;
+                deny_exit_virt(&mut module)?;
             }
         }
         if let Some(random) = self.random {
             if !random {
                 bindgen.resolve.merge_worlds(random_world, base_world)?;
-                add_stub_exported_func(
-                    &mut module,
-                    "wasi:random/random#get-random-bytes",
-                    vec![ValType::I64],
-                    vec![ValType::I32, ValType::I32],
-                )?;
-                add_stub_exported_func(
-                    &mut module,
-                    "wasi:random/random#get-random-u64",
-                    vec![],
-                    vec![ValType::I64],
-                )?;
-                add_stub_exported_func(
-                    &mut module,
-                    "wasi:random/insecure#get-insecure-random-bytes",
-                    vec![ValType::I64],
-                    vec![ValType::I32, ValType::I32],
-                )?;
-                add_stub_exported_func(
-                    &mut module,
-                    "wasi:random/insecure#get-insecure-random-u64",
-                    vec![],
-                    vec![ValType::I64],
-                )?;
-                add_stub_exported_func(
-                    &mut module,
-                    "wasi:random/insecure-seed#insecure-seed",
-                    vec![ValType::I64],
-                    vec![ValType::I32],
-                )?;
+                deny_random_virt(&mut module)?;
             }
         }
 
@@ -262,7 +230,7 @@ impl WasiVirt {
             } else {
                 // When subsystem is disabled, we must do a full virtualization
                 bindgen.resolve.merge_worlds(clocks_world, base_world)?;
-                stub_clocks_virt(&mut module)?;
+                deny_clocks_virt(&mut module)?;
             }
         } else {
             strip_clocks_virt(&mut module)?;
@@ -273,7 +241,8 @@ impl WasiVirt {
                 bindgen.resolve.merge_worlds(io_sockets_world, base_world)?;
             } else {
                 bindgen.resolve.merge_worlds(sockets_world, base_world)?;
-                stub_sockets_virt(&mut module)?;
+                // TODO:
+                // deny_sockets_virt(&mut module)?;
             }
         } else {
             strip_sockets_virt(&mut module)?;
@@ -283,7 +252,7 @@ impl WasiVirt {
                 bindgen.resolve.merge_worlds(io_http_world, base_world)?;
             } else {
                 bindgen.resolve.merge_worlds(http_world, base_world)?;
-                stub_http_virt(&mut module)?;
+                deny_http_virt(&mut module)?;
             }
         } else {
             strip_http_virt(&mut module)?;

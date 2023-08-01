@@ -115,11 +115,20 @@ pub(crate) fn add_stub_exported_func(
     params: Vec<ValType>,
     results: Vec<ValType>,
 ) -> Result<()> {
+    let exported_fn = module.exports.iter().find(|expt| expt.name == export_name);
+
     let mut builder = FunctionBuilder::new(&mut module.types, &params, &results);
     builder.func_body().unreachable();
     let local_func = builder.local_func(vec![]);
     let fid = module.funcs.add_local(local_func);
-    module.exports.add(export_name, ExportItem::Function(fid));
+
+    // if it exists, replace it
+    if let Some(exported_fn) = exported_fn {
+        let export = module.exports.get_mut(exported_fn.id());
+        export.item = ExportItem::Function(fid);
+    } else {
+        module.exports.add(export_name, ExportItem::Function(fid));
+    }
 
     Ok(())
 }
