@@ -16,15 +16,15 @@ The virtualized component can be composed into a WASI Preview2 component with `w
 
 Supports all of the current WASI subsystems:
 
-- [x] Environment: Set environment variables, configure host environment variable permissions
-- [x] Filesystem: Mount a read-only filesystem, configure host filesystem pass-through
-- [x] Stdio: Allow / Ignore
-- [ ] Sockets: Allow / Ignore
-- [ ] Clocks: Allow / Ignore
-- [x] Exit: Allow / Ignore
-- [ ] Random: Allow / Ignore
+- [Clocks](#clocks): Allow / Deny
+- [Environment](#env): Set environment variables, configure host environment variable permissions
+- [Exit](#exit): Allow / Deny
+- [Filesystem](#filesystem): Mount a read-only filesystem, configure host filesystem preopen remappings or pass-through.
+- [Random](#random): Allow / Deny
+- [Sockets](#sockets): Allow / Deny
+- [Stdio](#stdio): Allow / Deny
 
-While current virtualization support is limited, the goal for this project is to support a wide range of WASI virtualization use cases.
+While current virtualization support is limited, the goal for this project is to support a wide range of WASI virtualization configuration use cases.
 
 Have an unhandled use case? Post a virtualization [suggestion](https://github.com/bytecodealliance/WASI-Virt/issues/new).
 
@@ -54,7 +54,21 @@ In all of the following examples, the `component.wasm` argument is optional. If 
 wasm-tools compose component.wasm -d virt.wasm -o component.virt.wasm
 ```
 
-### Env Virtualization
+By default the virtualization will deny all subsystems, and will panic on any attempt
+to use any subsystem.
+
+Configuring a subsystem virtualization will enable it, or subsystems can be fully enabled via `--allow-fs`, `--allow-env` etc by subsystem.
+
+Allowing all subsystems can be achieved with `--allow-all`.
+
+### Clocks
+
+```
+# Create a component which just allows clocks, but no other interfaces
+wasi-virt component.wasm --allow-clocks -o virt.wasm
+```
+
+### Env
 
 ```
 # Encapsulating a component
@@ -70,7 +84,14 @@ wasi-virt component.wasm -e CUSTOM=VAR --allow-env -o virt.wasm
 wasi-virt component.wasm -e CUSTOM=VAR --allow-env=SOME,ENV_VARS -o virt.wasm
 ```
 
-### FS Virtualization
+### Exit
+
+```
+# Create a component which is allowed to exit (terminate execution without a panic and unwind)
+wasi-virt component.wasm --allow-exit -o virt.wasm
+```
+
+### FS
 
 ```
 # Mounting a virtual directory
@@ -84,20 +105,32 @@ wasi-virt component.wasm --preopen /=/restricted/path -o virt.wasm
 wasi-virt component.wasm --mount /virt-dir=./local --preopen /host-dir=/host/path -o virt.wasm
 ```
 
-### Stdio Virtualization
+### Random
+
+```
+# Allow random number generation
+wasi-virt component.wasm --allow-random -o virt.wasm
+```
+
+### Sockets
+
+```
+# Allow socket APIs
+wasi-virt component.wasm --allow-sockets -o virt.wasm
+```
+
+### Stdio
 
 ```
 # Ignore all stdio entirely
-wasi-virt --allow-stdio
+wasi-virt component.wasm --allow-stdio -o virt.wasm
 
 # Throw an error if attempting any stdio
 # (this is the default)
-wasi-virt --deny-stdio
+wasi-virt component.wasm --deny-stdio -o virt.wasm
 
-# Provide stdin as an inline string
-wasi-virt --stdin=test
-
-# Provide stdio
+# Allow stderr only
+wasi-virt component.wasm --allow-stderr -o virt.wasm
 ```
 
 ## API
@@ -111,6 +144,9 @@ use wasi_virt::{WasiVirt, FsEntry};
 fn main() {
     let mut virt = WasiVirt::new_reactor();
 
+    // allow all subsystems initially
+    virt.all(true);
+
     // ignore stdio
     virt.stdio().ignore();
 
@@ -121,6 +157,8 @@ fn main() {
       .overrides(&[("SOME", "ENV"), ("VAR", "OVERRIDES")]);
         
     virt.fs()
+        // deny arbitrary host preopens
+        .deny_host_preopens()
         // mount and virtualize a local directory recursively
         .virtual_preopen("/dir", "/local/dir")
         // create a virtual directory containing some virtual files

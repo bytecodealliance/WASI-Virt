@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::{env, error::Error, fs, path::PathBuf, time::SystemTime};
-use wasi_virt::{VirtExit, WasiVirt};
+use wasi_virt::WasiVirt;
 use wasm_compose::composer::ComponentComposer;
 
 #[derive(Parser, Debug)]
@@ -143,11 +143,7 @@ fn main() -> Result<()> {
         .stderr(args.allow_stderr.unwrap_or(allow_stdio));
 
     // exit
-    virt_opts.exit(if args.allow_exit.unwrap_or_default() {
-        VirtExit::Passthrough
-    } else {
-        Default::default()
-    });
+    virt_opts.exit(args.allow_exit.unwrap_or_default());
 
     // env options
     let env = virt_opts.env();

@@ -70,12 +70,13 @@ async fn virt_test() -> Result<()> {
         let test_case_path = test_case.path();
         let test_case_file_name = test_case.file_name().to_string_lossy().to_string();
         let test_case_name = test_case_file_name.strip_suffix(".toml").unwrap();
-        println!("- {:?}", test_case_path);
 
         // Filtering...
-        // if test_case_name != "passthrough" {
+        // if test_case_name != "encapsulate" {
         //     continue;
         // }
+
+        println!("> {:?}", test_case_path);
 
         // load the test case JSON data
         let test: TestCase = toml::from_str(&fs::read_to_string(&test_case_path)?)

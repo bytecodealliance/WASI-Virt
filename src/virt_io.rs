@@ -22,6 +22,12 @@ pub struct VirtStdio {
 }
 
 impl VirtStdio {
+    pub fn all(&mut self, allow: bool) -> &mut Self {
+        self.stdin = allow;
+        self.stdout = allow;
+        self.stderr = allow;
+        self
+    }
     pub fn stdin(&mut self, allow: bool) -> &mut Self {
         self.stdin = allow;
         self
@@ -79,6 +85,9 @@ pub struct VirtFile {
 type VirtDir = BTreeMap<String, FsEntry>;
 
 impl VirtFs {
+    pub fn deny_host_preopens(&mut self) {
+        self.host_preopens = false;
+    }
     pub fn allow_host_preopens(&mut self) {
         self.host_preopens = true;
     }
@@ -477,33 +486,36 @@ pub(crate) fn create_io_virt<'a>(
     Ok(virtual_files)
 }
 
+// stubs must be _comprehensive_ in order to act as full deny over entire subsystem
+// when stubbing functions that are not part of the virtual adapter exports, we therefore
+// have to create this functions fresh
 pub(crate) fn stub_fs_virt(module: &mut Module) -> Result<()> {
-    stub_imported_func(module, "wasi:cli-base/preopens", "get-directories", false)?;
+    stub_imported_func(module, "wasi:cli-base/preopens", "get-directories", true)?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
-        "read_via_stream",
+        "read-via-stream",
+        true,
+    )?;
+    stub_imported_func(
+        module,
+        "wasi:filesystem/filesystem",
+        "write-via-stream",
         false,
     )?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
-        "write_via_stream",
-        false,
-    )?;
-    stub_imported_func(
-        module,
-        "wasi:filesystem/filesystem",
-        "append_via_stream",
+        "append-via-stream",
         false,
     )?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "advise", false)?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "sync-data", false)?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "get-flags", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "get-type", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "get-type", true)?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "set-size", false)?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "set-times", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "read", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "read", true)?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "write", false)?;
     stub_imported_func(
         module,
@@ -518,11 +530,11 @@ pub(crate) fn stub_fs_virt(module: &mut Module) -> Result<()> {
         "create-directory-at",
         false,
     )?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "stat", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "stat-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "stat", true)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "stat-at", true)?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "set-times-at", false)?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "link-at", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "open-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/filesystem", "open-at", true)?;
     stub_imported_func(module, "wasi:filesystem/filesystem", "readlink-at", false)?;
     stub_imported_func(
         module,
@@ -575,82 +587,134 @@ pub(crate) fn stub_fs_virt(module: &mut Module) -> Result<()> {
         module,
         "wasi:filesystem/filesystem",
         "drop-descriptor",
-        false,
+        true,
     )?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
         "read-directory-entry",
-        false,
+        true,
     )?;
     stub_imported_func(
         module,
         "wasi:filesystem/filesystem",
         "drop-directory-entry-stream",
-        false,
+        true,
     )?;
-    Ok(())
-}
-
-pub(crate) fn stub_poll_streams_virt(module: &mut Module) -> Result<()> {
-    stub_imported_func(module, "wasi:poll/poll", "drop-pollable", false)?;
-    stub_imported_func(module, "wasi:poll/poll", "poll-oneoff", false)?;
-    stub_imported_func(
-        module,
-        "wasi:io/streams",
-        "drop-directory-entry-stream",
-        false,
-    )?;
-    stub_imported_func(module, "wasi:io/streams", "read", false)?;
-    stub_imported_func(module, "wasi:io/streams", "blocking-read", false)?;
-    stub_imported_func(module, "wasi:io/streams", "skip", false)?;
-    stub_imported_func(module, "wasi:io/streams", "blocking-skip", false)?;
-    stub_imported_func(
-        module,
-        "wasi:io/streams",
-        "subscribe-to-input-stream",
-        false,
-    )?;
-    stub_imported_func(module, "wasi:io/streams", "drop-input-stream", false)?;
-    stub_imported_func(module, "wasi:io/streams", "write", false)?;
-    stub_imported_func(module, "wasi:io/streams", "blocking-write", false)?;
-    stub_imported_func(module, "wasi:io/streams", "write-zeroes", false)?;
-    stub_imported_func(module, "wasi:io/streams", "blocking-write-zeroes", false)?;
-    stub_imported_func(module, "wasi:io/streams", "splice", false)?;
-    stub_imported_func(module, "wasi:io/streams", "blocking-splice", false)?;
-    stub_imported_func(module, "wasi:io/streams", "forward", false)?;
-    stub_imported_func(
-        module,
-        "wasi:io/streams",
-        "subscribe-to-output-stream",
-        false,
-    )?;
-    stub_imported_func(module, "wasi:io/streams", "drop-output-stream", false)?;
-    Ok(())
-}
-
-pub(crate) fn stub_clocks_virt(module: &mut Module) -> Result<()> {
-    stub_imported_func(module, "wasi:clocks/monotonic-clock", "now", false)?;
-    stub_imported_func(module, "wasi:clocks/monotonic-clock", "resolution", false)?;
-    stub_imported_func(module, "wasi:clocks/monotonic-clock", "subscribe", false)?;
-    Ok(())
-}
-
-pub(crate) fn stub_stdio_virt(module: &mut Module) -> Result<()> {
-    stub_imported_func(module, "wasi:cli-base/stdin", "get-stdin", false)?;
-    stub_imported_func(module, "wasi:cli-base/stdout", "get-stdout", false)?;
-    stub_imported_func(module, "wasi:cli-base/stderr", "get-stderr", false)?;
     Ok(())
 }
 
 pub(crate) fn stub_io_virt(module: &mut Module) -> Result<()> {
-    stub_stdio_virt(module)?;
-    stub_poll_streams_virt(module)?;
-    stub_fs_virt(module)?;
-    stub_clocks_virt(module)?;
+    stub_imported_func(module, "wasi:poll/poll", "drop-pollable", true)?;
+    stub_imported_func(module, "wasi:poll/poll", "poll-oneoff", true)?;
+    stub_imported_func(module, "wasi:io/streams", "read", false)?;
+    stub_imported_func(module, "wasi:io/streams", "blocking-read", true)?;
+    stub_imported_func(module, "wasi:io/streams", "skip", true)?;
+    stub_imported_func(module, "wasi:io/streams", "blocking-skip", true)?;
+    stub_imported_func(module, "wasi:io/streams", "subscribe-to-input-stream", true)?;
+    stub_imported_func(module, "wasi:io/streams", "drop-input-stream", true)?;
+    stub_imported_func(module, "wasi:io/streams", "write", true)?;
+    stub_imported_func(module, "wasi:io/streams", "blocking-write", false)?;
+    stub_imported_func(module, "wasi:io/streams", "write-zeroes", true)?;
+    stub_imported_func(module, "wasi:io/streams", "blocking-write-zeroes", true)?;
+    stub_imported_func(module, "wasi:io/streams", "splice", true)?;
+    stub_imported_func(module, "wasi:io/streams", "blocking-splice", true)?;
+    stub_imported_func(module, "wasi:io/streams", "forward", true)?;
+    stub_imported_func(
+        module,
+        "wasi:io/streams",
+        "subscribe-to-output-stream",
+        true,
+    )?;
+    stub_imported_func(module, "wasi:io/streams", "drop-output-stream", true)?;
     Ok(())
 }
 
+pub(crate) fn stub_clocks_virt(module: &mut Module) -> Result<()> {
+    stub_imported_func(module, "wasi:clocks/monotonic-clock", "now", true)?;
+    stub_imported_func(module, "wasi:clocks/monotonic-clock", "resolution", true)?;
+    stub_imported_func(module, "wasi:clocks/monotonic-clock", "subscribe", true)?;
+    Ok(())
+}
+
+pub(crate) fn stub_stdio_virt(module: &mut Module) -> Result<()> {
+    stub_imported_func(module, "wasi:cli-base/stdin", "get-stdin", true)?;
+    stub_imported_func(module, "wasi:cli-base/stdout", "get-stdout", true)?;
+    stub_imported_func(module, "wasi:cli-base/stderr", "get-stderr", true)?;
+    Ok(())
+}
+
+pub(crate) fn stub_sockets_virt(module: &mut Module) -> Result<()> {
+    stub_imported_func(
+        module,
+        "wasi:sockets/ip-name-lookup",
+        "resolve-addresses",
+        true,
+    )?;
+    stub_imported_func(
+        module,
+        "wasi:sockets/ip-name-lookup",
+        "resolve-next-address",
+        true,
+    )?;
+    stub_imported_func(
+        module,
+        "wasi:sockets/ip-name-lookup",
+        "drop-resolve-address-stream",
+        true,
+    )?;
+    stub_imported_func(module, "wasi:sockets/ip-name-lookup", "subscribe", true)?;
+
+    stub_imported_func(module, "wasi:sockets/tcp", "start-bind", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "finish-bind", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "start-connect", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "finish-connect", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "start-listen", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "finish-listen", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "accept", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "local-address", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "remote-address", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "address-family", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "ipv6-only", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-ipv6-only", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-listen-backlog-size", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "keep-alive", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-keep-alive", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "no-delay", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-no-delay", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "unicast-hop-limit", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-unicast-hop-limit", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "receive-buffer-size", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-receive-buffer-size", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "send-buffer-size", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "set-send-buffer-size", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "subscribe", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "shutdown", true)?;
+    stub_imported_func(module, "wasi:sockets/tcp", "drop-tcp-socket", true)?;
+
+    stub_imported_func(module, "wasi:sockets/udp", "start-bind", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "finish-bind", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "start-connect", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "finish-connect", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "receive", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "send", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "local-address", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "remote-address", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "address-family", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "ipv6-only", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "set-ipv6-only", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "unicast-hop-limit", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "set-unicast-hop-limit", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "receive-buffer-size", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "set-receive-buffer-size", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "send-buffer-size", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "set-send-buffer-size", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "subscribe", true)?;
+    stub_imported_func(module, "wasi:sockets/udp", "drop-udp-socket", true)?;
+    Ok(())
+}
+
+// strip functions only have to dce the virtual adapter
 pub(crate) fn strip_fs_virt(module: &mut Module) -> Result<()> {
     stub_fs_virt(module)?;
     remove_exported_func(module, "wasi:cli-base/preopens#get-directories")?;
@@ -824,12 +888,7 @@ pub(crate) fn strip_stdio_virt(module: &mut Module) -> Result<()> {
 }
 
 pub(crate) fn strip_io_virt(module: &mut Module) -> Result<()> {
-    strip_fs_virt(module)?;
-    strip_clocks_virt(module)?;
-    strip_http_virt(module)?;
-    strip_stdio_virt(module)?;
-    strip_sockets_virt(module)?;
-
+    stub_io_virt(module)?;
     remove_exported_func(module, "wasi:io/streams#read")?;
     remove_exported_func(module, "wasi:io/streams#blocking-read")?;
     remove_exported_func(module, "wasi:io/streams#skip")?;
@@ -906,75 +965,5 @@ pub(crate) fn strip_sockets_virt(module: &mut Module) -> Result<()> {
     remove_exported_func(module, "wasi:sockets/udp#set-send-buffer-size")?;
     remove_exported_func(module, "wasi:sockets/udp#subscribe")?;
     remove_exported_func(module, "wasi:sockets/udp#drop-udp-socket")?;
-    Ok(())
-}
-
-pub(crate) fn stub_sockets_virt(module: &mut Module) -> Result<()> {
-    stub_imported_func(
-        module,
-        "wasi:sockets/ip-name-lookup",
-        "resolve-addresses",
-        false,
-    )?;
-    stub_imported_func(
-        module,
-        "wasi:sockets/ip-name-lookup",
-        "resolve-next-address",
-        false,
-    )?;
-    stub_imported_func(
-        module,
-        "wasi:sockets/ip-name-lookup",
-        "drop-resolve-address-stream",
-        false,
-    )?;
-    stub_imported_func(module, "wasi:sockets/ip-name-lookup", "subscribe", false)?;
-
-    stub_imported_func(module, "wasi:sockets/tcp", "start-bind", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "finish-bind", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "start-connect", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "finish-connect", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "start-listen", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "finish-listen", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "accept", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "local-address", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "remote-address", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "address-family", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "ipv6-only", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "set-ipv6-only", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "set-listen-backlog-size", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "keep-alive", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "set-keep-alive", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "no-delay", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "set-no-delay", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "unicast-hop-limit", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "set-unicast-hop-limit", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "receive-buffer-size", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "set-receive-buffer-size", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "send-buffer-size", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "set-send-buffer-size", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "subscribe", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "shutdown", false)?;
-    stub_imported_func(module, "wasi:sockets/tcp", "drop-tcp-socket", false)?;
-
-    stub_imported_func(module, "wasi:sockets/udp", "start-bind", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "finish-bind", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "start-connect", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "finish-connect", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "receive", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "send", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "local-address", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "remote-address", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "address-family", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "ipv6-only", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "set-ipv6-only", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "unicast-hop-limit", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "set-unicast-hop-limit", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "receive-buffer-size", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "set-receive-buffer-size", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "send-buffer-size", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "set-send-buffer-size", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "subscribe", false)?;
-    stub_imported_func(module, "wasi:sockets/udp", "drop-udp-socket", false)?;
     Ok(())
 }
