@@ -3,7 +3,7 @@ component = "do-everything"
 host-fs-path = "/LICENSE"
 
 [virt-opts]
-exit = "passthrough"
+exit = true
 fs.host-preopens = true
 stdio.stdin = true
 stdio.stdout = true

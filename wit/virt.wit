@@ -20,6 +20,18 @@ world virtual-adapter {
   export wasi:cli-base/stdin
   export wasi:cli-base/stdout
   export wasi:cli-base/stderr
+  import wasi:poll/poll
+  export wasi:poll/poll
+  import wasi:clocks/monotonic-clock
+  export wasi:clocks/monotonic-clock
+  import wasi:http/types
+  export wasi:http/types
+  import wasi:sockets/ip-name-lookup
+  export wasi:sockets/ip-name-lookup
+  import wasi:sockets/tcp
+  export wasi:sockets/tcp
+  import wasi:sockets/udp
+  export wasi:sockets/udp
 }
 
 world virtual-base {
@@ -28,25 +40,102 @@ world virtual-base {
   }
 }
 
-world virtual-env {
-  import wasi:cli-base/environment
-  export wasi:cli-base/environment
-}
-
 world virtual-io {
-  import wasi:cli-base/preopens
-  import wasi:filesystem/filesystem
   import wasi:io/streams
   export wasi:io/streams
+  import wasi:poll/poll
+  export wasi:poll/poll
+}
+
+// io components of subsystems
+// where there is an intersection of
+// streams + poll
+world virtual-io-sockets {
+  import wasi:sockets/ip-name-lookup
+  export wasi:sockets/ip-name-lookup
+  import wasi:sockets/tcp
+  export wasi:sockets/tcp
+  import wasi:sockets/udp
+  export wasi:sockets/udp
+}
+
+world virtual-io-clocks {
+  import wasi:clocks/monotonic-clock
+  export wasi:clocks/monotonic-clock
+}
+
+world virtual-io-http {
+  import wasi:http/types
+  export wasi:http/types
+}
+
+world virtual-fs {
+  import wasi:cli-base/preopens
+  import wasi:filesystem/filesystem
   export wasi:filesystem/filesystem
   export wasi:cli-base/preopens
+}
+
+world virtual-stdio {
   import wasi:cli-base/stdin
   import wasi:cli-base/stdout
   import wasi:cli-base/stderr
   export wasi:cli-base/stdin
   export wasi:cli-base/stdout
   export wasi:cli-base/stderr
-  import wasi:poll/poll
+}
+
+// remaining subsystems
+world virtual-env {
+  import wasi:cli-base/environment
+  export wasi:cli-base/environment
+}
+
+world virtual-clocks {
+  import wasi:clocks/monotonic-clock
+  export wasi:clocks/monotonic-clock
+  import wasi:clocks/wall-clock
+  import wasi:clocks/timezone
+  export wasi:clocks/wall-clock
+  export wasi:clocks/timezone
+}
+
+world virtual-random {
+  import wasi:random/insecure-seed
+  import wasi:random/insecure
+  import wasi:random/random
+  export wasi:random/insecure-seed
+  export wasi:random/insecure
+  export wasi:random/random
+}
+
+world virtual-sockets {
+  import wasi:sockets/ip-name-lookup
+  export wasi:sockets/ip-name-lookup
+  import wasi:sockets/tcp
+  export wasi:sockets/tcp
+  import wasi:sockets/udp
+  export wasi:sockets/udp
+  import wasi:sockets/instance-network
+  import wasi:sockets/tcp-create-socket
+  import wasi:sockets/udp-create-socket
+  export wasi:sockets/instance-network
+  export wasi:sockets/tcp-create-socket
+  export wasi:sockets/udp-create-socket
+}
+
+world virtual-http {
+  import wasi:http/types
+  export wasi:http/types
+  import wasi:http/incoming-handler
+  import wasi:http/outgoing-handler
+  export wasi:http/incoming-handler
+  export wasi:http/outgoing-handler
+}
+
+world virtual-exit {
+  import wasi:cli-base/exit
+  export wasi:cli-base/exit
 }
 
 world virt-test {
