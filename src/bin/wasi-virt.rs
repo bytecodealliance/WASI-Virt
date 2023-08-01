@@ -131,7 +131,7 @@ fn main() -> Result<()> {
     // TODO: These need completing
 
     // random
-    // virt_opts.random(args.allow_random.unwrap_or(allow_all));
+    virt_opts.random(args.allow_random.unwrap_or(allow_all));
 
     // sockets
     // virt_opts.sockets(args.allow_sockets.unwrap_or(allow_all));
