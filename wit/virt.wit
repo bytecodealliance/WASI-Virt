@@ -10,28 +10,28 @@ world virtual-adapter {
     log: func(msg: string) -> ()
   }
   import wasi:io/streams
-  // export wasi:io/streams
-  // export wasi:cli-base/environment
-  // export wasi:filesystem/filesystem
-  // export wasi:cli-base/preopens
+  export wasi:io/streams
+  export wasi:cli-base/environment
+  export wasi:filesystem/filesystem
+  export wasi:cli-base/preopens
   import wasi:cli-base/stdin
   import wasi:cli-base/stdout
   import wasi:cli-base/stderr
-  // export wasi:cli-base/stdin
-  // export wasi:cli-base/stdout
-  // export wasi:cli-base/stderr
+  export wasi:cli-base/stdin
+  export wasi:cli-base/stdout
+  export wasi:cli-base/stderr
   import wasi:poll/poll
-  // export wasi:poll/poll
+  export wasi:poll/poll
   import wasi:clocks/monotonic-clock
-  // export wasi:clocks/monotonic-clock
+  export wasi:clocks/monotonic-clock
   import wasi:http/types
-  // export wasi:http/types
+  export wasi:http/types
   import wasi:sockets/ip-name-lookup
-  // export wasi:sockets/ip-name-lookup
+  export wasi:sockets/ip-name-lookup
   import wasi:sockets/tcp
-  // export wasi:sockets/tcp
+  export wasi:sockets/tcp
   import wasi:sockets/udp
-  // export wasi:sockets/udp
+  export wasi:sockets/udp
 }
 
 world virtual-base {
