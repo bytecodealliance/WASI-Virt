@@ -43,7 +43,7 @@ Using WASI Virt, those specific file paths can be mounted and virtualized into t
 ## Basic Usage
 
 ```
-cargo install wasi-virt
+cargo install --git https://github.com/bytecodealliance/wasi-virt
 ```
 
 By default, all virtualizations encapsulate the host virtualization, unless explicitly enabling host passthrough via `--allow-env` or `--preopen`.
