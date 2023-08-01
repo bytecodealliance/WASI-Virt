@@ -108,6 +108,12 @@ pub(crate) fn deny_random_virt(module: &mut Module) -> Result<()> {
     )?;
     add_stub_exported_func(
         module,
+        "cabi_post_wasi:random/random#get-random-bytes",
+        vec![ValType::I32],
+        vec![],
+    )?;
+    add_stub_exported_func(
+        module,
         "wasi:random/random#get-random-u64",
         vec![],
         vec![ValType::I64],
@@ -120,6 +126,12 @@ pub(crate) fn deny_random_virt(module: &mut Module) -> Result<()> {
     )?;
     add_stub_exported_func(
         module,
+        "cabi_post_wasi:random/insecure#get-insecure-random-bytes",
+        vec![ValType::I32],
+        vec![],
+    )?;
+    add_stub_exported_func(
+        module,
         "wasi:random/insecure#get-insecure-random-u64",
         vec![],
         vec![ValType::I64],
@@ -127,7 +139,7 @@ pub(crate) fn deny_random_virt(module: &mut Module) -> Result<()> {
     add_stub_exported_func(
         module,
         "wasi:random/insecure-seed#insecure-seed",
-        vec![ValType::I64],
+        vec![],
         vec![ValType::I32],
     )?;
     Ok(())
