@@ -308,7 +308,11 @@ pub(crate) fn create_io_virt<'a>(
                                     full_path.push('/');
                                 }
                                 full_path.push_str(file_name_str);
-                                virtual_files.insert(format!("{path}{}{name}/{file_name_str}", if path.len() > 0 { "/" } else { "" }), full_path.to_string());
+                                virtual_files.insert(format!(
+                                    "{path}{}{name}{}{file_name_str}",
+                                    if path.len() > 0 && !path.ends_with('/') { "/" } else { "" },
+                                    if name.len() > 0 && !name.ends_with('/') { "/" } else { "" }
+                                ), full_path.to_string());
                                 entries.insert(file_name_str.into(), FsEntry::Virtualize(full_path));
                             }
                             *entry = FsEntry::Dir(entries);
