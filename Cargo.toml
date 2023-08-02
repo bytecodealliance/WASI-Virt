@@ -33,10 +33,10 @@ clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.7"
 walrus = "0.20.1"
-wasm-compose = "0.4.0"
-wasm-metadata = "0.10.1"
+wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wasm-metadata = { git = "https://github.com/bytecodealliance/wasm-tools" }
 wasm-opt = "0.113.0"
-wit-component = "0.13.1"
+wit-component = { git = "https://github.com/bytecodealliance/wasm-tools" }
 
 [build-dependencies]
 anyhow = "1"
