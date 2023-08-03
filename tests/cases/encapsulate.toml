@@ -8,6 +8,9 @@ fs.host-preopens = false
 stdio.stdin = false
 stdio.stdout = false
 stdio.stderr = false
+clocks = true
+http = false
+random = true
 
 [virt-opts.fs.preopens."/".dir]
 "LICENSE" = { virtualize = "./LICENSE" }
