@@ -10,7 +10,9 @@ use crate::exports::wasi::filesystem::filesystem::{
 use crate::exports::wasi::http::types::{
     Error, Fields, Headers, Method, Scheme, StatusCode, Trailers, Types,
 };
-use crate::exports::wasi::io::streams::{InputStream, OutputStream, StreamError, Streams};
+use crate::exports::wasi::io::streams::{
+    InputStream, OutputStream, StreamError, StreamStatus, Streams,
+};
 use crate::exports::wasi::poll::poll::Poll;
 use crate::exports::wasi::sockets::ip_name_lookup::{
     IpAddress, IpAddressFamily, IpNameLookup, Network, ResolveAddressStream,
@@ -450,17 +452,28 @@ struct StaticDirStream {
     idx: usize,
 }
 
+fn stream_err() -> StreamError {
+    StreamError { dummy: 0 }
+}
+
 impl StaticFileStream {
     fn new(fd: u32) -> Self {
         Self { fd, offset: 0 }
     }
-    fn read(&mut self, len: u64) -> Result<(Vec<u8>, bool), StreamError> {
-        let descriptor = IoState::get_descriptor(self.fd).map_err(|_| StreamError {})?;
+    fn read(&mut self, len: u64) -> Result<(Vec<u8>, StreamStatus), StreamError> {
+        let descriptor = IoState::get_descriptor(self.fd).map_err(|_| stream_err())?;
         let (bytes, done) = descriptor
             .read(self.offset, len)
-            .map_err(|_| StreamError {})?;
+            .map_err(|_| stream_err())?;
         self.offset += bytes.len() as u64;
-        Ok((bytes, done))
+        Ok((
+            bytes,
+            if done {
+                StreamStatus::Ended
+            } else {
+                StreamStatus::Open
+            },
+        ))
     }
 }
 
@@ -602,7 +615,7 @@ impl IoState {
     fn get_stream<'a>(sid: u32) -> Result<&'a mut Stream, StreamError> {
         match unsafe { STATE.stream_table.get_mut(&sid) } {
             Some(stream) => Ok(stream),
-            None => Err(StreamError {}),
+            None => Err(stream_err()),
         }
     }
     fn new_poll(target: PollTarget) -> u32 {
@@ -668,9 +681,15 @@ impl Filesystem for VirtAdapter {
         let Stream::StaticFile(filestream) = stream else {
             unreachable!()
         };
-        let result = filestream.read(len).map_err(|_| ErrorCode::Io)?;
+        let (bytes, status) = filestream.read(len).map_err(|_| ErrorCode::Io)?;
         VirtAdapter::drop_input_stream(sid);
-        Ok(result)
+        Ok((
+            bytes,
+            match status {
+                StreamStatus::Open => false,
+                StreamStatus::Ended => true,
+            },
+        ))
     }
     fn write(_: u32, _: Vec<u8>, _: u64) -> Result<u64, ErrorCode> {
         Err(ErrorCode::Access)
@@ -915,31 +934,41 @@ impl Filesystem for VirtAdapter {
     }
 }
 
+fn stream_res_map<T>(
+    res: Result<(T, streams::StreamStatus), streams::StreamError>,
+) -> Result<(T, StreamStatus), StreamError> {
+    match res {
+        Ok((data, streams::StreamStatus::Ended)) => Ok((data, StreamStatus::Ended)),
+        Ok((data, streams::StreamStatus::Open)) => Ok((data, StreamStatus::Open)),
+        Err(_) => Err(stream_err()),
+    }
+}
+
 impl Streams for VirtAdapter {
-    fn read(sid: u32, len: u64) -> Result<(Vec<u8>, bool), StreamError> {
+    fn read(sid: u32, len: u64) -> Result<(Vec<u8>, StreamStatus), StreamError> {
         VirtAdapter::blocking_read(sid, len)
     }
-    fn blocking_read(sid: u32, len: u64) -> Result<(Vec<u8>, bool), StreamError> {
+    fn blocking_read(sid: u32, len: u64) -> Result<(Vec<u8>, StreamStatus), StreamError> {
         let stream = IoState::get_stream(sid)?;
         match stream {
             Stream::StaticFile(filestream) => filestream.read(len),
-            Stream::Host(sid) => streams::blocking_read(*sid, len).map_err(|_| StreamError {}),
-            Stream::Null => Ok((vec![], true)),
-            Stream::StaticDir(_) => stream_err(),
+            Stream::Host(sid) => stream_res_map(streams::blocking_read(*sid, len)),
+            Stream::Null => Ok((vec![], StreamStatus::Ended)),
+            Stream::StaticDir(_) => Err(stream_err()),
         }
     }
-    fn skip(sid: u32, offset: u64) -> Result<(u64, bool), StreamError> {
+    fn skip(sid: u32, offset: u64) -> Result<(u64, StreamStatus), StreamError> {
         match IoState::get_stream(sid)? {
-            Stream::Null => Ok((0, true)),
-            Stream::StaticDir(_) | Stream::StaticFile(_) => stream_err(),
-            Stream::Host(sid) => streams::skip(*sid, offset).map_err(|_| StreamError {}),
+            Stream::Null => Ok((0, StreamStatus::Ended)),
+            Stream::StaticDir(_) | Stream::StaticFile(_) => Err(stream_err()),
+            Stream::Host(sid) => stream_res_map(streams::skip(*sid, offset)),
         }
     }
-    fn blocking_skip(sid: u32, offset: u64) -> Result<(u64, bool), StreamError> {
+    fn blocking_skip(sid: u32, offset: u64) -> Result<(u64, StreamStatus), StreamError> {
         match IoState::get_stream(sid)? {
-            Stream::Null => Ok((0, true)),
-            Stream::StaticFile(_) | Stream::StaticDir(_) => stream_err(),
-            Stream::Host(sid) => streams::blocking_skip(*sid, offset).map_err(|_| StreamError {}),
+            Stream::Null => Ok((0, StreamStatus::Ended)),
+            Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Host(sid) => stream_res_map(streams::blocking_skip(*sid, offset)),
         }
     }
     fn subscribe_to_input_stream(sid: u32) -> u32 {
@@ -964,98 +993,100 @@ impl Streams for VirtAdapter {
         }
         unsafe { STATE.stream_table.remove(&sid) };
     }
-    fn write(sid: u32, bytes: Vec<u8>) -> Result<u64, StreamError> {
+    fn write(sid: u32, bytes: Vec<u8>) -> Result<(u64, StreamStatus), StreamError> {
         match IoState::get_stream(sid)? {
-            Stream::Null => Ok(bytes.len() as u64),
-            Stream::StaticFile(_) | Stream::StaticDir(_) => stream_err(),
-            Stream::Host(sid) => streams::write(*sid, bytes.as_slice()).map_err(|_| StreamError {}),
+            Stream::Null => Ok((bytes.len() as u64, StreamStatus::Ended)),
+            Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Host(sid) => stream_res_map(streams::write(*sid, bytes.as_slice())),
         }
     }
-    fn blocking_write(sid: u32, bytes: Vec<u8>) -> Result<u64, StreamError> {
+    fn blocking_write(sid: u32, bytes: Vec<u8>) -> Result<(u64, StreamStatus), StreamError> {
         match IoState::get_stream(sid)? {
-            Stream::Null => Ok(bytes.len() as u64),
-            Stream::StaticFile(_) | Stream::StaticDir(_) => stream_err(),
-            Stream::Host(sid) => streams::write(*sid, bytes.as_slice()).map_err(|_| StreamError {}),
+            Stream::Null => Ok((bytes.len() as u64, StreamStatus::Ended)),
+            Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Host(sid) => stream_res_map(streams::write(*sid, bytes.as_slice())),
         }
     }
-    fn write_zeroes(sid: u32, len: u64) -> Result<u64, StreamError> {
+    fn write_zeroes(sid: u32, len: u64) -> Result<(u64, StreamStatus), StreamError> {
         match IoState::get_stream(sid)? {
-            Stream::Null => Ok(len),
-            Stream::StaticFile(_) | Stream::StaticDir(_) => stream_err(),
-            Stream::Host(sid) => streams::write_zeroes(*sid, len).map_err(|_| StreamError {}),
+            Stream::Null => Ok((len, StreamStatus::Ended)),
+            Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Host(sid) => stream_res_map(streams::write_zeroes(*sid, len)),
         }
     }
-    fn blocking_write_zeroes(sid: u32, len: u64) -> Result<u64, StreamError> {
+    fn blocking_write_zeroes(sid: u32, len: u64) -> Result<(u64, StreamStatus), StreamError> {
         match IoState::get_stream(sid)? {
-            Stream::Null => Ok(len),
-            Stream::StaticFile(_) | Stream::StaticDir(_) => stream_err(),
-            Stream::Host(sid) => {
-                streams::blocking_write_zeroes(*sid, len).map_err(|_| StreamError {})
-            }
+            Stream::Null => Ok((len, StreamStatus::Ended)),
+            Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Host(sid) => stream_res_map(streams::blocking_write_zeroes(*sid, len)),
         }
     }
-    fn splice(to_sid: u32, from_sid: u32, len: u64) -> Result<(u64, bool), StreamError> {
+    fn splice(to_sid: u32, from_sid: u32, len: u64) -> Result<(u64, StreamStatus), StreamError> {
         let to_sid = match IoState::get_stream(to_sid)? {
             Stream::Null => {
-                return Ok((len, true));
+                return Ok((len, StreamStatus::Ended));
             }
             Stream::StaticFile(_) | Stream::StaticDir(_) => {
-                return stream_err();
+                return Err(stream_err());
             }
             Stream::Host(sid) => *sid,
         };
         let from_sid = match IoState::get_stream(from_sid)? {
             Stream::Null => {
-                return Ok((len, true));
+                return Ok((len, StreamStatus::Ended));
             }
             Stream::StaticFile(_) | Stream::StaticDir(_) => {
-                return stream_err();
+                return Err(stream_err());
             }
             Stream::Host(sid) => *sid,
         };
-        streams::splice(to_sid, from_sid, len).map_err(|_| StreamError {})
+        stream_res_map(streams::splice(to_sid, from_sid, len))
     }
-    fn blocking_splice(to_sid: u32, from_sid: u32, len: u64) -> Result<(u64, bool), StreamError> {
+    fn blocking_splice(
+        to_sid: u32,
+        from_sid: u32,
+        len: u64,
+    ) -> Result<(u64, StreamStatus), StreamError> {
         let to_sid = match IoState::get_stream(to_sid)? {
             Stream::Null => {
-                return Ok((len, true));
+                return Ok((len, StreamStatus::Ended));
             }
             Stream::StaticFile(_) | Stream::StaticDir(_) => {
-                return stream_err();
+                return Err(stream_err());
             }
             Stream::Host(sid) => *sid,
         };
         let from_sid = match IoState::get_stream(from_sid)? {
             Stream::Null => {
-                return Ok((len, true));
+                return Ok((len, StreamStatus::Ended));
             }
             Stream::StaticFile(_) | Stream::StaticDir(_) => {
-                return stream_err();
+                return Err(stream_err());
             }
             Stream::Host(sid) => *sid,
         };
-        streams::blocking_splice(to_sid, from_sid, len).map_err(|_| StreamError {})
+        stream_res_map(streams::blocking_splice(to_sid, from_sid, len))
     }
-    fn forward(to_sid: u32, from_sid: u32) -> Result<u64, StreamError> {
+    fn forward(to_sid: u32, from_sid: u32) -> Result<(u64, StreamStatus), StreamError> {
         let to_sid = match IoState::get_stream(to_sid)? {
             Stream::Null => {
-                return Ok(0);
+                return Ok((0, StreamStatus::Ended));
             }
             Stream::StaticFile(_) | Stream::StaticDir(_) => {
-                return stream_err();
+                return Err(stream_err());
             }
             Stream::Host(sid) => *sid,
         };
         let from_sid = match IoState::get_stream(from_sid)? {
             Stream::Null => {
-                return Ok(0);
+                return Ok((0, StreamStatus::Ended));
             }
             Stream::StaticFile(_) | Stream::StaticDir(_) => {
-                return stream_err();
+                return Err(stream_err());
             }
             Stream::Host(sid) => *sid,
         };
-        streams::forward(to_sid, from_sid).map_err(|_| StreamError {})
+        stream_res_map(streams::forward(to_sid, from_sid))
     }
     fn subscribe_to_output_stream(sid: u32) -> u32 {
         let Ok(stream) = IoState::get_stream(sid) else {
@@ -1079,10 +1110,6 @@ impl Streams for VirtAdapter {
         }
         unsafe { STATE.stream_table.remove(&sid) };
     }
-}
-
-fn stream_err<T>() -> Result<T, StreamError> {
-    Err(StreamError {})
 }
 
 // we enforce these descriptor numbers here internally
@@ -1116,7 +1143,7 @@ impl Poll for VirtAdapter {
         }
         unsafe { STATE.poll_table.remove(&pid) };
     }
-    fn poll_oneoff(list: Vec<u32>) -> Vec<u8> {
+    fn poll_oneoff(list: Vec<u32>) -> Vec<bool> {
         let has_host_polls = list
             .iter()
             .find(|&&pid| matches!(IoState::get_poll(pid), Some(PollTarget::Host(_))))
@@ -1129,7 +1156,7 @@ impl Poll for VirtAdapter {
             return poll::poll_oneoff(&list);
         }
         if has_virt_polls {
-            return std::iter::repeat(1).take(list.len()).collect();
+            return std::iter::repeat(true).take(list.len()).collect();
         }
         let mut host_polls = Vec::new();
         for pid in &list {
@@ -1143,7 +1170,7 @@ impl Poll for VirtAdapter {
         for pid in &list {
             match IoState::get_poll(*pid).unwrap() {
                 PollTarget::Null => {
-                    ready.push(1);
+                    ready.push(true);
                 }
                 PollTarget::Host(_) => {
                     ready.push(host_ready[host_idx]);
