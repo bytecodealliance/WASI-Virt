@@ -1,12 +1,12 @@
+use crate::mutator::{
+    ir::Value, ActiveData, ActiveDataLocation, DataKind, ExportItem, GlobalKind, InitExpr, Module,
+};
 use crate::walrus_ops::{
     bump_stack_global, get_active_data_segment, get_memory_id, remove_exported_func,
     stub_imported_func,
 };
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
-use walrus::{
-    ir::Value, ActiveData, ActiveDataLocation, DataKind, ExportItem, GlobalKind, InitExpr, Module,
-};
 
 #[derive(Deserialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields)]

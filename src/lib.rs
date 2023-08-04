@@ -17,6 +17,7 @@ use wasm_opt::{Feature, OptimizationOptions};
 use wit_component::{metadata, ComponentEncoder, StringEncoding};
 
 mod data;
+mod mutator;
 mod virt_deny;
 mod virt_env;
 mod virt_io;
@@ -124,7 +125,7 @@ impl WasiVirt {
     pub fn finish(&mut self) -> Result<VirtResult> {
         let virt_adapter = include_bytes!("../lib/virtual_adapter.wasm");
 
-        let config = walrus::ModuleConfig::new();
+        let config = mutator::ModuleConfig::new();
         let mut module = config.parse(virt_adapter)?;
         module.name = Some("wasi_virt".into());
 

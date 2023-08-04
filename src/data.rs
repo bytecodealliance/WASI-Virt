@@ -1,12 +1,12 @@
+use crate::mutator::{
+    ActiveData, ActiveDataLocation, DataKind, ElementKind, FunctionBuilder, FunctionId,
+    FunctionKind, InitExpr, Module, ValType,
+};
 use crate::walrus_ops::{
     bump_stack_global, get_exported_func, get_memory_id, remove_exported_func,
 };
 use anyhow::{bail, Result};
 use std::collections::HashMap;
-use walrus::{
-    ActiveData, ActiveDataLocation, DataKind, ElementKind, FunctionBuilder, FunctionId,
-    FunctionKind, InitExpr, Module, ValType,
-};
 
 /// Data section
 /// Because data is stack-allocated we create a corresponding byte vector as large

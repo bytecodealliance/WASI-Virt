@@ -1,5 +1,5 @@
+use crate::mutator::{Module, ValType};
 use anyhow::Result;
-use walrus::{Module, ValType};
 
 use crate::walrus_ops::add_stub_exported_func;
 

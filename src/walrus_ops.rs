@@ -1,9 +1,9 @@
-use anyhow::{bail, Context, Result};
-use walrus::{
+use crate::mutator::{
     ir::Value, ActiveData, ActiveDataLocation, Data, DataKind, ExportItem, Function,
     FunctionBuilder, FunctionId, FunctionKind, GlobalKind, ImportKind, ImportedFunction, InitExpr,
     MemoryId, Module, ValType,
 };
+use anyhow::{bail, Context, Result};
 
 pub(crate) fn get_active_data_start(data: &Data, mem: MemoryId) -> Result<u32> {
     let DataKind::Active(active_data) = &data.kind else {

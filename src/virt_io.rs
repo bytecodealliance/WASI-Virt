@@ -1,9 +1,9 @@
 use std::fmt;
 use std::{collections::BTreeMap, fs};
 
+use crate::mutator::{ir::Value, ExportItem, GlobalKind, InitExpr, Module};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
-use walrus::{ir::Value, ExportItem, GlobalKind, InitExpr, Module};
 
 use crate::walrus_ops::remove_exported_func;
 use crate::{
