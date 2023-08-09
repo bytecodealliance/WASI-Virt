@@ -2,6 +2,11 @@ component = "file-read"
 
 host-fs-path = "/clocks/monotonic-clock.wit"
 
+[virt-opts.stdio]
+stdin = true
+stdout = true
+stderr = true
+
 [virt-opts.fs.preopens."/"]
 virtualize = "./wit/deps"
 

@@ -85,24 +85,30 @@ pub struct VirtFile {
 type VirtDir = BTreeMap<String, FsEntry>;
 
 impl VirtFs {
+    /// Deny host preopens at runtime
     pub fn deny_host_preopens(&mut self) {
         self.host_preopens = false;
     }
+    /// Allow host preopens at runtime
     pub fn allow_host_preopens(&mut self) {
         self.host_preopens = true;
     }
+    /// Add a preopen entry
     pub fn preopen(&mut self, name: String, preopen: FsEntry) -> &mut Self {
         self.preopens.insert(name, preopen);
         self
     }
+    /// Add a runtime preopen host mapping
     pub fn host_preopen(&mut self, name: String, dir: String) -> &mut Self {
         self.preopens.insert(name, FsEntry::RuntimeDir(dir));
         self
     }
+    /// Add a preopen virtualized local directory (which will be globbed)
     pub fn virtual_preopen(&mut self, name: String, dir: String) -> &mut Self {
         self.preopens.insert(name, FsEntry::Virtualize(dir));
         self
     }
+    /// Set the passive cutoff size in bytes for creating Wasm passive segments
     pub fn passive_cutoff(&mut self, passive_cutoff: usize) -> &mut Self {
         self.passive_cutoff = Some(passive_cutoff);
         self
@@ -494,117 +500,75 @@ pub(crate) fn create_io_virt<'a>(
 // when stubbing functions that are not part of the virtual adapter exports, we therefore
 // have to create this functions fresh
 pub(crate) fn stub_fs_virt(module: &mut Module) -> Result<()> {
-    stub_imported_func(module, "wasi:cli-base/preopens", "get-directories", true)?;
+    stub_imported_func(module, "wasi:filesystem/preopens", "get-directories", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "read-via-stream", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "write-via-stream", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "append-via-stream", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "advise", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "sync-data", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "get-flags", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "get-type", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "set-size", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "set-times", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "read", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "write", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "read-directory", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "sync", false)?;
     stub_imported_func(
         module,
-        "wasi:filesystem/filesystem",
-        "read-via-stream",
-        true,
-    )?;
-    stub_imported_func(
-        module,
-        "wasi:filesystem/filesystem",
-        "write-via-stream",
-        false,
-    )?;
-    stub_imported_func(
-        module,
-        "wasi:filesystem/filesystem",
-        "append-via-stream",
-        false,
-    )?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "advise", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "sync-data", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "get-flags", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "get-type", true)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "set-size", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "set-times", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "read", true)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "write", false)?;
-    stub_imported_func(
-        module,
-        "wasi:filesystem/filesystem",
-        "read-directory",
-        false,
-    )?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "sync", false)?;
-    stub_imported_func(
-        module,
-        "wasi:filesystem/filesystem",
+        "wasi:filesystem/types",
         "create-directory-at",
         false,
     )?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "stat", true)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "stat-at", true)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "set-times-at", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "link-at", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "open-at", true)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "readlink-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "stat", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "stat-at", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "set-times-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "link-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "open-at", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "readlink-at", false)?;
     stub_imported_func(
         module,
-        "wasi:filesystem/filesystem",
+        "wasi:filesystem/types",
         "remove-directory-at",
         false,
     )?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "rename-at", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "symlink-at", false)?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "access-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "rename-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "symlink-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "access-at", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "unlink-file-at", false)?;
     stub_imported_func(
         module,
-        "wasi:filesystem/filesystem",
-        "unlink-file-at",
-        false,
-    )?;
-    stub_imported_func(
-        module,
-        "wasi:filesystem/filesystem",
+        "wasi:filesystem/types",
         "change-file-permissions-at",
         false,
     )?;
     stub_imported_func(
         module,
-        "wasi:filesystem/filesystem",
+        "wasi:filesystem/types",
         "change-directory-permissions-at",
         false,
     )?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "lock-shared", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "lock-shared", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "lock-exclusive", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "try-lock-shared", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "try-lock-exclusive", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "unlock", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "drop-descriptor", true)?;
     stub_imported_func(
         module,
-        "wasi:filesystem/filesystem",
-        "lock-exclusive",
-        false,
-    )?;
-    stub_imported_func(
-        module,
-        "wasi:filesystem/filesystem",
-        "try-lock-shared",
-        false,
-    )?;
-    stub_imported_func(
-        module,
-        "wasi:filesystem/filesystem",
-        "try-lock-exclusive",
-        false,
-    )?;
-    stub_imported_func(module, "wasi:filesystem/filesystem", "unlock", false)?;
-    stub_imported_func(
-        module,
-        "wasi:filesystem/filesystem",
-        "drop-descriptor",
-        true,
-    )?;
-    stub_imported_func(
-        module,
-        "wasi:filesystem/filesystem",
+        "wasi:filesystem/types",
         "read-directory-entry",
         true,
     )?;
     stub_imported_func(
         module,
-        "wasi:filesystem/filesystem",
+        "wasi:filesystem/types",
         "drop-directory-entry-stream",
         true,
     )?;
+    stub_imported_func(module, "wasi:filesystem/types", "is-same-object", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "metadata-hash", false)?;
+    stub_imported_func(module, "wasi:filesystem/types", "metadata-hash-at", false)?;
     Ok(())
 }
 
@@ -721,52 +685,46 @@ pub(crate) fn stub_sockets_virt(module: &mut Module) -> Result<()> {
 // strip functions only have to dce the virtual adapter
 pub(crate) fn strip_fs_virt(module: &mut Module) -> Result<()> {
     stub_fs_virt(module)?;
-    remove_exported_func(module, "wasi:cli-base/preopens#get-directories")?;
+    remove_exported_func(module, "wasi:filesystem/preopens#get-directories")?;
 
-    remove_exported_func(module, "wasi:filesystem/filesystem#read-via-stream")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#write-via-stream")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#append-via-stream")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#advise")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#sync-data")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#get-flags")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#get-type")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#set-size")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#set-times")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#read")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#write")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#read-directory")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#sync")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#create-directory-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#stat")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#stat-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#set-times-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#link-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#open-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#readlink-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#remove-directory-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#rename-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#symlink-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#access-at")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#unlink-file-at")?;
+    remove_exported_func(module, "wasi:filesystem/types#read-via-stream")?;
+    remove_exported_func(module, "wasi:filesystem/types#write-via-stream")?;
+    remove_exported_func(module, "wasi:filesystem/types#append-via-stream")?;
+    remove_exported_func(module, "wasi:filesystem/types#advise")?;
+    remove_exported_func(module, "wasi:filesystem/types#sync-data")?;
+    remove_exported_func(module, "wasi:filesystem/types#get-flags")?;
+    remove_exported_func(module, "wasi:filesystem/types#get-type")?;
+    remove_exported_func(module, "wasi:filesystem/types#set-size")?;
+    remove_exported_func(module, "wasi:filesystem/types#set-times")?;
+    remove_exported_func(module, "wasi:filesystem/types#read")?;
+    remove_exported_func(module, "wasi:filesystem/types#write")?;
+    remove_exported_func(module, "wasi:filesystem/types#read-directory")?;
+    remove_exported_func(module, "wasi:filesystem/types#sync")?;
+    remove_exported_func(module, "wasi:filesystem/types#create-directory-at")?;
+    remove_exported_func(module, "wasi:filesystem/types#stat")?;
+    remove_exported_func(module, "wasi:filesystem/types#stat-at")?;
+    remove_exported_func(module, "wasi:filesystem/types#set-times-at")?;
+    remove_exported_func(module, "wasi:filesystem/types#link-at")?;
+    remove_exported_func(module, "wasi:filesystem/types#open-at")?;
+    remove_exported_func(module, "wasi:filesystem/types#readlink-at")?;
+    remove_exported_func(module, "wasi:filesystem/types#remove-directory-at")?;
+    remove_exported_func(module, "wasi:filesystem/types#rename-at")?;
+    remove_exported_func(module, "wasi:filesystem/types#symlink-at")?;
+    remove_exported_func(module, "wasi:filesystem/types#access-at")?;
+    remove_exported_func(module, "wasi:filesystem/types#unlink-file-at")?;
+    remove_exported_func(module, "wasi:filesystem/types#change-file-permissions-at")?;
     remove_exported_func(
         module,
-        "wasi:filesystem/filesystem#change-file-permissions-at",
+        "wasi:filesystem/types#change-directory-permissions-at",
     )?;
-    remove_exported_func(
-        module,
-        "wasi:filesystem/filesystem#change-directory-permissions-at",
-    )?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#lock-shared")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#lock-exclusive")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#try-lock-shared")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#try-lock-exclusive")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#unlock")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#drop-descriptor")?;
-    remove_exported_func(module, "wasi:filesystem/filesystem#read-directory-entry")?;
-    remove_exported_func(
-        module,
-        "wasi:filesystem/filesystem#drop-directory-entry-stream",
-    )?;
+    remove_exported_func(module, "wasi:filesystem/types#lock-shared")?;
+    remove_exported_func(module, "wasi:filesystem/types#lock-exclusive")?;
+    remove_exported_func(module, "wasi:filesystem/types#try-lock-shared")?;
+    remove_exported_func(module, "wasi:filesystem/types#try-lock-exclusive")?;
+    remove_exported_func(module, "wasi:filesystem/types#unlock")?;
+    remove_exported_func(module, "wasi:filesystem/types#drop-descriptor")?;
+    remove_exported_func(module, "wasi:filesystem/types#read-directory-entry")?;
+    remove_exported_func(module, "wasi:filesystem/types#drop-directory-entry-stream")?;
     Ok(())
 }
 

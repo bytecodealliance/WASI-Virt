@@ -37,26 +37,31 @@ pub enum HostEnv {
 }
 
 impl VirtEnv {
+    /// Set the host environment variable allow list
     pub fn allow(&mut self, allow_list: &[String]) -> &mut Self {
         self.host = HostEnv::Allow(allow_list.iter().map(|s| s.to_string()).collect());
         self
     }
 
+    /// Set the host environment variable deny list
     pub fn deny(&mut self, deny_list: &[&str]) -> &mut Self {
         self.host = HostEnv::Deny(deny_list.iter().map(|s| s.to_string()).collect());
         self
     }
 
+    /// Enable all environment variables on the host
     pub fn allow_all(&mut self) -> &mut Self {
         self.host = HostEnv::All;
         self
     }
 
+    /// Deny all environment variables on the host
     pub fn deny_all(&mut self) -> &mut Self {
         self.host = HostEnv::None;
         self
     }
 
+    /// Set the environment variable overrides
     pub fn overrides(&mut self, overrides: &[(&str, &str)]) -> &mut Self {
         for (key, val) in overrides {
             self.overrides.push((key.to_string(), val.to_string()));

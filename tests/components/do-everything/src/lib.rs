@@ -7,14 +7,15 @@ extern crate rand;
 
 wit_bindgen::generate!({
     path: "../../../wit",
-    world: "virt-test"
+    world: "virt-test",
+    exports: {
+        world: VirtTestComponent
+    },
 });
 
-struct VirtTestImpl;
+struct VirtTestComponent;
 
-export_virt_test!(VirtTestImpl);
-
-impl VirtTest for VirtTestImpl {
+impl VirtTest for VirtTestComponent {
     fn test_get_env() -> Vec<(String, String)> {
         unreachable!();
     }
