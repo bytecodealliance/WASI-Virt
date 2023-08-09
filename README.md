@@ -180,6 +180,16 @@ fn main() {
 
 When calling a subsystem for the first time, its virtualization will be enabled. Subsystems not used or configured at all will be omitted from the virtualization entirely.
 
+### Selective Subsystem Virtualization
+
+By default, when using the `wasi-virt` CLI command, all virtualizations are enabled. This way, not only is encapsulation the default, but composition with arbitrary components will always work out as all interfaces for WASI should always be available.
+
+Selective subsystem virtualization can be performed directly with the WASI Virt library as above (which does not virtualize all subsystems by default). This allows virtualizing just a single subsystem like `env`, where it is possible to virtualize only that subsystem and skip other virtualizations and end up creating a smaller virtualization component.
+
+There is an important caveat to this: _as soon as any subsystem uses IO, all subsystems using IO need to be virtualized in order to fully subclass streams and polls in the virtualization layer_. In future this caveat requirement should weaken as these features lower into the core ABI in subsequent WASI versions.
+
+`wasm-tools compose` will error in these scenarios, and better [error messaging](https://github.com/bytecodealliance/wasm-tools/issues/1147) may be provided in future when performing invalid compositions like the above. Missing subsystems can be usually detected from the composition warnings list.
+
 ## Contributing
 
 To build, run `./build-adapter.sh` which builds the master `virtual-adapter` component, followed by `cargo build` to build

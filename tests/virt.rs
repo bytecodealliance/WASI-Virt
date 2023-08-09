@@ -60,7 +60,9 @@ struct TestCase {
     expect: TestExpectation,
 }
 
-#[async_std::test]
+const DEBUG: bool = false;
+
+#[tokio::test]
 async fn virt_test() -> Result<()> {
     let wasi_adapter = fs::read("lib/wasi_snapshot_preview1.reactor.wasm")?;
 
@@ -71,9 +73,15 @@ async fn virt_test() -> Result<()> {
         let test_case_name = test_case_file_name.strip_suffix(".toml").unwrap();
 
         // Filtering...
-        // if test_case_name != "encapsulate" {
+        // if test_case_name != "passthrough" {
         //     continue;
         // }
+
+        if DEBUG {
+            if test_case_name == "encapsulate" {
+                continue;
+            }
+        }
 
         println!("> {:?}", test_case_path);
 
@@ -90,12 +98,14 @@ async fn virt_test() -> Result<()> {
         let mut generated_component_path = generated_path.join(component_name);
         generated_component_path.set_extension("component.wasm");
         cmd(&format!(
-            "cargo build -p {component_name} --target wasm32-wasi --release"
+            "cargo build -p {component_name} --target wasm32-wasi {}",
+            if DEBUG { "" } else { "--release" }
         ))?;
 
         // encode the component
         let component_core = fs::read(&format!(
-            "target/wasm32-wasi/release/{}.wasm",
+            "target/wasm32-wasi/{}/{}.wasm",
+            if DEBUG { "debug" } else { "release" },
             component_name.to_snake_case()
         ))?;
         let mut encoder = ComponentEncoder::default()
@@ -112,7 +122,9 @@ async fn virt_test() -> Result<()> {
         virt_component_path.set_extension("virt.wasm");
         let mut virt_opts = test.virt_opts.clone().unwrap_or_default();
         virt_opts.exit(Default::default());
-        // virt_opts.wasm_opt = Some(false);
+        if DEBUG {
+            virt_opts.wasm_opt = Some(false);
+        }
 
         let virt_component = virt_opts
             .finish()
@@ -137,18 +149,17 @@ async fn virt_test() -> Result<()> {
         }
 
         // execute the composed virtualized component test function
-        let mut builder = WasiCtxBuilder::new().inherit_stdio().push_preopened_dir(
+        let mut builder = WasiCtxBuilder::new();
+        builder.inherit_stdio().preopened_dir(
             Dir::open_ambient_dir(".", ambient_authority())?,
             DirPerms::READ,
             FilePerms::READ,
             "/",
         );
         if let Some(host_env) = &test.host_env {
-            let env: Vec<(String, String)> = host_env
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect();
-            builder = builder.set_env(env.as_slice());
+            for (k, v) in host_env {
+                builder.env(k, v);
+            }
         }
         let mut table = Table::new();
         let wasi = builder.build(&mut table)?;

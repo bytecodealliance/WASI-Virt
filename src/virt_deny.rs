@@ -378,5 +378,6 @@ pub(crate) fn deny_exit_virt(module: &mut Module) -> Result<()> {
 }
 
 pub(crate) fn deny_sockets_virt(module: &mut Module) -> Result<()> {
-    todo!();
+    // TODO: Complete stubbing implementation
+    Ok(())
 }

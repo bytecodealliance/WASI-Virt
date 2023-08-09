@@ -198,7 +198,7 @@ impl WasiVirt {
             .resolve
             .select_world(*pkg_id, Some("virtual-sockets"))?;
 
-        // env & exit subsystems are fully independent
+        // env, exit & random subsystems are fully independent
         if self.env.is_some() {
             bindgen.resolve.merge_worlds(env_world, base_world)?;
         } else {
@@ -225,36 +225,36 @@ impl WasiVirt {
             strip_io_virt(&mut module)?;
         }
         if let Some(clocks) = self.clocks {
-            if clocks {
-                // When subsystem is enabled, we can pass through all interfaces
-                // that do not rely on io. The adapter default is passthrough.
-                bindgen.resolve.merge_worlds(io_clocks_world, base_world)?;
-            } else {
-                // When subsystem is disabled, we must do a full virtualization
+            if !clocks {
+                // deny is effectively virtualization
+                // in future with fine-grained virtualization options, they
+                // also would extend here (ie !clocks is deceiving)
                 bindgen.resolve.merge_worlds(clocks_world, base_world)?;
                 deny_clocks_virt(&mut module)?;
+            } else {
+                // passthrough can be simplified to just rewrapping io interfaces
+                bindgen.resolve.merge_worlds(io_clocks_world, base_world)?;
             }
         } else {
             strip_clocks_virt(&mut module)?;
         }
         // sockets and http are identical to clocks above
         if let Some(sockets) = self.sockets {
-            if sockets {
-                bindgen.resolve.merge_worlds(io_sockets_world, base_world)?;
-            } else {
+            if !sockets {
                 bindgen.resolve.merge_worlds(sockets_world, base_world)?;
-                // TODO:
-                // deny_sockets_virt(&mut module)?;
+                deny_sockets_virt(&mut module)?;
+            } else {
+                bindgen.resolve.merge_worlds(io_sockets_world, base_world)?;
             }
         } else {
             strip_sockets_virt(&mut module)?;
         }
         if let Some(http) = self.http {
-            if http {
-                bindgen.resolve.merge_worlds(io_http_world, base_world)?;
-            } else {
+            if !http {
                 bindgen.resolve.merge_worlds(http_world, base_world)?;
                 deny_http_virt(&mut module)?;
+            } else {
+                bindgen.resolve.merge_worlds(io_http_world, base_world)?;
             }
         } else {
             strip_http_virt(&mut module)?;

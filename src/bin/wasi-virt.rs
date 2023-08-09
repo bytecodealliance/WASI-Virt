@@ -131,13 +131,11 @@ fn main() -> Result<()> {
     // http
     virt_opts.http(args.allow_http.unwrap_or(allow_all));
 
-    // TODO: These need completing
-
     // random
     virt_opts.random(args.allow_random.unwrap_or(allow_all));
 
     // sockets
-    // virt_opts.sockets(args.allow_sockets.unwrap_or(allow_all));
+    virt_opts.sockets(args.allow_sockets.unwrap_or(allow_all));
 
     // stdio
     virt_opts

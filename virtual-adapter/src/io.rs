@@ -1004,7 +1004,7 @@ impl Streams for VirtAdapter {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((bytes.len() as u64, StreamStatus::Ended)),
             Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
-            Stream::Host(sid) => stream_res_map(streams::write(*sid, bytes.as_slice())),
+            Stream::Host(sid) => stream_res_map(streams::blocking_write(*sid, bytes.as_slice())),
         }
     }
     fn write_zeroes(sid: u32, len: u64) -> Result<(u64, StreamStatus), StreamError> {
