@@ -31,7 +31,6 @@ rustflags = ["-Zoom=panic"]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
-tokio = { version = "1.30.0", features = ["macros"] }
 toml = "0.7"
 walrus = "0.20.1"
 wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools" }
@@ -44,9 +43,9 @@ anyhow = "1"
 
 [dev-dependencies]
 anyhow = "1"
-async-std = { version = "1", features = ["attributes"] }
 cap-std = "1.0.12"
 heck =  { version = "0.4" }
+tokio = { version = "1.30.0", features = ["macros"] }
 wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", features = ["component-model"] }
 wasmtime-wasi =  { git = "https://github.com/bytecodealliance/wasmtime" }
 

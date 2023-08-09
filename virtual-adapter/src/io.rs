@@ -1,14 +1,15 @@
-use crate::exports::wasi::cli_base::preopens::Preopens;
 use crate::exports::wasi::cli_base::stderr::Stderr;
 use crate::exports::wasi::cli_base::stdin::Stdin;
 use crate::exports::wasi::cli_base::stdout::Stdout;
 use crate::exports::wasi::clocks::monotonic_clock::MonotonicClock;
-use crate::exports::wasi::filesystem::filesystem::{
+use crate::exports::wasi::filesystem::preopens::Preopens;
+use crate::exports::wasi::filesystem::types::{
     AccessType, Advice, Datetime, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry,
-    ErrorCode, Filesystem, Modes, NewTimestamp, OpenFlags, PathFlags,
+    ErrorCode, MetadataHashValue, Modes, NewTimestamp, OpenFlags, PathFlags,
+    Types as FilesystemTypes,
 };
 use crate::exports::wasi::http::types::{
-    Error, Fields, Headers, Method, Scheme, StatusCode, Trailers, Types,
+    Error, Fields, Headers, Method, Scheme, StatusCode, Trailers, Types as HttpTypes,
 };
 use crate::exports::wasi::io::streams::{
     InputStream, OutputStream, StreamError, StreamStatus, Streams,
@@ -21,16 +22,16 @@ use crate::exports::wasi::sockets::tcp::ErrorCode as NetworkErrorCode;
 use crate::exports::wasi::sockets::tcp::{IpSocketAddress, ShutdownType, Tcp, TcpSocket};
 use crate::exports::wasi::sockets::udp::{Datagram, Udp, UdpSocket};
 
-use crate::wasi::cli_base::preopens;
 use crate::wasi::cli_base::stderr;
 use crate::wasi::cli_base::stdin;
 use crate::wasi::cli_base::stdout;
-use crate::wasi::filesystem::filesystem;
+use crate::wasi::filesystem::preopens;
+use crate::wasi::filesystem::types as filesystem_types;
 use crate::wasi::io::streams;
 
 // these are all the subsystems which touch streams + poll
 use crate::wasi::clocks::monotonic_clock;
-use crate::wasi::http::types;
+use crate::wasi::http::types as http_types;
 use crate::wasi::poll::poll;
 use crate::wasi::sockets::ip_name_lookup;
 use crate::wasi::sockets::tcp;
@@ -113,7 +114,7 @@ impl Descriptor {
             STATE.descriptor_table.remove(&self.fd);
         }
         if let DescriptorTarget::HostDescriptor(host_fd) = self.target {
-            filesystem::drop_descriptor(host_fd);
+            filesystem_types::drop_descriptor(host_fd);
         }
     }
 
@@ -123,7 +124,7 @@ impl Descriptor {
                 let entry = entry(ptr);
                 Ok(entry.ty())
             }
-            DescriptorTarget::HostDescriptor(host_fd) => filesystem::get_type(host_fd)
+            DescriptorTarget::HostDescriptor(host_fd) => filesystem_types::get_type(host_fd)
                 .map(descriptor_ty_map)
                 .map_err(err_map),
         }
@@ -182,24 +183,21 @@ impl Descriptor {
                 }
             }
             DescriptorTarget::HostDescriptor(host_fd) => {
-                filesystem::read(host_fd, len, offset).map_err(err_map)
+                filesystem_types::read(host_fd, len, offset).map_err(err_map)
             }
         }
     }
 }
 
-fn dir_map(d: filesystem::DirectoryEntry) -> DirectoryEntry {
+fn dir_map(d: filesystem_types::DirectoryEntry) -> DirectoryEntry {
     DirectoryEntry {
-        inode: d.inode,
         type_: descriptor_ty_map(d.type_),
         name: d.name,
     }
 }
 
-fn stat_map(s: filesystem::DescriptorStat) -> DescriptorStat {
+fn stat_map(s: filesystem_types::DescriptorStat) -> DescriptorStat {
     DescriptorStat {
-        device: s.device,
-        inode: s.inode,
         type_: descriptor_ty_map(s.type_),
         link_count: s.link_count,
         size: s.size,
@@ -209,58 +207,58 @@ fn stat_map(s: filesystem::DescriptorStat) -> DescriptorStat {
     }
 }
 
-fn descriptor_ty_map(d: filesystem::DescriptorType) -> DescriptorType {
+fn descriptor_ty_map(d: filesystem_types::DescriptorType) -> DescriptorType {
     match d {
-        filesystem::DescriptorType::Unknown => DescriptorType::Unknown,
-        filesystem::DescriptorType::BlockDevice => DescriptorType::BlockDevice,
-        filesystem::DescriptorType::CharacterDevice => DescriptorType::CharacterDevice,
-        filesystem::DescriptorType::Directory => DescriptorType::Directory,
-        filesystem::DescriptorType::Fifo => DescriptorType::Fifo,
-        filesystem::DescriptorType::SymbolicLink => DescriptorType::SymbolicLink,
-        filesystem::DescriptorType::RegularFile => DescriptorType::RegularFile,
-        filesystem::DescriptorType::Socket => DescriptorType::Socket,
+        filesystem_types::DescriptorType::Unknown => DescriptorType::Unknown,
+        filesystem_types::DescriptorType::BlockDevice => DescriptorType::BlockDevice,
+        filesystem_types::DescriptorType::CharacterDevice => DescriptorType::CharacterDevice,
+        filesystem_types::DescriptorType::Directory => DescriptorType::Directory,
+        filesystem_types::DescriptorType::Fifo => DescriptorType::Fifo,
+        filesystem_types::DescriptorType::SymbolicLink => DescriptorType::SymbolicLink,
+        filesystem_types::DescriptorType::RegularFile => DescriptorType::RegularFile,
+        filesystem_types::DescriptorType::Socket => DescriptorType::Socket,
     }
 }
 
-fn err_map(e: filesystem::ErrorCode) -> ErrorCode {
+fn err_map(e: filesystem_types::ErrorCode) -> ErrorCode {
     match e {
-        filesystem::ErrorCode::Access => ErrorCode::Access,
-        filesystem::ErrorCode::WouldBlock => ErrorCode::WouldBlock,
-        filesystem::ErrorCode::Already => ErrorCode::Already,
-        filesystem::ErrorCode::BadDescriptor => ErrorCode::BadDescriptor,
-        filesystem::ErrorCode::Busy => ErrorCode::Busy,
-        filesystem::ErrorCode::Deadlock => ErrorCode::Deadlock,
-        filesystem::ErrorCode::Quota => ErrorCode::Quota,
-        filesystem::ErrorCode::Exist => ErrorCode::Exist,
-        filesystem::ErrorCode::FileTooLarge => ErrorCode::FileTooLarge,
-        filesystem::ErrorCode::IllegalByteSequence => ErrorCode::IllegalByteSequence,
-        filesystem::ErrorCode::InProgress => ErrorCode::InProgress,
-        filesystem::ErrorCode::Interrupted => ErrorCode::Interrupted,
-        filesystem::ErrorCode::Invalid => ErrorCode::Invalid,
-        filesystem::ErrorCode::Io => ErrorCode::Io,
-        filesystem::ErrorCode::IsDirectory => ErrorCode::IsDirectory,
-        filesystem::ErrorCode::Loop => ErrorCode::Loop,
-        filesystem::ErrorCode::TooManyLinks => ErrorCode::TooManyLinks,
-        filesystem::ErrorCode::MessageSize => ErrorCode::MessageSize,
-        filesystem::ErrorCode::NameTooLong => ErrorCode::NameTooLong,
-        filesystem::ErrorCode::NoDevice => ErrorCode::NoDevice,
-        filesystem::ErrorCode::NoEntry => ErrorCode::NoEntry,
-        filesystem::ErrorCode::NoLock => ErrorCode::NoLock,
-        filesystem::ErrorCode::InsufficientMemory => ErrorCode::InsufficientMemory,
-        filesystem::ErrorCode::InsufficientSpace => ErrorCode::InsufficientSpace,
-        filesystem::ErrorCode::NotDirectory => ErrorCode::NotDirectory,
-        filesystem::ErrorCode::NotEmpty => ErrorCode::NotEmpty,
-        filesystem::ErrorCode::NotRecoverable => ErrorCode::NotRecoverable,
-        filesystem::ErrorCode::Unsupported => ErrorCode::Unsupported,
-        filesystem::ErrorCode::NoTty => ErrorCode::NoTty,
-        filesystem::ErrorCode::NoSuchDevice => ErrorCode::NoSuchDevice,
-        filesystem::ErrorCode::Overflow => ErrorCode::Overflow,
-        filesystem::ErrorCode::NotPermitted => ErrorCode::NotPermitted,
-        filesystem::ErrorCode::Pipe => ErrorCode::Pipe,
-        filesystem::ErrorCode::ReadOnly => ErrorCode::ReadOnly,
-        filesystem::ErrorCode::InvalidSeek => ErrorCode::InvalidSeek,
-        filesystem::ErrorCode::TextFileBusy => ErrorCode::TextFileBusy,
-        filesystem::ErrorCode::CrossDevice => ErrorCode::CrossDevice,
+        filesystem_types::ErrorCode::Access => ErrorCode::Access,
+        filesystem_types::ErrorCode::WouldBlock => ErrorCode::WouldBlock,
+        filesystem_types::ErrorCode::Already => ErrorCode::Already,
+        filesystem_types::ErrorCode::BadDescriptor => ErrorCode::BadDescriptor,
+        filesystem_types::ErrorCode::Busy => ErrorCode::Busy,
+        filesystem_types::ErrorCode::Deadlock => ErrorCode::Deadlock,
+        filesystem_types::ErrorCode::Quota => ErrorCode::Quota,
+        filesystem_types::ErrorCode::Exist => ErrorCode::Exist,
+        filesystem_types::ErrorCode::FileTooLarge => ErrorCode::FileTooLarge,
+        filesystem_types::ErrorCode::IllegalByteSequence => ErrorCode::IllegalByteSequence,
+        filesystem_types::ErrorCode::InProgress => ErrorCode::InProgress,
+        filesystem_types::ErrorCode::Interrupted => ErrorCode::Interrupted,
+        filesystem_types::ErrorCode::Invalid => ErrorCode::Invalid,
+        filesystem_types::ErrorCode::Io => ErrorCode::Io,
+        filesystem_types::ErrorCode::IsDirectory => ErrorCode::IsDirectory,
+        filesystem_types::ErrorCode::Loop => ErrorCode::Loop,
+        filesystem_types::ErrorCode::TooManyLinks => ErrorCode::TooManyLinks,
+        filesystem_types::ErrorCode::MessageSize => ErrorCode::MessageSize,
+        filesystem_types::ErrorCode::NameTooLong => ErrorCode::NameTooLong,
+        filesystem_types::ErrorCode::NoDevice => ErrorCode::NoDevice,
+        filesystem_types::ErrorCode::NoEntry => ErrorCode::NoEntry,
+        filesystem_types::ErrorCode::NoLock => ErrorCode::NoLock,
+        filesystem_types::ErrorCode::InsufficientMemory => ErrorCode::InsufficientMemory,
+        filesystem_types::ErrorCode::InsufficientSpace => ErrorCode::InsufficientSpace,
+        filesystem_types::ErrorCode::NotDirectory => ErrorCode::NotDirectory,
+        filesystem_types::ErrorCode::NotEmpty => ErrorCode::NotEmpty,
+        filesystem_types::ErrorCode::NotRecoverable => ErrorCode::NotRecoverable,
+        filesystem_types::ErrorCode::Unsupported => ErrorCode::Unsupported,
+        filesystem_types::ErrorCode::NoTty => ErrorCode::NoTty,
+        filesystem_types::ErrorCode::NoSuchDevice => ErrorCode::NoSuchDevice,
+        filesystem_types::ErrorCode::Overflow => ErrorCode::Overflow,
+        filesystem_types::ErrorCode::NotPermitted => ErrorCode::NotPermitted,
+        filesystem_types::ErrorCode::Pipe => ErrorCode::Pipe,
+        filesystem_types::ErrorCode::ReadOnly => ErrorCode::ReadOnly,
+        filesystem_types::ErrorCode::InvalidSeek => ErrorCode::InvalidSeek,
+        filesystem_types::ErrorCode::TextFileBusy => ErrorCode::TextFileBusy,
+        filesystem_types::ErrorCode::CrossDevice => ErrorCode::CrossDevice,
     }
 }
 
@@ -269,11 +267,11 @@ fn entry(ptr: *const StaticIndexEntry) -> &'static StaticIndexEntry {
 }
 
 impl StaticIndexEntry {
-    // fn idx(&self) -> usize {
-    //     let static_index_start = unsafe { fs.static_index };
-    //     let cur_index_start = self as *const StaticIndexEntry;
-    //     unsafe { cur_index_start.sub_ptr(static_index_start) }
-    // }
+    fn idx(&self) -> usize {
+        let static_index_start = unsafe { io.static_index };
+        let cur_index_start = self as *const StaticIndexEntry;
+        unsafe { cur_index_start.sub_ptr(static_index_start) }
+    }
     fn runtime_path(&self) -> &'static str {
         let c_str = unsafe { CStr::from_ptr((*self).data.runtime_path) };
         c_str.to_str().unwrap()
@@ -299,8 +297,9 @@ impl StaticIndexEntry {
                 let Some((fd, subpath)) = IoState::get_host_preopen(self.runtime_path()) else {
                     return Err(ErrorCode::NoEntry);
                 };
-                let stat = filesystem::stat_at(fd, filesystem::PathFlags::empty(), subpath)
-                    .map_err(err_map)?;
+                let stat =
+                    filesystem_types::stat_at(fd, filesystem_types::PathFlags::empty(), subpath)
+                        .map_err(err_map)?;
                 Ok(stat.size)
             }
         }
@@ -491,7 +490,6 @@ impl StaticDirStream {
         let child = if self.idx < child_list.len() {
             let child = &child_list[self.idx];
             Some(DirectoryEntry {
-                inode: None,
                 type_: child.ty(),
                 name: child.name().into(),
             })
@@ -636,7 +634,7 @@ impl Preopens for VirtAdapter {
     }
 }
 
-impl Filesystem for VirtAdapter {
+impl FilesystemTypes for VirtAdapter {
     fn read_via_stream(fd: u32, offset: u64) -> Result<u32, ErrorCode> {
         match IoState::get_descriptor(fd)?.target {
             DescriptorTarget::StaticEntry(_) => {
@@ -646,7 +644,8 @@ impl Filesystem for VirtAdapter {
                 Ok(IoState::new_stream(StaticFileStream::new(fd)))
             }
             DescriptorTarget::HostDescriptor(host_fd) => {
-                let host_sid = filesystem::read_via_stream(host_fd, offset).map_err(err_map)?;
+                let host_sid =
+                    filesystem_types::read_via_stream(host_fd, offset).map_err(err_map)?;
                 Ok(IoState::new_stream(Stream::Host(host_sid)))
             }
         }
@@ -713,8 +712,6 @@ impl Filesystem for VirtAdapter {
             DescriptorTarget::StaticEntry(ptr) => {
                 let entry = entry(ptr);
                 Ok(DescriptorStat {
-                    device: 0,
-                    inode: 0,
                     type_: entry.ty(),
                     link_count: 0,
                     size: entry.size()?,
@@ -732,9 +729,9 @@ impl Filesystem for VirtAdapter {
                     },
                 })
             }
-            DescriptorTarget::HostDescriptor(host_fd) => {
-                filesystem::stat(host_fd).map(stat_map).map_err(err_map)
-            }
+            DescriptorTarget::HostDescriptor(host_fd) => filesystem_types::stat(host_fd)
+                .map(stat_map)
+                .map_err(err_map),
         }
     }
     fn stat_at(fd: u32, flags: PathFlags, path: String) -> Result<DescriptorStat, ErrorCode> {
@@ -751,17 +748,15 @@ impl Filesystem for VirtAdapter {
                     else {
                         return Err(ErrorCode::NoEntry);
                     };
-                    filesystem::stat_at(
+                    filesystem_types::stat_at(
                         host_fd,
-                        filesystem::PathFlags::from_bits(flags.bits()).unwrap(),
+                        filesystem_types::PathFlags::from_bits(flags.bits()).unwrap(),
                         &path,
                     )
                     .map(stat_map)
                     .map_err(err_map)
                 } else {
                     Ok(DescriptorStat {
-                        device: 0,
-                        inode: 0,
                         type_: child.ty(),
                         link_count: 0,
                         size: child.size()?,
@@ -780,9 +775,9 @@ impl Filesystem for VirtAdapter {
                     })
                 }
             }
-            DescriptorTarget::HostDescriptor(host_fd) => filesystem::stat_at(
+            DescriptorTarget::HostDescriptor(host_fd) => filesystem_types::stat_at(
                 host_fd,
-                filesystem::PathFlags::from_bits(flags.bits()).unwrap(),
+                filesystem_types::PathFlags::from_bits(flags.bits()).unwrap(),
                 &path,
             )
             .map(stat_map)
@@ -822,13 +817,14 @@ impl Filesystem for VirtAdapter {
                     else {
                         return Err(ErrorCode::NoEntry);
                     };
-                    let child_fd = filesystem::open_at(
+                    let child_fd = filesystem_types::open_at(
                         host_fd,
-                        filesystem::PathFlags::from_bits(path_flags.bits()).unwrap(),
+                        filesystem_types::PathFlags::from_bits(path_flags.bits()).unwrap(),
                         &path,
-                        filesystem::OpenFlags::from_bits(open_flags.bits()).unwrap(),
-                        filesystem::DescriptorFlags::from_bits(descriptor_flags.bits()).unwrap(),
-                        filesystem::Modes::from_bits(modes.bits()).unwrap(),
+                        filesystem_types::OpenFlags::from_bits(open_flags.bits()).unwrap(),
+                        filesystem_types::DescriptorFlags::from_bits(descriptor_flags.bits())
+                            .unwrap(),
+                        filesystem_types::Modes::from_bits(modes.bits()).unwrap(),
                     )
                     .map_err(err_map)?;
                     Ok(IoState::new_descriptor(DescriptorTarget::HostDescriptor(
@@ -841,13 +837,13 @@ impl Filesystem for VirtAdapter {
                 }
             }
             DescriptorTarget::HostDescriptor(host_fd) => {
-                let child_fd = filesystem::open_at(
+                let child_fd = filesystem_types::open_at(
                     host_fd,
-                    filesystem::PathFlags::from_bits(path_flags.bits()).unwrap(),
+                    filesystem_types::PathFlags::from_bits(path_flags.bits()).unwrap(),
                     &path,
-                    filesystem::OpenFlags::from_bits(open_flags.bits()).unwrap(),
-                    filesystem::DescriptorFlags::from_bits(descriptor_flags.bits()).unwrap(),
-                    filesystem::Modes::from_bits(modes.bits()).unwrap(),
+                    filesystem_types::OpenFlags::from_bits(open_flags.bits()).unwrap(),
+                    filesystem_types::DescriptorFlags::from_bits(descriptor_flags.bits()).unwrap(),
+                    filesystem_types::Modes::from_bits(modes.bits()).unwrap(),
                 )
                 .map_err(err_map)?;
                 Ok(IoState::new_descriptor(DescriptorTarget::HostDescriptor(
@@ -914,7 +910,7 @@ impl Filesystem for VirtAdapter {
     fn read_directory_entry(sid: u32) -> Result<Option<DirectoryEntry>, ErrorCode> {
         match IoState::get_stream(sid).map_err(|_| ErrorCode::BadDescriptor)? {
             Stream::StaticDir(dirstream) => dirstream.next(),
-            Stream::Host(sid) => filesystem::read_directory_entry(*sid)
+            Stream::Host(sid) => filesystem_types::read_directory_entry(*sid)
                 .map(|e| e.map(dir_map))
                 .map_err(err_map),
             _ => {
@@ -928,9 +924,94 @@ impl Filesystem for VirtAdapter {
         };
         match stream {
             Stream::Null | Stream::StaticFile(_) | Stream::StaticDir(_) => {}
-            Stream::Host(sid) => filesystem::drop_directory_entry_stream(*sid),
+            Stream::Host(sid) => filesystem_types::drop_directory_entry_stream(*sid),
         }
         unsafe { STATE.stream_table.remove(&sid) };
+    }
+
+    fn is_same_object(fd1: u32, fd2: u32) -> bool {
+        let Ok(descriptor1) = IoState::get_descriptor(fd1) else {
+            return false;
+        };
+        let Ok(descriptor2) = IoState::get_descriptor(fd2) else {
+            return false;
+        };
+        // already-opened static index descriptors will never point to a RuntimeFile
+        // or RuntimeDir - instead they point to an already-created HostDescriptor
+        match descriptor1.target {
+            DescriptorTarget::StaticEntry(entry1) => match descriptor2.target {
+                DescriptorTarget::StaticEntry(entry2) => entry1 == entry2,
+                DescriptorTarget::HostDescriptor(_) => false,
+            },
+            DescriptorTarget::HostDescriptor(host_fd1) => match descriptor2.target {
+                DescriptorTarget::StaticEntry(_) => false,
+                DescriptorTarget::HostDescriptor(host_fd2) => {
+                    filesystem_types::is_same_object(host_fd1, host_fd2)
+                }
+            },
+        }
+    }
+
+    fn metadata_hash(fd: u32) -> Result<MetadataHashValue, ErrorCode> {
+        let descriptor = IoState::get_descriptor(fd)?;
+        match descriptor.target {
+            DescriptorTarget::StaticEntry(e) => Ok(MetadataHashValue {
+                upper: entry(e).idx() as u64,
+                lower: 0,
+            }),
+            DescriptorTarget::HostDescriptor(host_fd) => filesystem_types::metadata_hash(host_fd)
+                .map(metadata_hash_map)
+                .map_err(err_map),
+        }
+    }
+
+    fn metadata_hash_at(
+        fd: u32,
+        path_flags: PathFlags,
+        path: String,
+    ) -> Result<MetadataHashValue, ErrorCode> {
+        let descriptor = IoState::get_descriptor(fd)?;
+        match descriptor.target {
+            DescriptorTarget::StaticEntry(ptr) => {
+                let entry = entry(ptr);
+                let child = entry.dir_lookup(&path)?;
+                if matches!(
+                    child.ty,
+                    StaticIndexType::RuntimeDir | StaticIndexType::RuntimeFile
+                ) {
+                    let Some((host_fd, path)) = IoState::get_host_preopen(child.runtime_path())
+                    else {
+                        return Err(ErrorCode::NoEntry);
+                    };
+                    filesystem_types::metadata_hash_at(
+                        host_fd,
+                        filesystem_types::PathFlags::from_bits(path_flags.bits()).unwrap(),
+                        &path,
+                    )
+                    .map(metadata_hash_map)
+                    .map_err(err_map)
+                } else {
+                    Ok(MetadataHashValue {
+                        upper: child.idx() as u64,
+                        lower: 0,
+                    })
+                }
+            }
+            DescriptorTarget::HostDescriptor(host_fd) => filesystem_types::metadata_hash_at(
+                host_fd,
+                filesystem_types::PathFlags::from_bits(path_flags.bits()).unwrap(),
+                &path,
+            )
+            .map(metadata_hash_map)
+            .map_err(err_map),
+        }
+    }
+}
+
+fn metadata_hash_map(value: filesystem_types::MetadataHashValue) -> MetadataHashValue {
+    MetadataHashValue {
+        upper: value.upper,
+        lower: value.lower,
     }
 }
 
@@ -1195,63 +1276,63 @@ impl MonotonicClock for VirtAdapter {
     }
 }
 
-impl Types for VirtAdapter {
+impl HttpTypes for VirtAdapter {
     fn drop_fields(fields: Fields) {
-        types::drop_fields(fields)
+        http_types::drop_fields(fields)
     }
     fn new_fields(entries: Vec<(String, String)>) -> Fields {
-        types::new_fields(&entries)
+        http_types::new_fields(&entries)
     }
     fn fields_get(fields: Fields, name: String) -> Vec<String> {
-        types::fields_get(fields, &name)
+        http_types::fields_get(fields, &name)
     }
     fn fields_set(fields: Fields, name: String, value: Vec<String>) {
-        types::fields_set(fields, &name, value.as_slice())
+        http_types::fields_set(fields, &name, value.as_slice())
     }
     fn fields_delete(fields: Fields, name: String) {
-        types::fields_delete(fields, &name)
+        http_types::fields_delete(fields, &name)
     }
     fn fields_append(fields: Fields, name: String, value: String) {
-        types::fields_append(fields, &name, &value)
+        http_types::fields_append(fields, &name, &value)
     }
     fn fields_entries(fields: Fields) -> Vec<(String, String)> {
-        types::fields_entries(fields)
+        http_types::fields_entries(fields)
     }
     fn fields_clone(fields: Fields) -> Fields {
-        types::fields_clone(fields)
+        http_types::fields_clone(fields)
     }
     fn finish_incoming_stream(s: InputStream) -> Option<Trailers> {
-        types::finish_incoming_stream(s)
+        http_types::finish_incoming_stream(s)
     }
     fn finish_outgoing_stream(s: OutputStream, trailers: Option<Trailers>) {
-        types::finish_outgoing_stream(s, trailers)
+        http_types::finish_outgoing_stream(s, trailers)
     }
     fn drop_incoming_request(request: u32) {
-        types::drop_incoming_request(request)
+        http_types::drop_incoming_request(request)
     }
     fn drop_outgoing_request(request: u32) {
-        types::drop_outgoing_request(request)
+        http_types::drop_outgoing_request(request)
     }
     fn incoming_request_method(request: u32) -> Method {
-        method_map_rev(types::incoming_request_method(request))
+        method_map_rev(http_types::incoming_request_method(request))
     }
     fn incoming_request_path(request: u32) -> String {
-        types::incoming_request_path(request)
+        http_types::incoming_request_path(request)
     }
     fn incoming_request_query(request: u32) -> String {
-        types::incoming_request_query(request)
+        http_types::incoming_request_query(request)
     }
     fn incoming_request_scheme(request: u32) -> Option<Scheme> {
-        types::incoming_request_scheme(request).map(scheme_map_rev)
+        http_types::incoming_request_scheme(request).map(scheme_map_rev)
     }
     fn incoming_request_authority(request: u32) -> String {
-        types::incoming_request_authority(request)
+        http_types::incoming_request_authority(request)
     }
     fn incoming_request_headers(request: u32) -> Headers {
-        types::incoming_request_headers(request)
+        http_types::incoming_request_headers(request)
     }
     fn incoming_request_consume(request: u32) -> Result<InputStream, ()> {
-        types::incoming_request_consume(request)
+        http_types::incoming_request_consume(request)
     }
     fn new_outgoing_request(
         method: Method,
@@ -1261,7 +1342,7 @@ impl Types for VirtAdapter {
         authority: String,
         headers: Headers,
     ) -> u32 {
-        types::new_outgoing_request(
+        http_types::new_outgoing_request(
             &method_map(method),
             &path,
             &query,
@@ -1271,113 +1352,113 @@ impl Types for VirtAdapter {
         )
     }
     fn outgoing_request_write(request: u32) -> Result<OutputStream, ()> {
-        types::outgoing_request_write(request)
+        http_types::outgoing_request_write(request)
     }
     fn drop_response_outparam(response: u32) {
-        types::drop_response_outparam(response)
+        http_types::drop_response_outparam(response)
     }
     fn set_response_outparam(response: Result<u32, Error>) -> Result<(), ()> {
         match response {
-            Ok(res) => types::set_response_outparam(Ok(res)),
+            Ok(res) => http_types::set_response_outparam(Ok(res)),
             Err(err) => {
                 let err = http_err_map(err);
-                types::set_response_outparam(Err(&err))
+                http_types::set_response_outparam(Err(&err))
             }
         }
     }
     fn drop_incoming_response(response: u32) {
-        types::drop_incoming_response(response)
+        http_types::drop_incoming_response(response)
     }
     fn drop_outgoing_response(response: u32) {
-        types::drop_outgoing_response(response)
+        http_types::drop_outgoing_response(response)
     }
     fn incoming_response_status(response: u32) -> StatusCode {
-        types::incoming_response_status(response)
+        http_types::incoming_response_status(response)
     }
     fn incoming_response_headers(response: u32) -> Headers {
-        types::incoming_response_headers(response)
+        http_types::incoming_response_headers(response)
     }
     fn incoming_response_consume(response: u32) -> Result<InputStream, ()> {
-        types::incoming_response_consume(response)
+        http_types::incoming_response_consume(response)
     }
     fn new_outgoing_response(status_code: StatusCode, headers: Headers) -> u32 {
-        types::new_outgoing_response(status_code, headers)
+        http_types::new_outgoing_response(status_code, headers)
     }
     fn outgoing_response_write(response: u32) -> Result<OutputStream, ()> {
-        types::outgoing_response_write(response)
+        http_types::outgoing_response_write(response)
     }
     fn drop_future_incoming_response(f: u32) {
-        types::drop_future_incoming_response(f)
+        http_types::drop_future_incoming_response(f)
     }
     fn future_incoming_response_get(f: u32) -> Option<Result<u32, Error>> {
-        types::future_incoming_response_get(f).map(|o| o.map_err(http_err_map_rev))
+        http_types::future_incoming_response_get(f).map(|o| o.map_err(http_err_map_rev))
     }
     fn listen_to_future_incoming_response(f: u32) -> u32 {
-        types::listen_to_future_incoming_response(f)
+        http_types::listen_to_future_incoming_response(f)
     }
 }
 
-fn scheme_map(scheme: Scheme) -> types::Scheme {
+fn scheme_map(scheme: Scheme) -> http_types::Scheme {
     match scheme {
-        Scheme::Http => types::Scheme::Http,
-        Scheme::Https => types::Scheme::Https,
-        Scheme::Other(s) => types::Scheme::Other(s),
+        Scheme::Http => http_types::Scheme::Http,
+        Scheme::Https => http_types::Scheme::Https,
+        Scheme::Other(s) => http_types::Scheme::Other(s),
     }
 }
 
-fn scheme_map_rev(scheme: types::Scheme) -> Scheme {
+fn scheme_map_rev(scheme: http_types::Scheme) -> Scheme {
     match scheme {
-        types::Scheme::Http => Scheme::Http,
-        types::Scheme::Https => Scheme::Https,
-        types::Scheme::Other(s) => Scheme::Other(s),
+        http_types::Scheme::Http => Scheme::Http,
+        http_types::Scheme::Https => Scheme::Https,
+        http_types::Scheme::Other(s) => Scheme::Other(s),
     }
 }
 
-fn method_map_rev(method: types::Method) -> Method {
+fn method_map_rev(method: http_types::Method) -> Method {
     match method {
-        types::Method::Get => Method::Get,
-        types::Method::Head => Method::Head,
-        types::Method::Post => Method::Post,
-        types::Method::Put => Method::Put,
-        types::Method::Delete => Method::Delete,
-        types::Method::Connect => Method::Connect,
-        types::Method::Options => Method::Options,
-        types::Method::Trace => Method::Trace,
-        types::Method::Patch => Method::Patch,
-        types::Method::Other(s) => Method::Other(s),
+        http_types::Method::Get => Method::Get,
+        http_types::Method::Head => Method::Head,
+        http_types::Method::Post => Method::Post,
+        http_types::Method::Put => Method::Put,
+        http_types::Method::Delete => Method::Delete,
+        http_types::Method::Connect => Method::Connect,
+        http_types::Method::Options => Method::Options,
+        http_types::Method::Trace => Method::Trace,
+        http_types::Method::Patch => Method::Patch,
+        http_types::Method::Other(s) => Method::Other(s),
     }
 }
 
-fn method_map(method: Method) -> types::Method {
+fn method_map(method: Method) -> http_types::Method {
     match method {
-        Method::Get => types::Method::Get,
-        Method::Head => types::Method::Head,
-        Method::Post => types::Method::Post,
-        Method::Put => types::Method::Put,
-        Method::Delete => types::Method::Delete,
-        Method::Connect => types::Method::Connect,
-        Method::Options => types::Method::Options,
-        Method::Trace => types::Method::Trace,
-        Method::Patch => types::Method::Patch,
-        Method::Other(s) => types::Method::Other(s),
+        Method::Get => http_types::Method::Get,
+        Method::Head => http_types::Method::Head,
+        Method::Post => http_types::Method::Post,
+        Method::Put => http_types::Method::Put,
+        Method::Delete => http_types::Method::Delete,
+        Method::Connect => http_types::Method::Connect,
+        Method::Options => http_types::Method::Options,
+        Method::Trace => http_types::Method::Trace,
+        Method::Patch => http_types::Method::Patch,
+        Method::Other(s) => http_types::Method::Other(s),
     }
 }
 
-fn http_err_map(err: Error) -> types::Error {
+fn http_err_map(err: Error) -> http_types::Error {
     match err {
-        Error::InvalidUrl(s) => types::Error::InvalidUrl(s),
-        Error::TimeoutError(s) => types::Error::TimeoutError(s),
-        Error::ProtocolError(s) => types::Error::ProtocolError(s),
-        Error::UnexpectedError(s) => types::Error::UnexpectedError(s),
+        Error::InvalidUrl(s) => http_types::Error::InvalidUrl(s),
+        Error::TimeoutError(s) => http_types::Error::TimeoutError(s),
+        Error::ProtocolError(s) => http_types::Error::ProtocolError(s),
+        Error::UnexpectedError(s) => http_types::Error::UnexpectedError(s),
     }
 }
 
-fn http_err_map_rev(err: types::Error) -> Error {
+fn http_err_map_rev(err: http_types::Error) -> Error {
     match err {
-        types::Error::InvalidUrl(s) => Error::InvalidUrl(s),
-        types::Error::TimeoutError(s) => Error::TimeoutError(s),
-        types::Error::ProtocolError(s) => Error::ProtocolError(s),
-        types::Error::UnexpectedError(s) => Error::UnexpectedError(s),
+        http_types::Error::InvalidUrl(s) => Error::InvalidUrl(s),
+        http_types::Error::TimeoutError(s) => Error::TimeoutError(s),
+        http_types::Error::ProtocolError(s) => Error::ProtocolError(s),
+        http_types::Error::UnexpectedError(s) => Error::UnexpectedError(s),
     }
 }
 

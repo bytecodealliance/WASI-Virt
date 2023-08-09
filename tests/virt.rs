@@ -60,7 +60,7 @@ struct TestCase {
     expect: TestExpectation,
 }
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 
 #[tokio::test]
 async fn virt_test() -> Result<()> {
@@ -73,15 +73,9 @@ async fn virt_test() -> Result<()> {
         let test_case_name = test_case_file_name.strip_suffix(".toml").unwrap();
 
         // Filtering...
-        // if test_case_name != "passthrough" {
+        // if test_case_name == "encapsulate" {
         //     continue;
         // }
-
-        if DEBUG {
-            if test_case_name == "encapsulate" {
-                continue;
-            }
-        }
 
         println!("> {:?}", test_case_path);
 
@@ -122,7 +116,7 @@ async fn virt_test() -> Result<()> {
         virt_component_path.set_extension("virt.wasm");
         let mut virt_opts = test.virt_opts.clone().unwrap_or_default();
         virt_opts.exit(Default::default());
-        if DEBUG {
+        if DEBUG && test_case_name != "encapsulate" {
             virt_opts.wasm_opt = Some(false);
         }
 

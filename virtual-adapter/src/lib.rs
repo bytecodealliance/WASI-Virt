@@ -1,4 +1,5 @@
 #![no_main]
+#![feature(ptr_sub_ptr)]
 
 mod env;
 mod io;
@@ -13,7 +14,8 @@ wit_bindgen::generate!({
         "wasi:io/streams": VirtAdapter,
         "wasi:cli-base/environment": VirtAdapter,
         "wasi:filesystem/filesystem": VirtAdapter,
-        "wasi:cli-base/preopens": VirtAdapter,
+        "wasi:filesystem/preopens": VirtAdapter,
+        "wasi:filesystem/types": VirtAdapter,
         "wasi:cli-base/stdin": VirtAdapter,
         "wasi:cli-base/stdout": VirtAdapter,
         "wasi:cli-base/stderr": VirtAdapter,
