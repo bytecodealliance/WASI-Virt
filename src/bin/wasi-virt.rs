@@ -8,57 +8,28 @@ use wasm_compose::composer::ComponentComposer;
 #[command(verbatim_doc_comment, author, version, about, long_about = None)]
 /// WASI Virt
 struct Args {
-    /// Enable all subsystem passthrough
+    /// Wasm binary to compose the virtualization into.
+    /// If not provided, only the virtualization component itself will be generated,
+    /// which can then be composed via `wasm-tools compose -d virt.wasm component.wasm`
+    #[arg(required(false), value_name("component.wasm"), verbatim_doc_comment)]
+    compose: Option<String>,
+
+    /// Output virtualization component Wasm file
+    #[arg(short, long, value_name("virt.wasm"))]
+    out: String,
+
+    /// Enable all subsystem passthrough (encapsulation is the default)
     #[arg(long)]
     allow_all: bool,
-
-    // STDIO
-    /// Enable all stdio
-    #[arg(long, action = ArgAction::SetTrue, help_heading = "Stdio")]
-    allow_stdio: Option<bool>,
-    /// Configure all stdio
-    #[arg(long, value_enum, value_name("cfg"), num_args(0..=1), require_equals(true), default_missing_value("allow"), help_heading = "Stdio")]
-    stdio: Option<StdioCfg>,
-    /// Configure stdin
-    #[arg(long, value_enum, value_name("cfg"), num_args(0..=1), require_equals(true), default_missing_value("allow"), help_heading = "Stdio")]
-    stdin: Option<StdioCfg>,
-    /// Configure stdout
-    #[arg(long, value_enum, value_name("cfg"), num_args(0..=1), require_equals(true), default_missing_value("allow"), help_heading = "Stdio")]
-    stdout: Option<StdioCfg>,
-    /// Configure stderr
-    #[arg(long, value_enum, value_name("cfg"), num_args(0..=1), require_equals(true), default_missing_value("allow"), help_heading = "Stdio")]
-    stderr: Option<StdioCfg>,
-
-    /// Allow the component to exit
-    #[arg(long, action = ArgAction::SetTrue)]
-    allow_exit: Option<bool>,
-
-    // ENV
-    /// Allow unrestricted access to host environment variables, or to a comma-separated list of variable names.
-    #[arg(long, num_args(0..), use_value_delimiter(true), require_equals(true), value_name("ENV_VAR"), help_heading = "Env")]
-    allow_env: Option<Vec<String>>,
-
-    /// Set environment variable overrides
-    #[arg(short, long, use_value_delimiter(true), value_name("ENV=VAR"), value_parser = parse_key_val::<String, String>, help_heading = "Env")]
-    env: Option<Vec<(String, String)>>,
-
-    // FS
-    /// Allow unrestricted access to host preopens
-    #[arg(long, action = ArgAction::SetTrue, help_heading = "Fs")]
-    allow_fs: Option<bool>,
-
-    /// Configure runtime preopen mappings
-    #[arg(long, value_name("preopen=hostpreopen"), value_parser = parse_key_val::<String, String>, help_heading = "Fs")]
-    preopen: Option<Vec<(String, String)>>,
-
-    /// Mount a virtual directory globbed from the local filesystem
-    #[arg(long, value_name("preopen=virtualdir"), value_parser = parse_key_val::<String, String>, help_heading = "Fs")]
-    mount: Option<Vec<(String, String)>>,
 
     // CLOCKS
     /// Enable clocks
     #[arg(long, action = ArgAction::SetTrue)]
     allow_clocks: Option<bool>,
+
+    /// Allow the component to exit
+    #[arg(long, action = ArgAction::SetTrue)]
+    allow_exit: Option<bool>,
 
     // HTTP
     /// Enable HTTP
@@ -75,14 +46,44 @@ struct Args {
     #[arg(long, action = ArgAction::SetTrue)]
     allow_sockets: Option<bool>,
 
-    /// Wasm binary to compose the virtualization with
-    /// If not provided, only the virtualization component itself will be generated.
-    #[arg(required(false))]
-    compose: Option<String>,
+    // ENV
+    /// Allow unrestricted access to host environment variables, or to a comma-separated list of variable names.
+    #[arg(long, num_args(0..), use_value_delimiter(true), require_equals(true), value_name("ENV_VAR"), help_heading = "Env")]
+    allow_env: Option<Vec<String>>,
 
-    /// Output virtualization component Wasm file
-    #[arg(short, long)]
-    out: String,
+    /// Set environment variable overrides
+    #[arg(short, long, use_value_delimiter(true), value_name("ENV=VAR"), value_parser = parse_key_val::<String, String>, help_heading = "Env")]
+    env: Option<Vec<(String, String)>>,
+
+    // FS
+    /// Allow unrestricted access to host preopens
+    #[arg(long, action = ArgAction::SetTrue, help_heading = "Fs")]
+    allow_fs: Option<bool>,
+
+    /// Mount a virtual directory globbed from the local filesystem
+    #[arg(long, value_name("preopen=virtualdir"), value_parser = parse_key_val::<String, String>, help_heading = "Fs")]
+    mount: Option<Vec<(String, String)>>,
+
+    /// Configure runtime preopen mappings
+    #[arg(long, value_name("preopen=hostpreopen"), value_parser = parse_key_val::<String, String>, help_heading = "Fs")]
+    preopen: Option<Vec<(String, String)>>,
+
+    // STDIO
+    /// Enable all stdio
+    #[arg(long, action = ArgAction::SetTrue, help_heading = "Stdio")]
+    allow_stdio: Option<bool>,
+    /// Configure all stdio
+    #[arg(long, value_enum, value_name("cfg"), num_args(0..=1), require_equals(true), default_missing_value("allow"), help_heading = "Stdio")]
+    stdio: Option<StdioCfg>,
+    /// Configure stderr
+    #[arg(long, value_enum, value_name("cfg"), num_args(0..=1), require_equals(true), default_missing_value("allow"), help_heading = "Stdio")]
+    stderr: Option<StdioCfg>,
+    /// Configure stdin
+    #[arg(long, value_enum, value_name("cfg"), num_args(0..=1), require_equals(true), default_missing_value("allow"), help_heading = "Stdio")]
+    stdin: Option<StdioCfg>,
+    /// Configure stdout
+    #[arg(long, value_enum, value_name("cfg"), num_args(0..=1), require_equals(true), default_missing_value("allow"), help_heading = "Stdio")]
+    stdout: Option<StdioCfg>,
 }
 
 // parser for KEY=VAR env vars
