@@ -8,7 +8,7 @@ use wasm_compose::composer::ComponentComposer;
 #[command(verbatim_doc_comment, author, version, about, long_about = None)]
 /// WASI Virt
 struct Args {
-    /// Wasm binary to compose the virtualization into.
+    /// Optional Wasm binary to compose the virtualization into.
     /// If not provided, only the virtualization component itself will be generated,
     /// which can then be composed via `wasm-tools compose -d virt.wasm component.wasm`
     #[arg(required(false), value_name("component.wasm"), verbatim_doc_comment)]
