@@ -22,7 +22,7 @@ Supports all of the current WASI subsystems:
 - [Filesystem](#filesystem): Mount a read-only filesystem, configure host filesystem preopen remappings or pass-through.
 - [Random](#random): Allow / Deny
 - [Sockets](#sockets): Allow / Deny
-- [Stdio](#stdio): Allow / Deny
+- [Stdio](#stdio): Allow / Deny / Ignore
 
 While current virtualization support is limited, the goal for this project is to support a wide range of WASI virtualization configuration use cases.
 
@@ -120,14 +120,14 @@ wasi-virt component.wasm --allow-sockets -o virt.wasm
 
 ```sh
 # Ignore all stdio entirely
-wasi-virt component.wasm --allow-stdio -o virt.wasm
+wasi-virt component.wasm --stdio=ignore -o virt.wasm
 
 # Throw an error if attempting any stdio
 # (this is the default)
-wasi-virt component.wasm --deny-stdio -o virt.wasm
+wasi-virt component.wasm --stdio=deny -o virt.wasm
 
-# Allow stderr only
-wasi-virt component.wasm --allow-stderr -o virt.wasm
+# Configure stderr / stdout / stdin individually
+wasi-virt component.wasm --stderr=allow -o virt.wasm
 ```
 
 ## API
@@ -142,7 +142,7 @@ fn main() {
     let mut virt = WasiVirt::new_reactor();
 
     // allow all subsystems initially
-    virt.all(true);
+    virt.allow_all();
 
     // ignore stdio
     virt.stdio().ignore();

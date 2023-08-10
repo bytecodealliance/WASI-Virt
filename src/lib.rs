@@ -23,7 +23,7 @@ mod virt_io;
 mod walrus_ops;
 
 pub use virt_env::{HostEnv, VirtEnv};
-pub use virt_io::{FsEntry, VirtFs, VirtualFiles};
+pub use virt_io::{FsEntry, StdioCfg, VirtFs, VirtualFiles};
 
 /// Virtualization options
 ///
@@ -67,22 +67,26 @@ impl WasiVirt {
         Self::default()
     }
 
-    pub fn all(&mut self, allow: bool) {
-        self.clocks(allow);
-        self.http(allow);
-        self.sockets(allow);
-        self.exit(allow);
-        if allow {
-            self.env().allow_all();
-        } else {
-            self.env().deny_all();
-        }
-        if allow {
-            self.fs().allow_host_preopens();
-        } else {
-            self.fs().deny_host_preopens();
-        }
-        self.stdio().all(allow);
+    pub fn allow_all(&mut self) {
+        self.clocks(true);
+        self.http(true);
+        self.sockets(true);
+        self.exit(true);
+        self.random(true);
+        self.env().allow_all();
+        self.fs().allow_host_preopens();
+        self.stdio().allow();
+    }
+
+    pub fn deny_all(&mut self) {
+        self.clocks(false);
+        self.http(false);
+        self.sockets(false);
+        self.exit(false);
+        self.random(false);
+        self.env().deny_all();
+        self.fs().deny_host_preopens();
+        self.stdio().ignore();
     }
 
     pub fn clocks(&mut self, allow: bool) {

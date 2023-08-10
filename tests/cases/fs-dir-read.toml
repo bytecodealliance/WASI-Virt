@@ -3,9 +3,9 @@ component = "file-read"
 host-fs-path = "/mydir"
 
 [virt-opts.stdio]
-stdin = true
-stdout = true
-stderr = true
+stdin = "allow"
+stdout = "allow"
+stderr = "allow"
 
 [virt-opts.fs.preopens."/".dir."mydir".dir]
 "file1.txt" = { source = "inner contents1" }

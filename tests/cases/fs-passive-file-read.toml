@@ -3,9 +3,9 @@ component = "file-read"
 host-fs-path = "/env-none.toml"
 
 [virt-opts.stdio]
-stdin = true
-stdout = true
-stderr = true
+stdin = "allow"
+stdout = "allow"
+stderr = "allow"
 
 [virt-opts.fs]
 passive-cutoff = 10

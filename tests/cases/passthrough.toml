@@ -5,9 +5,9 @@ host-fs-path = "/LICENSE"
 [virt-opts]
 exit = true
 fs.host-preopens = true
-stdio.stdin = true
-stdio.stdout = true
-stdio.stderr = true
+stdio.stdin = "allow"
+stdio.stdout = "allow"
+stdio.stderr = "allow"
 
 [expect]
 file-read = """

@@ -5,9 +5,9 @@ host-fs-path = "/LICENSE"
 [virt-opts]
 exit = false
 fs.host-preopens = false
-stdio.stdin = false
-stdio.stdout = false
-stdio.stderr = false
+stdio.stdin = "ignore"
+stdio.stdout = "ignore"
+stdio.stderr = "ignore"
 clocks = true
 http = false
 random = true

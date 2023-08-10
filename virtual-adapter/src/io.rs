@@ -53,8 +53,11 @@ use std::slice;
 const FLAGS_ENABLE_STDIN: u32 = 1 << 0;
 const FLAGS_ENABLE_STDOUT: u32 = 1 << 1;
 const FLAGS_ENABLE_STDERR: u32 = 1 << 2;
-const FLAGS_HOST_PREOPENS: u32 = 1 << 3;
-const FLAGS_HOST_PASSTHROUGH: u32 = 1 << 4;
+const FLAGS_IGNORE_STDIN: u32 = 1 << 3;
+const FLAGS_IGNORE_STDOUT: u32 = 1 << 4;
+const FLAGS_IGNORE_STDERR: u32 = 1 << 5;
+const FLAGS_HOST_PREOPENS: u32 = 1 << 6;
+const FLAGS_HOST_PASSTHROUGH: u32 = 1 << 7;
 
 // static fs config
 #[repr(C)]
@@ -64,6 +67,12 @@ pub struct Io {
     static_index_cnt: usize,
     static_index: *const StaticIndexEntry,
     flags: u32,
+}
+
+enum AllowCfg {
+    Allow,
+    Deny,
+    Ignore,
 }
 
 impl Io {
@@ -78,14 +87,32 @@ impl Io {
     fn static_index() -> &'static [StaticIndexEntry] {
         unsafe { slice::from_raw_parts(io.static_index, io.static_index_cnt) }
     }
-    fn stdin() -> bool {
-        (unsafe { io.flags }) & FLAGS_ENABLE_STDIN > 0
+    fn stdin() -> AllowCfg {
+        if (unsafe { io.flags }) & FLAGS_ENABLE_STDIN > 0 {
+            AllowCfg::Allow
+        } else if (unsafe { io.flags }) & FLAGS_IGNORE_STDIN > 0 {
+            AllowCfg::Ignore
+        } else {
+            AllowCfg::Deny
+        }
     }
-    fn stdout() -> bool {
-        (unsafe { io.flags }) & FLAGS_ENABLE_STDOUT > 0
+    fn stdout() -> AllowCfg {
+        if (unsafe { io.flags }) & FLAGS_ENABLE_STDOUT > 0 {
+            AllowCfg::Allow
+        } else if (unsafe { io.flags }) & FLAGS_IGNORE_STDOUT > 0 {
+            AllowCfg::Ignore
+        } else {
+            AllowCfg::Deny
+        }
     }
-    fn stderr() -> bool {
-        (unsafe { io.flags }) & FLAGS_ENABLE_STDERR > 0
+    fn stderr() -> AllowCfg {
+        if (unsafe { io.flags }) & FLAGS_ENABLE_STDERR > 0 {
+            AllowCfg::Allow
+        } else if (unsafe { io.flags }) & FLAGS_IGNORE_STDERR > 0 {
+            AllowCfg::Ignore
+        } else {
+            AllowCfg::Deny
+        }
     }
     fn host_passthrough() -> bool {
         (unsafe { io.flags }) & FLAGS_HOST_PASSTHROUGH > 0
@@ -421,7 +448,10 @@ static mut STATE: IoState = IoState {
 };
 
 enum Stream {
+    // null stream
     Null,
+    // error stream
+    Err,
     StaticFile(StaticFileStream),
     StaticDir(StaticDirStream),
     Host(u32),
@@ -508,20 +538,20 @@ impl IoState {
         }
         // the first three streams are always stdin, stdout, stderr
         assert!(unsafe { STATE.stream_cnt } == 0);
-        IoState::new_stream(if Io::stdin() {
-            Stream::Host(stdin::get_stdin())
-        } else {
-            Stream::Null
+        IoState::new_stream(match Io::stdin() {
+            AllowCfg::Allow => Stream::Host(stdin::get_stdin()),
+            AllowCfg::Ignore => Stream::Null,
+            AllowCfg::Deny => Stream::Err,
         });
-        IoState::new_stream(if Io::stdout() {
-            Stream::Host(stdout::get_stdout())
-        } else {
-            Stream::Null
+        IoState::new_stream(match Io::stdout() {
+            AllowCfg::Allow => Stream::Host(stdout::get_stdout()),
+            AllowCfg::Ignore => Stream::Null,
+            AllowCfg::Deny => Stream::Err,
         });
-        IoState::new_stream(if Io::stderr() {
-            Stream::Host(stderr::get_stderr())
-        } else {
-            Stream::Null
+        IoState::new_stream(match Io::stderr() {
+            AllowCfg::Allow => Stream::Host(stderr::get_stderr()),
+            AllowCfg::Ignore => Stream::Null,
+            AllowCfg::Deny => Stream::Err,
         });
         assert!(unsafe { STATE.stream_cnt } == 3);
 
@@ -923,7 +953,7 @@ impl FilesystemTypes for VirtAdapter {
             return;
         };
         match stream {
-            Stream::Null | Stream::StaticFile(_) | Stream::StaticDir(_) => {}
+            Stream::Err | Stream::Null | Stream::StaticFile(_) | Stream::StaticDir(_) => {}
             Stream::Host(sid) => filesystem_types::drop_directory_entry_stream(*sid),
         }
         unsafe { STATE.stream_table.remove(&sid) };
@@ -1035,20 +1065,20 @@ impl Streams for VirtAdapter {
             Stream::StaticFile(filestream) => filestream.read(len),
             Stream::Host(sid) => stream_res_map(streams::blocking_read(*sid, len)),
             Stream::Null => Ok((vec![], StreamStatus::Ended)),
-            Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticDir(_) => Err(stream_err()),
         }
     }
     fn skip(sid: u32, offset: u64) -> Result<(u64, StreamStatus), StreamError> {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((0, StreamStatus::Ended)),
-            Stream::StaticDir(_) | Stream::StaticFile(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticDir(_) | Stream::StaticFile(_) => Err(stream_err()),
             Stream::Host(sid) => stream_res_map(streams::skip(*sid, offset)),
         }
     }
     fn blocking_skip(sid: u32, offset: u64) -> Result<(u64, StreamStatus), StreamError> {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((0, StreamStatus::Ended)),
-            Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
             Stream::Host(sid) => stream_res_map(streams::blocking_skip(*sid, offset)),
         }
     }
@@ -1058,7 +1088,7 @@ impl Streams for VirtAdapter {
         };
         match stream {
             Stream::Null => 0,
-            Stream::StaticFile(_) | Stream::StaticDir(_) => 0,
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => 0,
             Stream::Host(sid) => {
                 IoState::new_poll(PollTarget::Host(streams::subscribe_to_input_stream(*sid)))
             }
@@ -1069,7 +1099,7 @@ impl Streams for VirtAdapter {
             return;
         };
         match stream {
-            Stream::Null | Stream::StaticFile(_) | Stream::StaticDir(_) => {}
+            Stream::Err | Stream::Null | Stream::StaticFile(_) | Stream::StaticDir(_) => {}
             Stream::Host(sid) => streams::drop_input_stream(*sid),
         }
         unsafe { STATE.stream_table.remove(&sid) };
@@ -1077,28 +1107,28 @@ impl Streams for VirtAdapter {
     fn write(sid: u32, bytes: Vec<u8>) -> Result<(u64, StreamStatus), StreamError> {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((bytes.len() as u64, StreamStatus::Ended)),
-            Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
             Stream::Host(sid) => stream_res_map(streams::write(*sid, bytes.as_slice())),
         }
     }
     fn blocking_write(sid: u32, bytes: Vec<u8>) -> Result<(u64, StreamStatus), StreamError> {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((bytes.len() as u64, StreamStatus::Ended)),
-            Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
             Stream::Host(sid) => stream_res_map(streams::blocking_write(*sid, bytes.as_slice())),
         }
     }
     fn write_zeroes(sid: u32, len: u64) -> Result<(u64, StreamStatus), StreamError> {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((len, StreamStatus::Ended)),
-            Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
             Stream::Host(sid) => stream_res_map(streams::write_zeroes(*sid, len)),
         }
     }
     fn blocking_write_zeroes(sid: u32, len: u64) -> Result<(u64, StreamStatus), StreamError> {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((len, StreamStatus::Ended)),
-            Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
             Stream::Host(sid) => stream_res_map(streams::blocking_write_zeroes(*sid, len)),
         }
     }
@@ -1107,7 +1137,7 @@ impl Streams for VirtAdapter {
             Stream::Null => {
                 return Ok((len, StreamStatus::Ended));
             }
-            Stream::StaticFile(_) | Stream::StaticDir(_) => {
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => {
                 return Err(stream_err());
             }
             Stream::Host(sid) => *sid,
@@ -1116,7 +1146,7 @@ impl Streams for VirtAdapter {
             Stream::Null => {
                 return Ok((len, StreamStatus::Ended));
             }
-            Stream::StaticFile(_) | Stream::StaticDir(_) => {
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => {
                 return Err(stream_err());
             }
             Stream::Host(sid) => *sid,
@@ -1132,7 +1162,7 @@ impl Streams for VirtAdapter {
             Stream::Null => {
                 return Ok((len, StreamStatus::Ended));
             }
-            Stream::StaticFile(_) | Stream::StaticDir(_) => {
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => {
                 return Err(stream_err());
             }
             Stream::Host(sid) => *sid,
@@ -1141,7 +1171,7 @@ impl Streams for VirtAdapter {
             Stream::Null => {
                 return Ok((len, StreamStatus::Ended));
             }
-            Stream::StaticFile(_) | Stream::StaticDir(_) => {
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => {
                 return Err(stream_err());
             }
             Stream::Host(sid) => *sid,
@@ -1153,7 +1183,7 @@ impl Streams for VirtAdapter {
             Stream::Null => {
                 return Ok((0, StreamStatus::Ended));
             }
-            Stream::StaticFile(_) | Stream::StaticDir(_) => {
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => {
                 return Err(stream_err());
             }
             Stream::Host(sid) => *sid,
@@ -1162,7 +1192,7 @@ impl Streams for VirtAdapter {
             Stream::Null => {
                 return Ok((0, StreamStatus::Ended));
             }
-            Stream::StaticFile(_) | Stream::StaticDir(_) => {
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => {
                 return Err(stream_err());
             }
             Stream::Host(sid) => *sid,
@@ -1175,7 +1205,7 @@ impl Streams for VirtAdapter {
         };
         match stream {
             Stream::Null => 0,
-            Stream::StaticFile(_) | Stream::StaticDir(_) => 0,
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => 0,
             Stream::Host(sid) => {
                 IoState::new_poll(PollTarget::Host(streams::subscribe_to_output_stream(*sid)))
             }
@@ -1186,7 +1216,7 @@ impl Streams for VirtAdapter {
             return;
         };
         match stream {
-            Stream::Null | Stream::StaticFile(_) | Stream::StaticDir(_) => {}
+            Stream::Err | Stream::Null | Stream::StaticFile(_) | Stream::StaticDir(_) => {}
             Stream::Host(sid) => streams::drop_output_stream(*sid),
         }
         unsafe { STATE.stream_table.remove(&sid) };
