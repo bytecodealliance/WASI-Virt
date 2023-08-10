@@ -2,6 +2,7 @@ use std::fmt;
 use std::{collections::BTreeMap, fs};
 
 use anyhow::{bail, Context, Result};
+use clap::ValueEnum;
 use serde::Deserialize;
 use walrus::{ir::Value, ExportItem, GlobalKind, InitExpr, Module};
 
@@ -13,31 +14,52 @@ use crate::{
 
 pub type VirtualFiles = BTreeMap<String, String>;
 
+#[derive(ValueEnum, Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StdioCfg {
+    #[default]
+    Allow,
+    Ignore,
+    Deny,
+}
+
 #[derive(Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct VirtStdio {
-    pub stdin: bool,
-    pub stdout: bool,
-    pub stderr: bool,
+    pub stdin: StdioCfg,
+    pub stdout: StdioCfg,
+    pub stderr: StdioCfg,
 }
 
 impl VirtStdio {
-    pub fn all(&mut self, allow: bool) -> &mut Self {
-        self.stdin = allow;
-        self.stdout = allow;
-        self.stderr = allow;
+    pub fn ignore(&mut self) -> &mut Self {
+        self.stdin = StdioCfg::Ignore;
+        self.stdout = StdioCfg::Ignore;
+        self.stderr = StdioCfg::Ignore;
         self
     }
-    pub fn stdin(&mut self, allow: bool) -> &mut Self {
-        self.stdin = allow;
+    pub fn allow(&mut self) -> &mut Self {
+        self.stdin = StdioCfg::Allow;
+        self.stdout = StdioCfg::Allow;
+        self.stderr = StdioCfg::Allow;
         self
     }
-    pub fn stdout(&mut self, allow: bool) -> &mut Self {
-        self.stdout = allow;
+    pub fn deny(&mut self) -> &mut Self {
+        self.stdin = StdioCfg::Deny;
+        self.stdout = StdioCfg::Deny;
+        self.stderr = StdioCfg::Deny;
         self
     }
-    pub fn stderr(&mut self, allow: bool) -> &mut Self {
-        self.stderr = allow;
+    pub fn stdin(&mut self, cfg: StdioCfg) -> &mut Self {
+        self.stdin = cfg;
+        self
+    }
+    pub fn stdout(&mut self, cfg: StdioCfg) -> &mut Self {
+        self.stdout = cfg;
+        self
+    }
+    pub fn stderr(&mut self, cfg: StdioCfg) -> &mut Self {
+        self.stderr = cfg;
         self
     }
 }
@@ -259,8 +281,11 @@ impl FsEntry {
 const FLAGS_ENABLE_STDIN: u32 = 1 << 0;
 const FLAGS_ENABLE_STDOUT: u32 = 1 << 1;
 const FLAGS_ENABLE_STDERR: u32 = 1 << 2;
-const FLAGS_HOST_PREOPENS: u32 = 1 << 3;
-const FLAGS_HOST_PASSTHROUGH: u32 = 1 << 4;
+const FLAGS_IGNORE_STDIN: u32 = 1 << 3;
+const FLAGS_IGNORE_STDOUT: u32 = 1 << 4;
+const FLAGS_IGNORE_STDERR: u32 = 1 << 5;
+const FLAGS_HOST_PREOPENS: u32 = 1 << 6;
+const FLAGS_HOST_PASSTHROUGH: u32 = 1 << 7;
 
 pub(crate) fn create_io_virt<'a>(
     module: &'a mut Module,
@@ -276,17 +301,21 @@ pub(crate) fn create_io_virt<'a>(
         }
     }
     if let Some(stdio) = stdio {
-        if stdio.stdin {
-            flags |= FLAGS_ENABLE_STDIN;
+        match stdio.stdin {
+            StdioCfg::Allow => flags |= FLAGS_ENABLE_STDIN,
+            StdioCfg::Ignore => flags |= FLAGS_IGNORE_STDIN,
+            // deny is the default
+            StdioCfg::Deny => {}
         }
-        if stdio.stdout {
-            flags |= FLAGS_ENABLE_STDOUT;
+        match stdio.stdout {
+            StdioCfg::Allow => flags |= FLAGS_ENABLE_STDOUT,
+            StdioCfg::Ignore => flags |= FLAGS_IGNORE_STDOUT,
+            StdioCfg::Deny => {}
         }
-        if stdio.stderr {
-            flags |= FLAGS_ENABLE_STDERR;
-        }
-        if !stdio.stdin && !stdio.stdout && !stdio.stderr {
-            stub_stdio_virt(module)?;
+        match stdio.stderr {
+            StdioCfg::Allow => flags |= FLAGS_ENABLE_STDERR,
+            StdioCfg::Ignore => flags |= FLAGS_IGNORE_STDERR,
+            StdioCfg::Deny => {}
         }
     }
 
