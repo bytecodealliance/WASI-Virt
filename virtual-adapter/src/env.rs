@@ -1,5 +1,5 @@
-use crate::exports::wasi::cli_base::environment::Environment;
-use crate::wasi::cli_base::environment;
+use crate::exports::wasi::cli::environment::Guest as Environment;
+use crate::wasi::cli::environment;
 use crate::VirtAdapter;
 
 #[repr(C)]
@@ -81,8 +81,10 @@ impl Environment for VirtAdapter {
         }
         environment
     }
-
     fn get_arguments() -> Vec<String> {
         environment::get_arguments()
+    }
+    fn initial_cwd() -> Option<String> {
+        environment::initial_cwd()
     }
 }

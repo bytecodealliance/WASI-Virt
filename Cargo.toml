@@ -33,10 +33,10 @@ clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.7"
 walrus = "0.20.1"
-wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools" }
-wasm-metadata = { git = "https://github.com/bytecodealliance/wasm-tools" }
-wasm-opt = "0.113.0"
-wit-component = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "4678a61ae428da21299aeae016bd56d5e248248f" }
+wasm-metadata = "0.10.2"
+wasm-opt = "0.114.1"
+wit-component = "0.13.2"
 
 [build-dependencies]
 anyhow = "1"
@@ -46,9 +46,9 @@ anyhow = "1"
 cap-std = "1.0.12"
 heck =  { version = "0.4" }
 tokio = { version = "1.30.0", features = ["macros"] }
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", features = ["component-model"] }
-wasmtime-wasi =  { git = "https://github.com/bytecodealliance/wasmtime" }
+wasmtime = { version = "12.0.0", features = ["component-model"] }
+wasmtime-wasi =  "12.0.0"
 
 [workspace.dependencies]
 anyhow = "1"
-wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen" }
+wit-bindgen = { git = "https://github.com/alexcrichton/witx-bindgen", branch = "fix-name-clashes" }

@@ -525,9 +525,10 @@ pub(crate) fn create_io_virt<'a>(
     Ok(virtual_files)
 }
 
-// stubs must be _comprehensive_ in order to act as full deny over entire subsystem
+// Stubs must be _comprehensive_ in order to act as full deny over entire subsystem
 // when stubbing functions that are not part of the virtual adapter exports, we therefore
-// have to create this functions fresh
+// have to create this functions fresh.
+// Ideally, we should generate these stubs automatically from WASI definitions.
 pub(crate) fn stub_fs_virt(module: &mut Module) -> Result<()> {
     stub_imported_func(module, "wasi:filesystem/preopens", "get-directories", true)?;
     stub_imported_func(module, "wasi:filesystem/types", "read-via-stream", true)?;
@@ -780,8 +781,7 @@ pub(crate) fn strip_http_virt(module: &mut Module) -> Result<()> {
     remove_exported_func(module, "wasi:http/types#drop-incoming-request")?;
     remove_exported_func(module, "wasi:http/types#drop-outgoing-request")?;
     remove_exported_func(module, "wasi:http/types#incoming-request-method")?;
-    remove_exported_func(module, "wasi:http/types#incoming-request-path")?;
-    remove_exported_func(module, "wasi:http/types#incoming-request-query")?;
+    remove_exported_func(module, "wasi:http/types#incoming-request-path-with-query")?;
     remove_exported_func(module, "wasi:http/types#incoming-request-scheme")?;
     remove_exported_func(module, "wasi:http/types#incoming-request-authority")?;
     remove_exported_func(module, "wasi:http/types#incoming-request-headers")?;
@@ -817,8 +817,12 @@ pub(crate) fn stub_http_virt(module: &mut Module) -> Result<()> {
     stub_imported_func(module, "wasi:http/types", "drop-incoming-request", false)?;
     stub_imported_func(module, "wasi:http/types", "drop-outgoing-request", false)?;
     stub_imported_func(module, "wasi:http/types", "incoming-request-method", false)?;
-    stub_imported_func(module, "wasi:http/types", "incoming-request-path", false)?;
-    stub_imported_func(module, "wasi:http/types", "incoming-request-query", false)?;
+    stub_imported_func(
+        module,
+        "wasi:http/types",
+        "incoming-request-path-with-query",
+        false,
+    )?;
     stub_imported_func(module, "wasi:http/types", "incoming-request-scheme", false)?;
     stub_imported_func(
         module,

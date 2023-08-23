@@ -144,7 +144,7 @@ async fn virt_test() -> Result<()> {
 
         // execute the composed virtualized component test function
         let mut builder = WasiCtxBuilder::new();
-        builder.inherit_stdio().preopened_dir(
+        builder = builder.inherit_stdio().push_preopened_dir(
             Dir::open_ambient_dir(".", ambient_authority())?,
             DirPerms::READ,
             FilePerms::READ,
@@ -152,7 +152,7 @@ async fn virt_test() -> Result<()> {
         );
         if let Some(host_env) = &test.host_env {
             for (k, v) in host_env {
-                builder.env(k, v);
+                builder = builder.push_env(k, v);
             }
         }
         let mut table = Table::new();
