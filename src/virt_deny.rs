@@ -185,13 +185,7 @@ pub(crate) fn deny_http_virt(module: &mut Module) -> Result<()> {
     )?;
     add_stub_exported_func(
         module,
-        "wasi:http/types#incoming-request-path",
-        vec![ValType::I32],
-        vec![ValType::I32],
-    )?;
-    add_stub_exported_func(
-        module,
-        "wasi:http/types#incoming-request-query",
+        "wasi:http/types#incoming-request-path-with-query",
         vec![ValType::I32],
         vec![ValType::I32],
     )?;
@@ -255,7 +249,13 @@ pub(crate) fn deny_http_virt(module: &mut Module) -> Result<()> {
     add_stub_exported_func(
         module,
         "wasi:http/types#set-response-outparam",
-        vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+        vec![
+            ValType::I32,
+            ValType::I32,
+            ValType::I32,
+            ValType::I32,
+            ValType::I32,
+        ],
         vec![ValType::I32],
     )?;
     add_stub_exported_func(
@@ -368,12 +368,7 @@ pub(crate) fn deny_random_virt(module: &mut Module) -> Result<()> {
 }
 
 pub(crate) fn deny_exit_virt(module: &mut Module) -> Result<()> {
-    add_stub_exported_func(
-        module,
-        "wasi:cli-base/exit#exit",
-        vec![ValType::I32],
-        vec![],
-    )?;
+    add_stub_exported_func(module, "wasi:cli/exit#exit", vec![ValType::I32], vec![])?;
     Ok(())
 }
 

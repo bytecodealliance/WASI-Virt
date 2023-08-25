@@ -15,7 +15,7 @@ wit_bindgen::generate!({
 
 struct VirtTestComponent;
 
-impl VirtTest for VirtTestComponent {
+impl Guest for VirtTestComponent {
     fn test_get_env() -> Vec<(String, String)> {
         unreachable!();
     }

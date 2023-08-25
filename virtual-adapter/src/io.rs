@@ -30,11 +30,11 @@ use crate::exports::wasi::sockets::udp::{Datagram, Guest as Udp, UdpSocket};
 use crate::wasi::cli::stderr;
 use crate::wasi::cli::stdin;
 use crate::wasi::cli::stdout;
-use crate::wasi::cli::terminal_input;
-use crate::wasi::cli::terminal_output;
-use crate::wasi::cli::terminal_stderr;
-use crate::wasi::cli::terminal_stdin;
-use crate::wasi::cli::terminal_stdout;
+// use crate::wasi::cli::terminal_input;
+// use crate::wasi::cli::terminal_output;
+// use crate::wasi::cli::terminal_stderr;
+// use crate::wasi::cli::terminal_stdin;
+// use crate::wasi::cli::terminal_stdout;
 use crate::wasi::filesystem::preopens;
 use crate::wasi::filesystem::types as filesystem_types;
 use crate::wasi::io::streams;
@@ -138,7 +138,7 @@ enum DescriptorTarget {
     HostDescriptor(u32),
 }
 
-// #[derive(Debug)]
+#[derive(Debug)]
 struct Descriptor {
     // the descriptor index of this descriptor
     fd: u32,
@@ -345,9 +345,9 @@ impl StaticIndexEntry {
         if !matches!(self.ty(), DescriptorType::Directory) {
             return Err(ErrorCode::NotDirectory);
         }
-        let (child_list_idx, child_list_len) = unsafe { (*self).data.dir };
+        let (child_offset, child_list_len) = unsafe { (*self).data.dir };
         let static_index = Io::static_index();
-        Ok(&static_index[child_list_idx..child_list_idx + child_list_len])
+        Ok(&static_index[self.idx() + child_offset..self.idx() + child_offset + child_list_len])
     }
     fn dir_lookup(&self, path: &str) -> Result<&'static StaticIndexEntry, ErrorCode> {
         assert!(path.len() > 0);
@@ -400,7 +400,7 @@ union StaticFileData {
 //     }
 // }
 
-// #[derive(Debug)]
+#[derive(Debug)]
 #[allow(dead_code)]
 #[repr(u32)]
 enum StaticIndexType {
