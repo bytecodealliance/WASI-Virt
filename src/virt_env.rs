@@ -214,14 +214,16 @@ pub(crate) fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Resu
 }
 
 pub(crate) fn stub_env_virt(module: &mut Module) -> Result<()> {
-    stub_imported_func(module, "wasi:cli-base/environment", "get-arguments", true)?;
-    stub_imported_func(module, "wasi:cli-base/environment", "get-environment", true)?;
+    stub_imported_func(module, "wasi:cli/environment", "get-arguments", true)?;
+    stub_imported_func(module, "wasi:cli/environment", "get-environment", true)?;
+    stub_imported_func(module, "wasi:cli/environment", "initial-cwd", true)?;
     Ok(())
 }
 
 pub(crate) fn strip_env_virt(module: &mut Module) -> Result<()> {
     stub_env_virt(module)?;
-    remove_exported_func(module, "wasi:cli-base/environment#get-arguments")?;
-    remove_exported_func(module, "wasi:cli-base/environment#get-environment")?;
+    remove_exported_func(module, "wasi:cli/environment#get-arguments")?;
+    remove_exported_func(module, "wasi:cli/environment#get-environment")?;
+    remove_exported_func(module, "wasi:cli/environment#initial-cwd")?;
     Ok(())
 }

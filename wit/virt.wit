@@ -3,7 +3,7 @@ package local:virt
 // in future this should be defined as a union world of the various
 // virtual subsystems, when union syntax lands
 world virtual-adapter {
-  import wasi:cli-base/environment
+  import wasi:cli/environment
   import wasi:filesystem/preopens
   import wasi:filesystem/types
   import wasi:io/streams
@@ -11,15 +11,25 @@ world virtual-adapter {
     log: func(msg: string) -> ()
   }
   export wasi:io/streams
-  export wasi:cli-base/environment
+  export wasi:cli/environment
   export wasi:filesystem/types
   export wasi:filesystem/preopens
-  import wasi:cli-base/stdin
-  import wasi:cli-base/stdout
-  import wasi:cli-base/stderr
-  export wasi:cli-base/stdin
-  export wasi:cli-base/stdout
-  export wasi:cli-base/stderr
+  import wasi:cli/stdin
+  import wasi:cli/stdout
+  import wasi:cli/stderr
+  import wasi:cli/terminal-input
+  import wasi:cli/terminal-output
+  import wasi:cli/terminal-stdin
+  import wasi:cli/terminal-stdout
+  import wasi:cli/terminal-stderr
+  export wasi:cli/stdin
+  export wasi:cli/stdout
+  export wasi:cli/stderr
+  export wasi:cli/terminal-input
+  export wasi:cli/terminal-output
+  export wasi:cli/terminal-stdin
+  export wasi:cli/terminal-stdout
+  export wasi:cli/terminal-stderr
   import wasi:poll/poll
   export wasi:poll/poll
   import wasi:clocks/monotonic-clock
@@ -77,18 +87,28 @@ world virtual-fs {
 }
 
 world virtual-stdio {
-  import wasi:cli-base/stdin
-  import wasi:cli-base/stdout
-  import wasi:cli-base/stderr
-  export wasi:cli-base/stdin
-  export wasi:cli-base/stdout
-  export wasi:cli-base/stderr
+  import wasi:cli/stdin
+  import wasi:cli/stdout
+  import wasi:cli/stderr
+  import wasi:cli/terminal-input
+  import wasi:cli/terminal-output
+  import wasi:cli/terminal-stdin
+  import wasi:cli/terminal-stdout
+  import wasi:cli/terminal-stderr
+  export wasi:cli/stdin
+  export wasi:cli/stdout
+  export wasi:cli/stderr
+  export wasi:cli/terminal-input
+  export wasi:cli/terminal-output
+  export wasi:cli/terminal-stdin
+  export wasi:cli/terminal-stdout
+  export wasi:cli/terminal-stderr
 }
 
 // remaining subsystems
 world virtual-env {
-  import wasi:cli-base/environment
-  export wasi:cli-base/environment
+  import wasi:cli/environment
+  export wasi:cli/environment
 }
 
 world virtual-clocks {
@@ -134,8 +154,8 @@ world virtual-http {
 }
 
 world virtual-exit {
-  import wasi:cli-base/exit
-  export wasi:cli-base/exit
+  import wasi:cli/exit
+  export wasi:cli/exit
 }
 
 world virt-test {
@@ -155,12 +175,17 @@ world virt-test {
   import wasi:random/insecure-seed
   import wasi:poll/poll
   import wasi:io/streams
-  import wasi:cli-base/environment
+  import wasi:cli/environment
   import wasi:filesystem/preopens
-  import wasi:cli-base/exit
-  import wasi:cli-base/stdin
-  import wasi:cli-base/stdout
-  import wasi:cli-base/stderr
+  import wasi:cli/exit
+  import wasi:cli/stdin
+  import wasi:cli/stdout
+  import wasi:cli/stderr
+  import wasi:cli/terminal-input
+  import wasi:cli/terminal-output
+  import wasi:cli/terminal-stdin
+  import wasi:cli/terminal-stdout
+  import wasi:cli/terminal-stderr
 
   export test-get-env: func() -> list<tuple<string, string>>
   export test-file-read: func(path: string) -> string

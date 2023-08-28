@@ -248,30 +248,55 @@ impl FsEntry {
         Ok(())
     }
 
-    pub fn visit_pre<'a, Visitor>(&'a self, base_path: &str, visit: &mut Visitor) -> Result<()>
+    pub fn visit_bfs<'a, Visitor>(&'a self, base_path: &str, visit: &mut Visitor) -> Result<()>
     where
         Visitor: FnMut(&FsEntry, &str, &str, usize) -> Result<()>,
     {
-        visit(self, base_path, "", 0)?;
-        self.visit_pre_inner(visit, base_path)
+        visit(self, base_path, "", 1)?;
+        let mut children_of = vec![(base_path.to_string(), self)];
+        let mut next_children_of;
+        while children_of.len() > 0 {
+            next_children_of = Vec::new();
+            FsEntry::visit_bfs_level(children_of, visit, &mut next_children_of)?;
+            children_of = next_children_of;
+        }
+        Ok(())
     }
 
-    fn visit_pre_inner<'a, Visitor>(&'a self, visit: &mut Visitor, base_path: &str) -> Result<()>
+    fn visit_bfs_level<'a, Visitor>(
+        children_of: Vec<(String, &'a FsEntry)>,
+        visit: &mut Visitor,
+        next_children_of: &mut Vec<(String, &'a FsEntry)>,
+    ) -> Result<()>
     where
         Visitor: FnMut(&FsEntry, &str, &str, usize) -> Result<()>,
     {
-        match self {
-            FsEntry::Dir(dir) => {
-                let len = dir.iter().len();
-                for (idx, (name, sub_entry)) in dir.iter().enumerate() {
-                    visit(sub_entry, name, base_path, len - idx - 1)?;
+        // first we do a full len count at this depth to be able to predict the
+        // next depth offset position for children of this item from the current index
+        let mut child_offset = 0;
+        for (_, parent) in &children_of {
+            match parent {
+                FsEntry::Dir(dir) => {
+                    child_offset += dir.iter().len();
                 }
-                for (name, sub_entry) in dir {
-                    let path = format!("{base_path}/{name}");
-                    sub_entry.visit_pre_inner(visit, &path)?;
-                }
+                _ => {}
             }
-            _ => {}
+        }
+        for (base_path, parent) in children_of {
+            match parent {
+                FsEntry::Dir(dir) => {
+                    for (name, sub_entry) in dir.iter() {
+                        visit(sub_entry, name, &base_path, child_offset)?;
+                        child_offset -= 1;
+                        let path = format!("{base_path}/{name}");
+                        next_children_of.push((path, sub_entry));
+                        if let FsEntry::Dir(dir) = sub_entry {
+                            child_offset += dir.iter().len();
+                        }
+                    }
+                }
+                _ => {}
+            }
         }
         Ok(())
     }
@@ -386,7 +411,8 @@ pub(crate) fn create_io_virt<'a>(
     if let Some(fs) = &fs {
         for (name, entry) in &fs.preopens {
             preopen_indices.push(static_fs_data.len() as u32);
-            entry.visit_pre(name, &mut |entry, name, _path, remaining_siblings| {
+            let mut cur_idx = 0;
+            entry.visit_bfs(name, &mut |entry, name, _path, child_offset| {
                 let name_str_ptr = data_section.string(name)?;
                 let (ty, data) = match &entry {
                     // removed during previous step
@@ -408,20 +434,12 @@ pub(crate) fn create_io_virt<'a>(
                             StaticFileData { host_path: str },
                         )
                     }
-                    FsEntry::Dir(dir) => {
-                        let child_cnt = dir.len() as u32;
-                        // children will be visited next in preorder and contiguously
-                        // therefore the child index in the static fs data is known
-                        // to be the next index
-                        let start_idx = static_fs_data.len() as u32 + 1;
-                        let child_idx = start_idx + remaining_siblings as u32;
-                        (
-                            StaticIndexType::Dir,
-                            StaticFileData {
-                                dir: (child_idx, child_cnt),
-                            },
-                        )
-                    }
+                    FsEntry::Dir(dir) => (
+                        StaticIndexType::Dir,
+                        StaticFileData {
+                            dir: (child_offset as u32, dir.len() as u32),
+                        },
+                    ),
                     FsEntry::File(bytes) => {
                         let byte_len = bytes.len();
                         if byte_len > fs.passive_cutoff.unwrap_or(1024) as usize {
@@ -448,6 +466,7 @@ pub(crate) fn create_io_virt<'a>(
                     ty,
                     data,
                 });
+                cur_idx += 1;
                 Ok(())
             })?;
         }
@@ -525,9 +544,10 @@ pub(crate) fn create_io_virt<'a>(
     Ok(virtual_files)
 }
 
-// stubs must be _comprehensive_ in order to act as full deny over entire subsystem
+// Stubs must be _comprehensive_ in order to act as full deny over entire subsystem
 // when stubbing functions that are not part of the virtual adapter exports, we therefore
-// have to create this functions fresh
+// have to create this functions fresh.
+// Ideally, we should generate these stubs automatically from WASI definitions.
 pub(crate) fn stub_fs_virt(module: &mut Module) -> Result<()> {
     stub_imported_func(module, "wasi:filesystem/preopens", "get-directories", true)?;
     stub_imported_func(module, "wasi:filesystem/types", "read-via-stream", true)?;
@@ -635,9 +655,39 @@ pub(crate) fn stub_clocks_virt(module: &mut Module) -> Result<()> {
 }
 
 pub(crate) fn stub_stdio_virt(module: &mut Module) -> Result<()> {
-    stub_imported_func(module, "wasi:cli-base/stdin", "get-stdin", true)?;
-    stub_imported_func(module, "wasi:cli-base/stdout", "get-stdout", true)?;
-    stub_imported_func(module, "wasi:cli-base/stderr", "get-stderr", true)?;
+    stub_imported_func(module, "wasi:cli/stdin", "get-stdin", true)?;
+    stub_imported_func(module, "wasi:cli/stdout", "get-stdout", true)?;
+    stub_imported_func(module, "wasi:cli/stderr", "get-stderr", true)?;
+    stub_imported_func(
+        module,
+        "wasi:cli/terminal-stdin",
+        "get-terminal-stdin",
+        false,
+    )?;
+    stub_imported_func(
+        module,
+        "wasi:cli/terminal-stdout",
+        "get-terminal-stdout",
+        false,
+    )?;
+    stub_imported_func(
+        module,
+        "wasi:cli/terminal-stderr",
+        "get-terminal-stderr",
+        false,
+    )?;
+    stub_imported_func(
+        module,
+        "wasi:cli/terminal-input",
+        "drop-terminal-input",
+        false,
+    )?;
+    stub_imported_func(
+        module,
+        "wasi:cli/terminal-output",
+        "drop-terminal-output",
+        false,
+    )?;
     Ok(())
 }
 
@@ -780,8 +830,7 @@ pub(crate) fn strip_http_virt(module: &mut Module) -> Result<()> {
     remove_exported_func(module, "wasi:http/types#drop-incoming-request")?;
     remove_exported_func(module, "wasi:http/types#drop-outgoing-request")?;
     remove_exported_func(module, "wasi:http/types#incoming-request-method")?;
-    remove_exported_func(module, "wasi:http/types#incoming-request-path")?;
-    remove_exported_func(module, "wasi:http/types#incoming-request-query")?;
+    remove_exported_func(module, "wasi:http/types#incoming-request-path-with-query")?;
     remove_exported_func(module, "wasi:http/types#incoming-request-scheme")?;
     remove_exported_func(module, "wasi:http/types#incoming-request-authority")?;
     remove_exported_func(module, "wasi:http/types#incoming-request-headers")?;
@@ -817,8 +866,12 @@ pub(crate) fn stub_http_virt(module: &mut Module) -> Result<()> {
     stub_imported_func(module, "wasi:http/types", "drop-incoming-request", false)?;
     stub_imported_func(module, "wasi:http/types", "drop-outgoing-request", false)?;
     stub_imported_func(module, "wasi:http/types", "incoming-request-method", false)?;
-    stub_imported_func(module, "wasi:http/types", "incoming-request-path", false)?;
-    stub_imported_func(module, "wasi:http/types", "incoming-request-query", false)?;
+    stub_imported_func(
+        module,
+        "wasi:http/types",
+        "incoming-request-path-with-query",
+        false,
+    )?;
     stub_imported_func(module, "wasi:http/types", "incoming-request-scheme", false)?;
     stub_imported_func(
         module,
@@ -872,9 +925,14 @@ pub(crate) fn stub_http_virt(module: &mut Module) -> Result<()> {
 
 pub(crate) fn strip_stdio_virt(module: &mut Module) -> Result<()> {
     stub_stdio_virt(module)?;
-    remove_exported_func(module, "wasi:cli-base/stdin#get-stdin")?;
-    remove_exported_func(module, "wasi:cli-base/stdout#get-stdout")?;
-    remove_exported_func(module, "wasi:cli-base/stderr#get-stderr")?;
+    remove_exported_func(module, "wasi:cli/stdin#get-stdin")?;
+    remove_exported_func(module, "wasi:cli/stdout#get-stdout")?;
+    remove_exported_func(module, "wasi:cli/stderr#get-stderr")?;
+    remove_exported_func(module, "wasi:cli/terminal-stdin#get-terminal-stdin")?;
+    remove_exported_func(module, "wasi:cli/terminal-stdout#get-terminal-stdout")?;
+    remove_exported_func(module, "wasi:cli/terminal-stderr#get-terminal-stderr")?;
+    remove_exported_func(module, "wasi:cli/terminal-input#drop-terminal-input")?;
+    remove_exported_func(module, "wasi:cli/terminal-output#drop-terminal-output")?;
     Ok(())
 }
 

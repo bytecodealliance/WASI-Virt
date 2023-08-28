@@ -73,7 +73,7 @@ async fn virt_test() -> Result<()> {
         let test_case_name = test_case_file_name.strip_suffix(".toml").unwrap();
 
         // Filtering...
-        // if test_case_name == "encapsulate" {
+        // if test_case_name != "fs-nested-dir-read" {
         //     continue;
         // }
 
@@ -89,12 +89,20 @@ async fn virt_test() -> Result<()> {
         let generated_path = PathBuf::from("tests/generated");
         fs::create_dir_all(&generated_path)?;
 
+        if DEBUG {
+            println!("- Building test component");
+        }
+
         let mut generated_component_path = generated_path.join(component_name);
         generated_component_path.set_extension("component.wasm");
         cmd(&format!(
             "cargo build -p {component_name} --target wasm32-wasi {}",
             if DEBUG { "" } else { "--release" }
         ))?;
+
+        if DEBUG {
+            println!("- Encoding test component");
+        }
 
         // encode the component
         let component_core = fs::read(&format!(
@@ -112,6 +120,10 @@ async fn virt_test() -> Result<()> {
         )?;
 
         // create the test case specific virtualization
+        if DEBUG {
+            println!("- Creating virtualization");
+        }
+
         let mut virt_component_path = generated_path.join(test_case_name);
         virt_component_path.set_extension("virt.wasm");
         let mut virt_opts = test.virt_opts.clone().unwrap_or_default();
@@ -127,6 +139,9 @@ async fn virt_test() -> Result<()> {
         fs::write(&virt_component_path, virt_component.adapter)?;
 
         // compose the test component with the defined test virtualization
+        if DEBUG {
+            println!("- Composing virtualization");
+        }
         let component_bytes = ComponentComposer::new(
             &generated_component_path,
             &wasm_compose::config::Config {
@@ -143,6 +158,9 @@ async fn virt_test() -> Result<()> {
         }
 
         // execute the composed virtualized component test function
+        if DEBUG {
+            println!("- Executing composition");
+        }
         let mut builder = WasiCtxBuilder::new();
         builder.inherit_stdio().preopened_dir(
             Dir::open_ambient_dir(".", ambient_authority())?,
@@ -201,6 +219,10 @@ async fn virt_test() -> Result<()> {
         let (instance, _instance) =
             VirtTest::instantiate_async(&mut store, &component, &linker).await?;
 
+        if DEBUG {
+            println!("- Checking expectations");
+        }
+
         // env var expectation check
         if let Some(expect_env) = &test.expect.env {
             let env_vars = instance.call_test_get_env(&mut store).await?;
@@ -225,18 +247,13 @@ async fn virt_test() -> Result<()> {
             let file_read = instance
                 .call_test_file_read(&mut store, test.host_fs_path.as_ref().unwrap())
                 .await?;
+            if file_read.starts_with("ERR") {
+                eprintln!("> {}", file_read);
+            }
             if !file_read.eq(expect_file_read) {
                 return Err(anyhow!(
-                    "Unexpected file read result testing {:?}:
-
-    \x1b[1mExpected:\x1b[0m {:?}
-    \x1b[1mActual:\x1b[0m {:?}
-
-    {:?}",
-                    test_case_path,
-                    expect_file_read,
-                    file_read,
-                    test
+                    "Unexpected file read result testing {:?}",
+                    test_case_path
                 ));
             }
         }

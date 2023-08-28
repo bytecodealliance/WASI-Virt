@@ -1,30 +1,40 @@
-use crate::exports::wasi::cli_base::stderr::Stderr;
-use crate::exports::wasi::cli_base::stdin::Stdin;
-use crate::exports::wasi::cli_base::stdout::Stdout;
-use crate::exports::wasi::clocks::monotonic_clock::MonotonicClock;
-use crate::exports::wasi::filesystem::preopens::Preopens;
+use crate::exports::wasi::cli::stderr::Guest as Stderr;
+use crate::exports::wasi::cli::stdin::Guest as Stdin;
+use crate::exports::wasi::cli::stdout::Guest as Stdout;
+use crate::exports::wasi::cli::terminal_input::Guest as TerminalInput;
+use crate::exports::wasi::cli::terminal_output::Guest as TerminalOutput;
+use crate::exports::wasi::cli::terminal_stderr::Guest as TerminalStderr;
+use crate::exports::wasi::cli::terminal_stdin::Guest as TerminalStdin;
+use crate::exports::wasi::cli::terminal_stdout::Guest as TerminalStdout;
+use crate::exports::wasi::clocks::monotonic_clock::Guest as MonotonicClock;
+use crate::exports::wasi::filesystem::preopens::Guest as Preopens;
 use crate::exports::wasi::filesystem::types::{
     AccessType, Advice, Datetime, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry,
-    ErrorCode, MetadataHashValue, Modes, NewTimestamp, OpenFlags, PathFlags,
-    Types as FilesystemTypes,
+    ErrorCode, Guest as FilesystemTypes, MetadataHashValue, Modes, NewTimestamp, OpenFlags,
+    PathFlags,
 };
 use crate::exports::wasi::http::types::{
-    Error, Fields, Headers, Method, Scheme, StatusCode, Trailers, Types as HttpTypes,
+    Error, Fields, Guest as HttpTypes, Headers, Method, Scheme, StatusCode, Trailers,
 };
 use crate::exports::wasi::io::streams::{
-    InputStream, OutputStream, StreamError, StreamStatus, Streams,
+    Guest as Streams, InputStream, OutputStream, StreamStatus,
 };
-use crate::exports::wasi::poll::poll::Poll;
+use crate::exports::wasi::poll::poll::Guest as Poll;
 use crate::exports::wasi::sockets::ip_name_lookup::{
-    IpAddress, IpAddressFamily, IpNameLookup, Network, ResolveAddressStream,
+    Guest as IpNameLookup, IpAddress, IpAddressFamily, Network, ResolveAddressStream,
 };
 use crate::exports::wasi::sockets::tcp::ErrorCode as NetworkErrorCode;
-use crate::exports::wasi::sockets::tcp::{IpSocketAddress, ShutdownType, Tcp, TcpSocket};
-use crate::exports::wasi::sockets::udp::{Datagram, Udp, UdpSocket};
+use crate::exports::wasi::sockets::tcp::{Guest as Tcp, IpSocketAddress, ShutdownType, TcpSocket};
+use crate::exports::wasi::sockets::udp::{Datagram, Guest as Udp, UdpSocket};
 
-use crate::wasi::cli_base::stderr;
-use crate::wasi::cli_base::stdin;
-use crate::wasi::cli_base::stdout;
+use crate::wasi::cli::stderr;
+use crate::wasi::cli::stdin;
+use crate::wasi::cli::stdout;
+// use crate::wasi::cli::terminal_input;
+// use crate::wasi::cli::terminal_output;
+// use crate::wasi::cli::terminal_stderr;
+// use crate::wasi::cli::terminal_stdin;
+// use crate::wasi::cli::terminal_stdout;
 use crate::wasi::filesystem::preopens;
 use crate::wasi::filesystem::types as filesystem_types;
 use crate::wasi::io::streams;
@@ -128,7 +138,7 @@ enum DescriptorTarget {
     HostDescriptor(u32),
 }
 
-// #[derive(Debug)]
+#[derive(Debug)]
 struct Descriptor {
     // the descriptor index of this descriptor
     fd: u32,
@@ -335,9 +345,9 @@ impl StaticIndexEntry {
         if !matches!(self.ty(), DescriptorType::Directory) {
             return Err(ErrorCode::NotDirectory);
         }
-        let (child_list_idx, child_list_len) = unsafe { (*self).data.dir };
+        let (child_offset, child_list_len) = unsafe { (*self).data.dir };
         let static_index = Io::static_index();
-        Ok(&static_index[child_list_idx..child_list_idx + child_list_len])
+        Ok(&static_index[self.idx() + child_offset..self.idx() + child_offset + child_list_len])
     }
     fn dir_lookup(&self, path: &str) -> Result<&'static StaticIndexEntry, ErrorCode> {
         assert!(path.len() > 0);
@@ -390,7 +400,7 @@ union StaticFileData {
 //     }
 // }
 
-// #[derive(Debug)]
+#[derive(Debug)]
 #[allow(dead_code)]
 #[repr(u32)]
 enum StaticIndexType {
@@ -481,19 +491,13 @@ struct StaticDirStream {
     idx: usize,
 }
 
-fn stream_err() -> StreamError {
-    StreamError { dummy: 0 }
-}
-
 impl StaticFileStream {
     fn new(fd: u32) -> Self {
         Self { fd, offset: 0 }
     }
-    fn read(&mut self, len: u64) -> Result<(Vec<u8>, StreamStatus), StreamError> {
-        let descriptor = IoState::get_descriptor(self.fd).map_err(|_| stream_err())?;
-        let (bytes, done) = descriptor
-            .read(self.offset, len)
-            .map_err(|_| stream_err())?;
+    fn read(&mut self, len: u64) -> Result<(Vec<u8>, StreamStatus), ()> {
+        let descriptor = IoState::get_descriptor(self.fd).map_err(|_| ())?;
+        let (bytes, done) = descriptor.read(self.offset, len).map_err(|_| ())?;
         self.offset += bytes.len() as u64;
         Ok((
             bytes,
@@ -640,10 +644,10 @@ impl IoState {
         unsafe { STATE.stream_table.insert(sid, stream.into()) };
         sid
     }
-    fn get_stream<'a>(sid: u32) -> Result<&'a mut Stream, StreamError> {
+    fn get_stream<'a>(sid: u32) -> Result<&'a mut Stream, ()> {
         match unsafe { STATE.stream_table.get_mut(&sid) } {
             Some(stream) => Ok(stream),
-            None => Err(stream_err()),
+            None => Err(()),
         }
     }
     fn new_poll(target: PollTarget) -> u32 {
@@ -1045,40 +1049,38 @@ fn metadata_hash_map(value: filesystem_types::MetadataHashValue) -> MetadataHash
     }
 }
 
-fn stream_res_map<T>(
-    res: Result<(T, streams::StreamStatus), streams::StreamError>,
-) -> Result<(T, StreamStatus), StreamError> {
+fn stream_res_map<T>(res: Result<(T, streams::StreamStatus), ()>) -> Result<(T, StreamStatus), ()> {
     match res {
         Ok((data, streams::StreamStatus::Ended)) => Ok((data, StreamStatus::Ended)),
         Ok((data, streams::StreamStatus::Open)) => Ok((data, StreamStatus::Open)),
-        Err(_) => Err(stream_err()),
+        Err(_) => Err(()),
     }
 }
 
 impl Streams for VirtAdapter {
-    fn read(sid: u32, len: u64) -> Result<(Vec<u8>, StreamStatus), StreamError> {
+    fn read(sid: u32, len: u64) -> Result<(Vec<u8>, StreamStatus), ()> {
         VirtAdapter::blocking_read(sid, len)
     }
-    fn blocking_read(sid: u32, len: u64) -> Result<(Vec<u8>, StreamStatus), StreamError> {
+    fn blocking_read(sid: u32, len: u64) -> Result<(Vec<u8>, StreamStatus), ()> {
         let stream = IoState::get_stream(sid)?;
         match stream {
             Stream::StaticFile(filestream) => filestream.read(len),
             Stream::Host(sid) => stream_res_map(streams::blocking_read(*sid, len)),
             Stream::Null => Ok((vec![], StreamStatus::Ended)),
-            Stream::Err | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticDir(_) => Err(()),
         }
     }
-    fn skip(sid: u32, offset: u64) -> Result<(u64, StreamStatus), StreamError> {
+    fn skip(sid: u32, offset: u64) -> Result<(u64, StreamStatus), ()> {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((0, StreamStatus::Ended)),
-            Stream::Err | Stream::StaticDir(_) | Stream::StaticFile(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticDir(_) | Stream::StaticFile(_) => Err(()),
             Stream::Host(sid) => stream_res_map(streams::skip(*sid, offset)),
         }
     }
-    fn blocking_skip(sid: u32, offset: u64) -> Result<(u64, StreamStatus), StreamError> {
+    fn blocking_skip(sid: u32, offset: u64) -> Result<(u64, StreamStatus), ()> {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((0, StreamStatus::Ended)),
-            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(()),
             Stream::Host(sid) => stream_res_map(streams::blocking_skip(*sid, offset)),
         }
     }
@@ -1104,41 +1106,41 @@ impl Streams for VirtAdapter {
         }
         unsafe { STATE.stream_table.remove(&sid) };
     }
-    fn write(sid: u32, bytes: Vec<u8>) -> Result<(u64, StreamStatus), StreamError> {
+    fn write(sid: u32, bytes: Vec<u8>) -> Result<(u64, StreamStatus), ()> {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((bytes.len() as u64, StreamStatus::Ended)),
-            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(()),
             Stream::Host(sid) => stream_res_map(streams::write(*sid, bytes.as_slice())),
         }
     }
-    fn blocking_write(sid: u32, bytes: Vec<u8>) -> Result<(u64, StreamStatus), StreamError> {
+    fn blocking_write(sid: u32, bytes: Vec<u8>) -> Result<(u64, StreamStatus), ()> {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((bytes.len() as u64, StreamStatus::Ended)),
-            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(()),
             Stream::Host(sid) => stream_res_map(streams::blocking_write(*sid, bytes.as_slice())),
         }
     }
-    fn write_zeroes(sid: u32, len: u64) -> Result<(u64, StreamStatus), StreamError> {
+    fn write_zeroes(sid: u32, len: u64) -> Result<(u64, StreamStatus), ()> {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((len, StreamStatus::Ended)),
-            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(()),
             Stream::Host(sid) => stream_res_map(streams::write_zeroes(*sid, len)),
         }
     }
-    fn blocking_write_zeroes(sid: u32, len: u64) -> Result<(u64, StreamStatus), StreamError> {
+    fn blocking_write_zeroes(sid: u32, len: u64) -> Result<(u64, StreamStatus), ()> {
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((len, StreamStatus::Ended)),
-            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(stream_err()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(()),
             Stream::Host(sid) => stream_res_map(streams::blocking_write_zeroes(*sid, len)),
         }
     }
-    fn splice(to_sid: u32, from_sid: u32, len: u64) -> Result<(u64, StreamStatus), StreamError> {
+    fn splice(to_sid: u32, from_sid: u32, len: u64) -> Result<(u64, StreamStatus), ()> {
         let to_sid = match IoState::get_stream(to_sid)? {
             Stream::Null => {
                 return Ok((len, StreamStatus::Ended));
             }
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => {
-                return Err(stream_err());
+                return Err(());
             }
             Stream::Host(sid) => *sid,
         };
@@ -1147,23 +1149,19 @@ impl Streams for VirtAdapter {
                 return Ok((len, StreamStatus::Ended));
             }
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => {
-                return Err(stream_err());
+                return Err(());
             }
             Stream::Host(sid) => *sid,
         };
         stream_res_map(streams::splice(to_sid, from_sid, len))
     }
-    fn blocking_splice(
-        to_sid: u32,
-        from_sid: u32,
-        len: u64,
-    ) -> Result<(u64, StreamStatus), StreamError> {
+    fn blocking_splice(to_sid: u32, from_sid: u32, len: u64) -> Result<(u64, StreamStatus), ()> {
         let to_sid = match IoState::get_stream(to_sid)? {
             Stream::Null => {
                 return Ok((len, StreamStatus::Ended));
             }
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => {
-                return Err(stream_err());
+                return Err(());
             }
             Stream::Host(sid) => *sid,
         };
@@ -1172,19 +1170,19 @@ impl Streams for VirtAdapter {
                 return Ok((len, StreamStatus::Ended));
             }
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => {
-                return Err(stream_err());
+                return Err(());
             }
             Stream::Host(sid) => *sid,
         };
         stream_res_map(streams::blocking_splice(to_sid, from_sid, len))
     }
-    fn forward(to_sid: u32, from_sid: u32) -> Result<(u64, StreamStatus), StreamError> {
+    fn forward(to_sid: u32, from_sid: u32) -> Result<(u64, StreamStatus), ()> {
         let to_sid = match IoState::get_stream(to_sid)? {
             Stream::Null => {
                 return Ok((0, StreamStatus::Ended));
             }
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => {
-                return Err(stream_err());
+                return Err(());
             }
             Stream::Host(sid) => *sid,
         };
@@ -1193,7 +1191,7 @@ impl Streams for VirtAdapter {
                 return Ok((0, StreamStatus::Ended));
             }
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => {
-                return Err(stream_err());
+                return Err(());
             }
             Stream::Host(sid) => *sid,
         };
@@ -1240,6 +1238,32 @@ impl Stdout for VirtAdapter {
 impl Stderr for VirtAdapter {
     fn get_stderr() -> u32 {
         2
+    }
+}
+
+impl TerminalInput for VirtAdapter {
+    fn drop_terminal_input(_: u32) {}
+}
+
+impl TerminalOutput for VirtAdapter {
+    fn drop_terminal_output(_: u32) {}
+}
+
+impl TerminalStdin for VirtAdapter {
+    fn get_terminal_stdin() -> Option<u32> {
+        Some(0)
+    }
+}
+
+impl TerminalStdout for VirtAdapter {
+    fn get_terminal_stdout() -> Option<u32> {
+        Some(1)
+    }
+}
+
+impl TerminalStderr for VirtAdapter {
+    fn get_terminal_stderr() -> Option<u32> {
+        Some(2)
     }
 }
 
@@ -1313,19 +1337,19 @@ impl HttpTypes for VirtAdapter {
     fn new_fields(entries: Vec<(String, String)>) -> Fields {
         http_types::new_fields(&entries)
     }
-    fn fields_get(fields: Fields, name: String) -> Vec<String> {
+    fn fields_get(fields: Fields, name: String) -> Vec<Vec<u8>> {
         http_types::fields_get(fields, &name)
     }
-    fn fields_set(fields: Fields, name: String, value: Vec<String>) {
+    fn fields_set(fields: Fields, name: String, value: Vec<Vec<u8>>) {
         http_types::fields_set(fields, &name, value.as_slice())
     }
     fn fields_delete(fields: Fields, name: String) {
         http_types::fields_delete(fields, &name)
     }
-    fn fields_append(fields: Fields, name: String, value: String) {
+    fn fields_append(fields: Fields, name: String, value: Vec<u8>) {
         http_types::fields_append(fields, &name, &value)
     }
-    fn fields_entries(fields: Fields) -> Vec<(String, String)> {
+    fn fields_entries(fields: Fields) -> Vec<(String, Vec<u8>)> {
         http_types::fields_entries(fields)
     }
     fn fields_clone(fields: Fields) -> Fields {
@@ -1346,16 +1370,13 @@ impl HttpTypes for VirtAdapter {
     fn incoming_request_method(request: u32) -> Method {
         method_map_rev(http_types::incoming_request_method(request))
     }
-    fn incoming_request_path(request: u32) -> String {
-        http_types::incoming_request_path(request)
-    }
-    fn incoming_request_query(request: u32) -> String {
-        http_types::incoming_request_query(request)
+    fn incoming_request_path_with_query(request: u32) -> Option<String> {
+        http_types::incoming_request_path_with_query(request)
     }
     fn incoming_request_scheme(request: u32) -> Option<Scheme> {
         http_types::incoming_request_scheme(request).map(scheme_map_rev)
     }
-    fn incoming_request_authority(request: u32) -> String {
+    fn incoming_request_authority(request: u32) -> Option<String> {
         http_types::incoming_request_authority(request)
     }
     fn incoming_request_headers(request: u32) -> Headers {
@@ -1366,18 +1387,16 @@ impl HttpTypes for VirtAdapter {
     }
     fn new_outgoing_request(
         method: Method,
-        path: String,
-        query: String,
+        path_with_query: Option<String>,
         scheme: Option<Scheme>,
-        authority: String,
+        authority: Option<String>,
         headers: Headers,
     ) -> u32 {
         http_types::new_outgoing_request(
             &method_map(method),
-            &path,
-            &query,
+            path_with_query.as_deref(),
             scheme.map(|s| scheme_map(s)).as_ref(),
-            &authority,
+            authority.as_deref(),
             headers,
         )
     }
@@ -1387,12 +1406,12 @@ impl HttpTypes for VirtAdapter {
     fn drop_response_outparam(response: u32) {
         http_types::drop_response_outparam(response)
     }
-    fn set_response_outparam(response: Result<u32, Error>) -> Result<(), ()> {
+    fn set_response_outparam(param: u32, response: Result<u32, Error>) -> Result<(), ()> {
         match response {
-            Ok(res) => http_types::set_response_outparam(Ok(res)),
+            Ok(res) => http_types::set_response_outparam(param, Ok(res)),
             Err(err) => {
                 let err = http_err_map(err);
-                http_types::set_response_outparam(Err(&err))
+                http_types::set_response_outparam(param, Err(&err))
             }
         }
     }
@@ -1535,8 +1554,8 @@ impl Tcp for VirtAdapter {
     fn finish_connect(this: TcpSocket) -> Result<(InputStream, OutputStream), NetworkErrorCode> {
         tcp::finish_connect(this)
     }
-    fn start_listen(this: TcpSocket, network: Network) -> Result<(), NetworkErrorCode> {
-        tcp::start_listen(this, network)
+    fn start_listen(this: TcpSocket) -> Result<(), NetworkErrorCode> {
+        tcp::start_listen(this)
     }
     fn finish_listen(this: TcpSocket) -> Result<(), NetworkErrorCode> {
         tcp::finish_listen(this)
@@ -1633,22 +1652,29 @@ impl Udp for VirtAdapter {
     fn finish_connect(this: UdpSocket) -> Result<(), NetworkErrorCode> {
         udp::finish_connect(this)
     }
-    fn receive(this: UdpSocket) -> Result<Datagram, NetworkErrorCode> {
-        match udp::receive(this) {
-            Ok(datagram) => Ok(Datagram {
-                data: datagram.data,
-                remote_address: datagram.remote_address,
-            }),
+    fn receive(this: UdpSocket, max_results: u64) -> Result<Vec<Datagram>, NetworkErrorCode> {
+        match udp::receive(this, max_results) {
+            Ok(mut datagrams) => Ok(datagrams
+                .drain(..)
+                .map(|d| Datagram {
+                    data: d.data,
+                    remote_address: d.remote_address,
+                })
+                .collect::<Vec<Datagram>>()),
             Err(err) => Err(err),
         }
     }
-    fn send(this: UdpSocket, datagram: Datagram) -> Result<(), NetworkErrorCode> {
+    fn send(this: UdpSocket, mut datagrams: Vec<Datagram>) -> Result<u64, NetworkErrorCode> {
         udp::send(
             this,
-            &udp::Datagram {
-                data: datagram.data,
-                remote_address: datagram.remote_address,
-            },
+            datagrams
+                .drain(..)
+                .map(|d| udp::Datagram {
+                    data: d.data,
+                    remote_address: d.remote_address,
+                })
+                .collect::<Vec<udp::Datagram>>()
+                .as_slice(),
         )
     }
     fn local_address(this: UdpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
