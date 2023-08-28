@@ -51,4 +51,4 @@ wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime" }
 
 [workspace.dependencies]
 anyhow = "1"
-wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen" }
+wit-bindgen = "0.11.0"
