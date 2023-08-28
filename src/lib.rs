@@ -1,12 +1,9 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::env;
-use std::fs;
-use std::time::SystemTime;
-use virt_deny::deny_exit_virt;
-use virt_deny::deny_random_virt;
-use virt_deny::deny_sockets_virt;
-use virt_deny::{deny_clocks_virt, deny_http_virt};
+use std::{env, fs, time::SystemTime};
+use virt_deny::{
+    deny_clocks_virt, deny_exit_virt, deny_http_virt, deny_random_virt, deny_sockets_virt,
+};
 use virt_env::{create_env_virt, strip_env_virt};
 use virt_io::{
     create_io_virt, strip_clocks_virt, strip_fs_virt, strip_http_virt, strip_io_virt,

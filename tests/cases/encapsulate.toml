@@ -11,6 +11,7 @@ stdio.stderr = "ignore"
 clocks = true
 http = false
 random = true
+sockets = false
 
 [virt-opts.fs.preopens."/".dir]
 "LICENSE" = { virtualize = "./LICENSE" }
