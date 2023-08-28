@@ -758,6 +758,13 @@ pub(crate) fn stub_sockets_virt(module: &mut Module) -> Result<()> {
     stub_imported_func(module, "wasi:sockets/udp", "set-send-buffer-size", true)?;
     stub_imported_func(module, "wasi:sockets/udp", "subscribe", true)?;
     stub_imported_func(module, "wasi:sockets/udp", "drop-udp-socket", true)?;
+
+    stub_imported_func(
+        module,
+        "wasi:sockets/instance-network",
+        "instance-network",
+        false,
+    )?;
     Ok(())
 }
 

@@ -6,11 +6,13 @@ use std::time::SystemTime;
 use virt_deny::deny_exit_virt;
 use virt_deny::deny_random_virt;
 use virt_deny::deny_sockets_virt;
+use virt_io::strip_sockets_virt;
+// use virt_deny::deny_sockets_virt;
 use virt_deny::{deny_clocks_virt, deny_http_virt};
 use virt_env::{create_env_virt, strip_env_virt};
 use virt_io::{
     create_io_virt, strip_clocks_virt, strip_fs_virt, strip_http_virt, strip_io_virt,
-    strip_sockets_virt, strip_stdio_virt, VirtStdio,
+    strip_stdio_virt, VirtStdio,
 };
 use wasm_metadata::Producers;
 use wasm_opt::{Feature, OptimizationOptions};
