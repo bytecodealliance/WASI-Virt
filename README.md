@@ -42,6 +42,10 @@ Using WASI Virt, those specific file paths can be mounted and virtualized into t
 
 ## Basic Usage
 
+Make sure to run Cargo nightly (`rustup default nightly`).
+
+Then:
+
 ```sh
 cargo install --git https://github.com/bytecodealliance/wasi-virt
 ```
