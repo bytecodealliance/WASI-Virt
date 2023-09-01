@@ -14,11 +14,13 @@ use wasm_opt::{Feature, OptimizationOptions};
 use wit_component::{metadata, ComponentEncoder, StringEncoding};
 
 mod data;
+mod stub_preview1;
 mod virt_deny;
 mod virt_env;
 mod virt_io;
 mod walrus_ops;
 
+pub use stub_preview1::stub_preview1;
 pub use virt_env::{HostEnv, VirtEnv};
 pub use virt_io::{FsEntry, StdioCfg, VirtFs, VirtualFiles};
 
