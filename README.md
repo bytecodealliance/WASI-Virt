@@ -20,6 +20,7 @@ Supports all of the current WASI subsystems:
 - [Environment](#env): Set environment variables, configure host environment variable permissions
 - [Exit](#exit): Allow / Deny
 - [Filesystem](#filesystem): Mount a read-only filesystem, configure host filesystem preopen remappings or pass-through.
+- [HTTP](#http): Allow / Deny
 - [Random](#random): Allow / Deny
 - [Sockets](#sockets): Allow / Deny
 - [Stdio](#stdio): Allow / Deny / Ignore
@@ -104,6 +105,13 @@ wasi-virt component.wasm --preopen /=/restricted/path -o virt.wasm
 
 # Providing both host and virtual preopens
 wasi-virt component.wasm --mount /virt-dir=./local --preopen /host-dir=/host/path -o virt.wasm
+```
+
+### HTTP
+
+```sh
+# Allow HTTP
+wasi-virt component.wasm --allow-http -o virt.wasm
 ```
 
 ### Random
