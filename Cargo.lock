@@ -1992,6 +1992,7 @@ dependencies = [
  "wasm-compose",
  "wasm-metadata",
  "wasm-opt",
+ "wasmparser 0.112.0",
  "wasmtime",
  "wasmtime-wasi",
  "wit-component",

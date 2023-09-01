@@ -1,10 +1,14 @@
 use anyhow::Result;
 use walrus::{Module, ValType};
 
-use crate::walrus_ops::add_stub_exported_func;
+use crate::{
+    virt_io::{stub_clocks_virt, stub_http_virt, stub_sockets_virt},
+    walrus_ops::add_stub_exported_func,
+};
 
 // set exports to deny clock access
 pub(crate) fn deny_clocks_virt(module: &mut Module) -> Result<()> {
+    stub_clocks_virt(module)?;
     add_stub_exported_func(
         module,
         "wasi:clocks/monotonic-clock#now",
@@ -72,6 +76,7 @@ pub(crate) fn deny_clocks_virt(module: &mut Module) -> Result<()> {
 }
 
 pub(crate) fn deny_http_virt(module: &mut Module) -> Result<()> {
+    stub_http_virt(module)?;
     add_stub_exported_func(
         module,
         "wasi:http/incoming-handler#handle",
@@ -373,6 +378,7 @@ pub(crate) fn deny_exit_virt(module: &mut Module) -> Result<()> {
 }
 
 pub(crate) fn deny_sockets_virt(module: &mut Module) -> Result<()> {
+    stub_sockets_virt(module)?;
     add_stub_exported_func(
         module,
         "wasi:sockets/instance-network#instance-network",

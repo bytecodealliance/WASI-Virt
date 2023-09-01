@@ -48,6 +48,7 @@ heck =  { version = "0.4" }
 tokio = { version = "1.30.0", features = ["macros"] }
 wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", features = ["component-model"] }
 wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime" }
+wasmparser = "0.112.0"
 
 [workspace.dependencies]
 anyhow = "1"
