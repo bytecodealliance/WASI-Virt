@@ -1,0 +1,15 @@
+component = "do-everything"
+
+[virt-opts]
+exit = false
+fs.host-preopens = false
+stdio.stdin = "ignore"
+stdio.stdout = "ignore"
+stdio.stderr = "ignore"
+clocks = false
+http = false
+random = false
+sockets = false
+
+[expect]
+encapsulation = true

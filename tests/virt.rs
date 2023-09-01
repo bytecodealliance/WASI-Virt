@@ -7,6 +7,7 @@ use std::process::Command;
 use std::{fs, path::PathBuf};
 use wasi_virt::WasiVirt;
 use wasm_compose::composer::ComponentComposer;
+use wasmparser::{Chunk, Parser, Payload};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store, WasmBacktraceDetails,
@@ -48,6 +49,7 @@ fn cmd(arg: &str) -> Result<()> {
 struct TestExpectation {
     env: Option<Vec<(String, String)>>,
     file_read: Option<String>,
+    encapsulation: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -60,7 +62,7 @@ struct TestCase {
     expect: TestExpectation,
 }
 
-const DEBUG: bool = true;
+const DEBUG: bool = false;
 
 #[tokio::test]
 async fn virt_test() -> Result<()> {
@@ -73,7 +75,7 @@ async fn virt_test() -> Result<()> {
         let test_case_name = test_case_file_name.strip_suffix(".toml").unwrap();
 
         // Filtering...
-        // if test_case_name != "encapsulate" {
+        // if test_case_name != "encapsulate-none" {
         //     continue;
         // }
 
@@ -136,7 +138,17 @@ async fn virt_test() -> Result<()> {
             .finish()
             .with_context(|| format!("Error creating virtual adapter for {:?}", test_case_path))?;
 
-        fs::write(&virt_component_path, virt_component.adapter)?;
+        fs::write(&virt_component_path, &virt_component.adapter)?;
+
+        // verify the encapsulation
+        if test.expect.encapsulation.unwrap_or(false) {
+            if let Some(impt) = has_component_import(virt_component.adapter.as_slice())? {
+                panic!(
+                    "Unexpected import \"{impt}\" in virtualization {:?}",
+                    virt_component_path
+                );
+            }
+        }
 
         // compose the test component with the defined test virtualization
         if DEBUG {
@@ -261,4 +273,44 @@ async fn virt_test() -> Result<()> {
         println!("\x1b[1;32m√\x1b[0m {:?}", test_case_path);
     }
     Ok(())
+}
+
+fn has_component_import(bytes: &[u8]) -> Result<Option<String>> {
+    let mut parser = Parser::new(0);
+    let mut offset = 0;
+    loop {
+        let payload = match parser.parse(&bytes[offset..], true)? {
+            Chunk::NeedMoreData(_) => unreachable!(),
+            Chunk::Parsed { payload, consumed } => {
+                offset += consumed;
+                payload
+            }
+        };
+        match payload {
+            Payload::ModuleSection { mut parser, range } => {
+                let mut ioffset = range.start;
+                loop {
+                    let payload = match parser.parse(&bytes[ioffset..], true)? {
+                        Chunk::NeedMoreData(_) => unreachable!(),
+                        Chunk::Parsed { payload, consumed } => {
+                            ioffset += consumed;
+                            payload
+                        }
+                    };
+                    match payload {
+                        Payload::ImportSection(impt_section_reader) => {
+                            for impt in impt_section_reader {
+                                let impt = impt?;
+                                return Ok(Some(format!("{}#{}", impt.module, impt.name)));
+                            }
+                        }
+                        Payload::End(_) => return Ok(None),
+                        _ => {}
+                    }
+                }
+            }
+            Payload::End(_) => return Ok(None),
+            _ => {}
+        }
+    }
 }

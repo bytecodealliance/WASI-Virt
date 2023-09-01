@@ -325,23 +325,38 @@ pub(crate) fn create_io_virt<'a>(
             flags |= FLAGS_HOST_PREOPENS;
         }
     }
+    let mut disable_stdio = true;
     if let Some(stdio) = stdio {
         match stdio.stdin {
-            StdioCfg::Allow => flags |= FLAGS_ENABLE_STDIN,
+            StdioCfg::Allow => {
+                flags |= FLAGS_ENABLE_STDIN;
+                disable_stdio = false;
+            }
             StdioCfg::Ignore => flags |= FLAGS_IGNORE_STDIN,
             // deny is the default
             StdioCfg::Deny => {}
         }
         match stdio.stdout {
-            StdioCfg::Allow => flags |= FLAGS_ENABLE_STDOUT,
+            StdioCfg::Allow => {
+                flags |= FLAGS_ENABLE_STDOUT;
+                disable_stdio = false;
+            }
             StdioCfg::Ignore => flags |= FLAGS_IGNORE_STDOUT,
             StdioCfg::Deny => {}
         }
         match stdio.stderr {
-            StdioCfg::Allow => flags |= FLAGS_ENABLE_STDERR,
+            StdioCfg::Allow => {
+                flags |= FLAGS_ENABLE_STDERR;
+                disable_stdio = false;
+            }
             StdioCfg::Ignore => flags |= FLAGS_IGNORE_STDERR,
             StdioCfg::Deny => {}
         }
+    } else {
+        strip_stdio_virt(module)?;
+    }
+    if disable_stdio {
+        stub_stdio_virt(module)?;
     }
 
     // First we iterate the options and fill in all HostDir and HostFile entries
@@ -498,6 +513,7 @@ pub(crate) fn create_io_virt<'a>(
     // replacing it with a stub panic
     if !fs_passthrough {
         stub_io_virt(module)?;
+        stub_fs_virt(module, true)?;
     } else {
         flags |= FLAGS_HOST_PASSTHROUGH;
     }
@@ -548,18 +564,23 @@ pub(crate) fn create_io_virt<'a>(
 // when stubbing functions that are not part of the virtual adapter exports, we therefore
 // have to create this functions fresh.
 // Ideally, we should generate these stubs automatically from WASI definitions.
-pub(crate) fn stub_fs_virt(module: &mut Module) -> Result<()> {
-    stub_imported_func(module, "wasi:filesystem/preopens", "get-directories", true)?;
-    stub_imported_func(module, "wasi:filesystem/types", "read-via-stream", true)?;
+pub(crate) fn stub_fs_virt(module: &mut Module, uses_fs: bool) -> Result<()> {
+    stub_imported_func(
+        module,
+        "wasi:filesystem/preopens",
+        "get-directories",
+        uses_fs,
+    )?;
+    stub_imported_func(module, "wasi:filesystem/types", "read-via-stream", uses_fs)?;
     stub_imported_func(module, "wasi:filesystem/types", "write-via-stream", false)?;
     stub_imported_func(module, "wasi:filesystem/types", "append-via-stream", false)?;
     stub_imported_func(module, "wasi:filesystem/types", "advise", false)?;
     stub_imported_func(module, "wasi:filesystem/types", "sync-data", false)?;
     stub_imported_func(module, "wasi:filesystem/types", "get-flags", false)?;
-    stub_imported_func(module, "wasi:filesystem/types", "get-type", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "get-type", uses_fs)?;
     stub_imported_func(module, "wasi:filesystem/types", "set-size", false)?;
     stub_imported_func(module, "wasi:filesystem/types", "set-times", false)?;
-    stub_imported_func(module, "wasi:filesystem/types", "read", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "read", uses_fs)?;
     stub_imported_func(module, "wasi:filesystem/types", "write", false)?;
     stub_imported_func(module, "wasi:filesystem/types", "read-directory", false)?;
     stub_imported_func(module, "wasi:filesystem/types", "sync", false)?;
@@ -569,11 +590,11 @@ pub(crate) fn stub_fs_virt(module: &mut Module) -> Result<()> {
         "create-directory-at",
         false,
     )?;
-    stub_imported_func(module, "wasi:filesystem/types", "stat", true)?;
-    stub_imported_func(module, "wasi:filesystem/types", "stat-at", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "stat", uses_fs)?;
+    stub_imported_func(module, "wasi:filesystem/types", "stat-at", uses_fs)?;
     stub_imported_func(module, "wasi:filesystem/types", "set-times-at", false)?;
     stub_imported_func(module, "wasi:filesystem/types", "link-at", false)?;
-    stub_imported_func(module, "wasi:filesystem/types", "open-at", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "open-at", uses_fs)?;
     stub_imported_func(module, "wasi:filesystem/types", "readlink-at", false)?;
     stub_imported_func(
         module,
@@ -602,26 +623,26 @@ pub(crate) fn stub_fs_virt(module: &mut Module) -> Result<()> {
     stub_imported_func(module, "wasi:filesystem/types", "try-lock-shared", false)?;
     stub_imported_func(module, "wasi:filesystem/types", "try-lock-exclusive", false)?;
     stub_imported_func(module, "wasi:filesystem/types", "unlock", false)?;
-    stub_imported_func(module, "wasi:filesystem/types", "drop-descriptor", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "drop-descriptor", uses_fs)?;
     stub_imported_func(
         module,
         "wasi:filesystem/types",
         "read-directory-entry",
-        true,
+        uses_fs,
     )?;
     stub_imported_func(
         module,
         "wasi:filesystem/types",
         "drop-directory-entry-stream",
-        true,
+        uses_fs,
     )?;
-    stub_imported_func(module, "wasi:filesystem/types", "is-same-object", true)?;
+    stub_imported_func(module, "wasi:filesystem/types", "is-same-object", uses_fs)?;
     stub_imported_func(module, "wasi:filesystem/types", "metadata-hash", false)?;
     stub_imported_func(module, "wasi:filesystem/types", "metadata-hash-at", false)?;
     Ok(())
 }
 
-pub(crate) fn stub_io_virt(module: &mut Module) -> Result<()> {
+fn stub_io_virt(module: &mut Module) -> Result<()> {
     stub_imported_func(module, "wasi:poll/poll", "drop-pollable", true)?;
     stub_imported_func(module, "wasi:poll/poll", "poll-oneoff", true)?;
     stub_imported_func(module, "wasi:io/streams", "read", false)?;
@@ -655,9 +676,9 @@ pub(crate) fn stub_clocks_virt(module: &mut Module) -> Result<()> {
 }
 
 pub(crate) fn stub_stdio_virt(module: &mut Module) -> Result<()> {
-    stub_imported_func(module, "wasi:cli/stdin", "get-stdin", true)?;
-    stub_imported_func(module, "wasi:cli/stdout", "get-stdout", true)?;
-    stub_imported_func(module, "wasi:cli/stderr", "get-stderr", true)?;
+    stub_imported_func(module, "wasi:cli/stdin", "get-stdin", false)?;
+    stub_imported_func(module, "wasi:cli/stdout", "get-stdout", false)?;
+    stub_imported_func(module, "wasi:cli/stderr", "get-stderr", false)?;
     stub_imported_func(
         module,
         "wasi:cli/terminal-stdin",
@@ -764,7 +785,7 @@ pub(crate) fn stub_sockets_virt(module: &mut Module) -> Result<()> {
 
 // strip functions only have to dce the virtual adapter
 pub(crate) fn strip_fs_virt(module: &mut Module) -> Result<()> {
-    stub_fs_virt(module)?;
+    stub_fs_virt(module, false)?;
     remove_exported_func(module, "wasi:filesystem/preopens#get-directories")?;
 
     remove_exported_func(module, "wasi:filesystem/types#read-via-stream")?;
