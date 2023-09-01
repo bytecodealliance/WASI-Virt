@@ -381,6 +381,12 @@ pub(crate) fn deny_sockets_virt(module: &mut Module) -> Result<()> {
     stub_sockets_virt(module)?;
     add_stub_exported_func(
         module,
+        "wasi:sockets/network#drop-network",
+        vec![ValType::I32],
+        vec![],
+    )?;
+    add_stub_exported_func(
+        module,
         "wasi:sockets/instance-network#instance-network",
         vec![],
         vec![ValType::I32],

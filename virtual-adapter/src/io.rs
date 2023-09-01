@@ -44,6 +44,7 @@ use crate::wasi::clocks::monotonic_clock;
 use crate::wasi::http::types as http_types;
 use crate::wasi::poll::poll;
 use crate::wasi::sockets::ip_name_lookup;
+use crate::wasi::sockets::network;
 use crate::wasi::sockets::tcp;
 use crate::wasi::sockets::udp;
 
@@ -1517,7 +1518,7 @@ impl IpNameLookup for VirtAdapter {
         name: String,
         address_family: Option<IpAddressFamily>,
         include_unavailable: bool,
-    ) -> Result<ip_name_lookup::ResolveAddressStream, NetworkErrorCode> {
+    ) -> Result<ip_name_lookup::ResolveAddressStream, network::ErrorCode> {
         ip_name_lookup::resolve_addresses(network, &name, address_family, include_unavailable)
     }
     fn resolve_next_address(

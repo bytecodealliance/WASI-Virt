@@ -142,6 +142,8 @@ world virtual-sockets {
   export wasi:sockets/instance-network
   export wasi:sockets/tcp-create-socket
   export wasi:sockets/udp-create-socket
+  import wasi:sockets/network
+  export wasi:sockets/network
 }
 
 world virtual-http {
