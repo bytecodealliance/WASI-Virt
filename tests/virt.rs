@@ -50,6 +50,7 @@ struct TestExpectation {
     env: Option<Vec<(String, String)>>,
     file_read: Option<String>,
     encapsulation: Option<bool>,
+    stdout: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -75,7 +76,7 @@ async fn virt_test() -> Result<()> {
         let test_case_name = test_case_file_name.strip_suffix(".toml").unwrap();
 
         // Filtering...
-        // if test_case_name != "encapsulate-none" {
+        // if test_case_name != "stdio" {
         //     continue;
         // }
 
@@ -268,6 +269,11 @@ async fn virt_test() -> Result<()> {
                     test_case_path
                 ));
             }
+        }
+
+        if let Some(expect_stdout) = &test.expect.stdout {
+            // todo: expectation pending wasmtime stream flushing
+            instance.call_test_stdio(&mut store).await?;
         }
 
         println!("\x1b[1;32m√\x1b[0m {:?}", test_case_path);

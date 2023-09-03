@@ -270,7 +270,7 @@ impl WasiVirt {
         } else {
             strip_stdio_virt(&mut module)?;
         }
-        if self.fs.is_some() {
+        if self.fs.is_some() || self.stdio.is_some() {
             bindgen.resolve.merge_worlds(fs_world, base_world)?;
         } else {
             strip_fs_virt(&mut module)?;

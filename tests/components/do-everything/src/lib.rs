@@ -30,4 +30,7 @@ impl Guest for VirtTestComponent {
         );
         fs::read_to_string(&path).unwrap_or_else(|e| format!("ERR: {:?}", e))
     }
+    fn test_stdio() -> () {
+        unimplemented!();
+    }
 }

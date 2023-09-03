@@ -191,4 +191,5 @@ world virt-test {
 
   export test-get-env: func() -> list<tuple<string, string>>
   export test-file-read: func(path: string) -> string
+  export test-stdio: func() -> ()
 }
