@@ -512,7 +512,9 @@ pub(crate) fn create_io_virt<'a>(
     // If host fs is disabled, remove its imports entirely
     // replacing it with a stub panic
     if !fs_passthrough {
-        stub_io_virt(module)?;
+        if disable_stdio {
+            stub_io_virt(module)?;
+        }
         stub_fs_virt(module, true)?;
     } else {
         flags |= FLAGS_HOST_PASSTHROUGH;

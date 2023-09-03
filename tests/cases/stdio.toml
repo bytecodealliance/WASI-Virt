@@ -1,0 +1,9 @@
+component = "stdio"
+
+[virt-opts]
+stdio.stdin = "ignore"
+stdio.stdout = "allow"
+stdio.stderr = "ignore"
+
+[expect]
+stdout = "Hello world"

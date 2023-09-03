@@ -53,4 +53,7 @@ impl Guest for VirtTestComponent {
             "ERR: Not a file or dir".into()
         }
     }
+    fn test_stdio() -> () {
+        unimplemented!();
+    }
 }
