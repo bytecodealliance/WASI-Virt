@@ -654,9 +654,11 @@ fn stub_io_virt(module: &mut Module) -> Result<()> {
     stub_imported_func(module, "wasi:io/streams", "subscribe-to-input-stream", true)?;
     stub_imported_func(module, "wasi:io/streams", "drop-input-stream", true)?;
     stub_imported_func(module, "wasi:io/streams", "write", true)?;
-    stub_imported_func(module, "wasi:io/streams", "blocking-write", false)?;
+    stub_imported_func(module, "wasi:io/streams", "blocking-write-and-flush", false)?;
+    stub_imported_func(module, "wasi:io/streams", "flush", false)?;
+    stub_imported_func(module, "wasi:io/streams", "blocking-flush", false)?;
+    stub_imported_func(module, "wasi:io/streams", "check-write", false)?;
     stub_imported_func(module, "wasi:io/streams", "write-zeroes", true)?;
-    stub_imported_func(module, "wasi:io/streams", "blocking-write-zeroes", true)?;
     stub_imported_func(module, "wasi:io/streams", "splice", true)?;
     stub_imported_func(module, "wasi:io/streams", "blocking-splice", true)?;
     stub_imported_func(module, "wasi:io/streams", "forward", true)?;
@@ -969,9 +971,11 @@ pub(crate) fn strip_io_virt(module: &mut Module) -> Result<()> {
     remove_exported_func(module, "wasi:io/streams#subscribe-to-input-stream")?;
     remove_exported_func(module, "wasi:io/streams#drop-input-stream")?;
     remove_exported_func(module, "wasi:io/streams#write")?;
-    remove_exported_func(module, "wasi:io/streams#blocking-write")?;
+    remove_exported_func(module, "wasi:io/streams#blocking-write-and-flush")?;
+    remove_exported_func(module, "wasi:io/streams#flush")?;
+    remove_exported_func(module, "wasi:io/streams#blocking-flush")?;
+    remove_exported_func(module, "wasi:io/streams#check-write")?;
     remove_exported_func(module, "wasi:io/streams#write-zeroes")?;
-    remove_exported_func(module, "wasi:io/streams#blocking-write-zeroes")?;
     remove_exported_func(module, "wasi:io/streams#splice")?;
     remove_exported_func(module, "wasi:io/streams#blocking-splice")?;
     remove_exported_func(module, "wasi:io/streams#forward")?;
