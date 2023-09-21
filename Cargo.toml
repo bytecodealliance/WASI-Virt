@@ -35,9 +35,9 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.7"
 walrus = "0.20.1"
 wasm-compose = "0.4.2"
-wasm-metadata = "0.10.3"
+wasm-metadata = "0.10.5"
 wasm-opt = "0.114.1"
-wit-component = "0.14.0"
+wit-component = "0.14.2"
 
 [build-dependencies]
 anyhow = "1"
@@ -49,8 +49,8 @@ heck =  { version = "0.4" }
 tokio = { version = "1.30.0", features = ["macros"] }
 wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", features = ["component-model"] }
 wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime" }
-wasmparser = "0.112.0"
+wasmparser = "0.113.1"
 
 [workspace.dependencies]
 anyhow = "1"
-wit-bindgen = "0.11.0"
+wit-bindgen = "0.12.0"

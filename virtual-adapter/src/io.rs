@@ -17,7 +17,7 @@ use crate::exports::wasi::http::types::{
     Error, Fields, Guest as HttpTypes, Headers, Method, Scheme, StatusCode, Trailers,
 };
 use crate::exports::wasi::io::streams::{
-    Guest as Streams, InputStream, OutputStream, StreamStatus,
+    Guest as Streams, InputStream, OutputStream, StreamStatus, WriteError,
 };
 use crate::exports::wasi::poll::poll::Guest as Poll;
 use crate::exports::wasi::sockets::ip_name_lookup::{
@@ -1056,6 +1056,13 @@ fn stream_res_map<T>(res: Result<(T, streams::StreamStatus), ()>) -> Result<(T, 
         Err(_) => Err(()),
     }
 }
+fn stream_write_res_map<T>(res: Result<T, streams::WriteError>) -> Result<T, WriteError> {
+    match res {
+        Ok(data) => Ok(data),
+        Err(streams::WriteError::Closed) => Err(WriteError::Closed),
+        Err(streams::WriteError::LastOperationFailed) => Err(WriteError::LastOperationFailed),
+    }
+}
 
 impl Streams for VirtAdapter {
     fn read(sid: u32, len: u64) -> Result<(Vec<u8>, StreamStatus), ()> {
@@ -1106,32 +1113,52 @@ impl Streams for VirtAdapter {
         }
         unsafe { STATE.stream_table.remove(&sid) };
     }
-    fn write(sid: u32, bytes: Vec<u8>) -> Result<(u64, StreamStatus), ()> {
-        match IoState::get_stream(sid)? {
-            Stream::Null => Ok((bytes.len() as u64, StreamStatus::Ended)),
-            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(()),
-            Stream::Host(sid) => stream_res_map(streams::write(*sid, bytes.as_slice())),
+    fn check_write(sid: u32) -> Result<u64, WriteError> {
+        let Ok(stream) = IoState::get_stream(sid) else {
+            return Err(WriteError::Closed);
+        };
+        match stream {
+            Stream::Err | Stream::Null | Stream::StaticFile(_) | Stream::StaticDir(_) => {
+                Err(WriteError::Closed)
+            }
+            Stream::Host(sid) => stream_write_res_map(streams::check_write(*sid)),
         }
     }
-    fn blocking_write(sid: u32, bytes: Vec<u8>) -> Result<(u64, StreamStatus), ()> {
-        match IoState::get_stream(sid)? {
-            Stream::Null => Ok((bytes.len() as u64, StreamStatus::Ended)),
-            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(()),
-            Stream::Host(sid) => stream_res_map(streams::blocking_write(*sid, bytes.as_slice())),
+    fn write(sid: u32, bytes: Vec<u8>) -> Result<(), WriteError> {
+        match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
+            Stream::Null => Ok(()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
+            Stream::Host(sid) => stream_write_res_map(streams::write(*sid, bytes.as_slice())),
         }
     }
-    fn write_zeroes(sid: u32, len: u64) -> Result<(u64, StreamStatus), ()> {
-        match IoState::get_stream(sid)? {
-            Stream::Null => Ok((len, StreamStatus::Ended)),
-            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(()),
-            Stream::Host(sid) => stream_res_map(streams::write_zeroes(*sid, len)),
+    fn blocking_write_and_flush(sid: u32, bytes: Vec<u8>) -> Result<(), WriteError> {
+        match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
+            Stream::Null => Ok(()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
+            Stream::Host(sid) => {
+                stream_write_res_map(streams::blocking_write_and_flush(*sid, bytes.as_slice()))
+            }
         }
     }
-    fn blocking_write_zeroes(sid: u32, len: u64) -> Result<(u64, StreamStatus), ()> {
-        match IoState::get_stream(sid)? {
-            Stream::Null => Ok((len, StreamStatus::Ended)),
-            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(()),
-            Stream::Host(sid) => stream_res_map(streams::blocking_write_zeroes(*sid, len)),
+    fn flush(sid: u32) -> Result<(), WriteError> {
+        match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
+            Stream::Null => Ok(()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
+            Stream::Host(sid) => stream_write_res_map(streams::flush(*sid)),
+        }
+    }
+    fn blocking_flush(sid: u32) -> Result<(), WriteError> {
+        match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
+            Stream::Null => Ok(()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
+            Stream::Host(sid) => stream_write_res_map(streams::blocking_flush(*sid)),
+        }
+    }
+    fn write_zeroes(sid: u32, len: u64) -> Result<(), WriteError> {
+        match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
+            Stream::Null => Ok(()),
+            Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
+            Stream::Host(sid) => stream_write_res_map(streams::write_zeroes(*sid, len)),
         }
     }
     fn splice(to_sid: u32, from_sid: u32, len: u64) -> Result<(u64, StreamStatus), ()> {
