@@ -201,6 +201,8 @@ There is an important caveat to this: _as soon as any subsystem uses IO, all sub
 
 ## Contributing
 
+Note: You may need to install the `wasm32-wasi` target if not already added (`rustup target add wasm32-wasi`).
+
 To build, run `./build-adapter.sh` which builds the master `virtual-adapter` component, followed by `cargo build` to build
 the virtualization tooling (located in `src`).
 
