@@ -142,10 +142,9 @@ wasi-virt component.wasm --stdio=deny -o virt.wasm
 wasi-virt component.wasm --stderr=allow -o virt.wasm
 ```
 
-## Debugging
+### Debugging
 
-This project is still experimental and under development. To assist in debugging, the `--debug` flag can be used to
-get tracing output of system calls.
+The `--debug` flag can be used to get tracing output of system calls.
 
 ## API
 

@@ -14,6 +14,7 @@ struct Args {
     #[arg(required(false), value_name("component.wasm"), verbatim_doc_comment)]
     compose: Option<String>,
 
+    /// Enable debug tracing of all virtualized calls
     #[arg(long, action = ArgAction::SetTrue)]
     debug: Option<bool>,
 
