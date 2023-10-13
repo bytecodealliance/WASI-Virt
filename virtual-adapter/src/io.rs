@@ -49,9 +49,8 @@ use crate::wasi::sockets::udp;
 
 use crate::VirtAdapter;
 
-// for debugging
-// use crate::console;
-// use std::fmt;
+// for debugging build
+const DEBUG: bool = cfg!(feature = "debug");
 
 use std::alloc::Layout;
 use std::cmp;
@@ -68,6 +67,27 @@ const FLAGS_IGNORE_STDOUT: u32 = 1 << 4;
 const FLAGS_IGNORE_STDERR: u32 = 1 << 5;
 const FLAGS_HOST_PREOPENS: u32 = 1 << 6;
 const FLAGS_HOST_PASSTHROUGH: u32 = 1 << 7;
+
+#[macro_export]
+macro_rules! debug {
+    ($dst:expr, $($arg:tt)*) => {
+        if DEBUG {
+            log(&format!($dst, $($arg)*));
+        }
+    };
+    ($dst:expr) => {
+        if DEBUG {
+            log($dst);
+        }
+    };
+}
+
+fn log(msg: &str) {
+    if let Some(stdout) = unsafe { STATE.host_stdout } {
+        let msg = format!("{}\n", msg);
+        let _ = streams::blocking_write_and_flush(stdout, msg.as_bytes());
+    }
+}
 
 // static fs config
 #[repr(C)]
@@ -214,7 +234,7 @@ impl Descriptor {
                         Err(ErrorCode::IsDirectory)
                     }
                     StaticIndexType::RuntimeFile => {
-                        // console::log("Internal error: Runtime file should not be reflected directly on descriptors");
+                        // log("Internal error: Runtime file should not be reflected directly on descriptors");
                         unreachable!();
                     }
                 }
@@ -434,6 +454,7 @@ pub struct IoState {
     preopen_directories: Vec<(u32, String)>,
     host_preopen_directories: BTreeMap<String, u32>,
     descriptor_table: BTreeMap<u32, Descriptor>,
+    host_stdout: Option<u32>,
     stream_cnt: u32,
     stream_table: BTreeMap<u32, Stream>,
     poll_cnt: u32,
@@ -451,6 +472,7 @@ static mut STATE: IoState = IoState {
     preopen_directories: Vec::new(),
     host_preopen_directories: BTreeMap::new(),
     descriptor_table: BTreeMap::new(),
+    host_stdout: None,
     stream_cnt: 0,
     stream_table: BTreeMap::new(),
     poll_cnt: 0,
@@ -548,7 +570,11 @@ impl IoState {
             AllowCfg::Deny => Stream::Err,
         });
         IoState::new_stream(match Io::stdout() {
-            AllowCfg::Allow => Stream::Host(stdout::get_stdout()),
+            AllowCfg::Allow => {
+                let stdout = stdout::get_stdout();
+                unsafe { STATE.host_stdout = Some(stdout) };
+                Stream::Host(stdout)
+            }
             AllowCfg::Ignore => Stream::Null,
             AllowCfg::Deny => Stream::Err,
         });
@@ -670,6 +696,9 @@ impl Preopens for VirtAdapter {
 
 impl FilesystemTypes for VirtAdapter {
     fn read_via_stream(fd: u32, offset: u64) -> Result<u32, ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#read_via_stream");
+        }
         match IoState::get_descriptor(fd)?.target {
             DescriptorTarget::StaticEntry(_) => {
                 if offset != 0 {
@@ -685,30 +714,57 @@ impl FilesystemTypes for VirtAdapter {
         }
     }
     fn write_via_stream(_: u32, _: u64) -> Result<u32, ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#write_via_stream");
+        }
         Err(ErrorCode::Access)
     }
     fn append_via_stream(_fd: u32) -> Result<u32, ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#append_via_stream");
+        }
         Err(ErrorCode::Access)
     }
     fn advise(_: u32, _: u64, _: u64, _: Advice) -> Result<(), ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#advise");
+        }
         todo!()
     }
     fn sync_data(_: u32) -> Result<(), ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#sync_data");
+        }
         Err(ErrorCode::Access)
     }
     fn get_flags(_fd: u32) -> Result<DescriptorFlags, ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#get_flags");
+        }
         Ok(DescriptorFlags::READ)
     }
     fn get_type(fd: u32) -> Result<DescriptorType, ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#get_type");
+        }
         IoState::get_descriptor(fd)?.get_type()
     }
     fn set_size(_: u32, _: u64) -> Result<(), ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#set_size");
+        }
         Err(ErrorCode::Access)
     }
     fn set_times(_: u32, _: NewTimestamp, _: NewTimestamp) -> Result<(), ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#set_times");
+        }
         Err(ErrorCode::Access)
     }
     fn read(fd: u32, len: u64, offset: u64) -> Result<(Vec<u8>, bool), ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#read");
+        }
         let sid = VirtAdapter::read_via_stream(fd, offset)?;
         let stream = IoState::get_stream(sid).unwrap();
         let Stream::StaticFile(filestream) = stream else {
@@ -725,9 +781,15 @@ impl FilesystemTypes for VirtAdapter {
         ))
     }
     fn write(_: u32, _: Vec<u8>, _: u64) -> Result<u64, ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#write");
+        }
         Err(ErrorCode::Access)
     }
     fn read_directory(fd: u32) -> Result<u32, ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#read_directory");
+        }
         let descriptor = IoState::get_descriptor(fd)?;
         if descriptor.get_type()? != DescriptorType::Directory {
             return Err(ErrorCode::NotDirectory);
@@ -735,12 +797,19 @@ impl FilesystemTypes for VirtAdapter {
         Ok(IoState::new_stream(StaticDirStream::new(fd)))
     }
     fn sync(_: u32) -> Result<(), ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#sync");
+        }
         Err(ErrorCode::Access)
     }
     fn create_directory_at(_: u32, _: String) -> Result<(), ErrorCode> {
+        if DEBUG {
+            log("CALL wasi:filesystem/types#create_directory_at");
+        }
         Err(ErrorCode::Access)
     }
     fn stat(fd: u32) -> Result<DescriptorStat, ErrorCode> {
+        debug!("CALL wasi:filesystem/types#stat FD={}", &fd);
         let descriptor = IoState::get_descriptor(fd)?;
         match descriptor.target {
             DescriptorTarget::StaticEntry(ptr) => {
@@ -769,6 +838,10 @@ impl FilesystemTypes for VirtAdapter {
         }
     }
     fn stat_at(fd: u32, flags: PathFlags, path: String) -> Result<DescriptorStat, ErrorCode> {
+        debug!(
+            "CALL wasi:filesystem/types#stat_at FD={} PATH={}",
+            &fd, &path
+        );
         let descriptor = IoState::get_descriptor(fd)?;
         match descriptor.target {
             DescriptorTarget::StaticEntry(ptr) => {
@@ -825,9 +898,11 @@ impl FilesystemTypes for VirtAdapter {
         _: NewTimestamp,
         _: NewTimestamp,
     ) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#set_times_at");
         Err(ErrorCode::Access)
     }
     fn link_at(_: u32, _: PathFlags, _: String, _: u32, _: String) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#link_at");
         Err(ErrorCode::Access)
     }
     fn open_at(
@@ -838,6 +913,7 @@ impl FilesystemTypes for VirtAdapter {
         descriptor_flags: DescriptorFlags,
         modes: Modes,
     ) -> Result<u32, ErrorCode> {
+        debug!("CALL wasi:filesystem/types#open_at");
         let descriptor = IoState::get_descriptor(fd)?;
         match descriptor.target {
             DescriptorTarget::StaticEntry(ptr) => {
@@ -887,21 +963,27 @@ impl FilesystemTypes for VirtAdapter {
         }
     }
     fn readlink_at(_: u32, _: String) -> Result<String, ErrorCode> {
+        debug!("CALL wasi:filesystem/types#readlink_at");
         todo!()
     }
     fn remove_directory_at(_: u32, _: String) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#remove_directory_at");
         Err(ErrorCode::Access)
     }
     fn rename_at(_: u32, _: String, _: u32, _: String) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#rename_at");
         Err(ErrorCode::Access)
     }
     fn symlink_at(_: u32, _: String, _: String) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#symlink_at");
         Err(ErrorCode::Access)
     }
     fn access_at(_: u32, _: PathFlags, _: String, _: AccessType) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#access_at");
         Err(ErrorCode::Access)
     }
     fn unlink_file_at(_: u32, _: String) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#unlink_file_at");
         Err(ErrorCode::Access)
     }
     fn change_file_permissions_at(
@@ -910,6 +992,7 @@ impl FilesystemTypes for VirtAdapter {
         _: String,
         _: Modes,
     ) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#change_file_permissions_at");
         Err(ErrorCode::Access)
     }
     fn change_directory_permissions_at(
@@ -918,30 +1001,38 @@ impl FilesystemTypes for VirtAdapter {
         _: String,
         _: Modes,
     ) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#change_directory_permissions_at");
         Err(ErrorCode::Access)
     }
     fn lock_shared(_fd: u32) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#lock_shared");
         Ok(())
     }
     fn lock_exclusive(_fd: u32) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#lock_exclusive");
         Ok(())
     }
     fn try_lock_shared(_fd: u32) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#try_lock_shared");
         Ok(())
     }
     fn try_lock_exclusive(_fd: u32) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#try_lock_exclusive");
         Ok(())
     }
     fn unlock(_: u32) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#unlock");
         Ok(())
     }
     fn drop_descriptor(fd: u32) {
+        debug!("CALL wasi:filesystem/types#drop_descriptor");
         let Ok(descriptor) = IoState::get_descriptor(fd) else {
             return;
         };
         descriptor.drop();
     }
     fn read_directory_entry(sid: u32) -> Result<Option<DirectoryEntry>, ErrorCode> {
+        debug!("CALL wasi:filesystem/types#read_directory_entry");
         match IoState::get_stream(sid).map_err(|_| ErrorCode::BadDescriptor)? {
             Stream::StaticDir(dirstream) => dirstream.next(),
             Stream::Host(sid) => filesystem_types::read_directory_entry(*sid)
@@ -953,6 +1044,7 @@ impl FilesystemTypes for VirtAdapter {
         }
     }
     fn drop_directory_entry_stream(sid: u32) {
+        debug!("CALL wasi:filesystem/types#drop_directory_entry_stream");
         let Ok(stream) = IoState::get_stream(sid) else {
             return;
         };
@@ -964,6 +1056,7 @@ impl FilesystemTypes for VirtAdapter {
     }
 
     fn is_same_object(fd1: u32, fd2: u32) -> bool {
+        debug!("CALL wasi:filesystem/types#is_same_object");
         let Ok(descriptor1) = IoState::get_descriptor(fd1) else {
             return false;
         };
@@ -987,6 +1080,7 @@ impl FilesystemTypes for VirtAdapter {
     }
 
     fn metadata_hash(fd: u32) -> Result<MetadataHashValue, ErrorCode> {
+        debug!("CALL wasi:filesystem/types#metadata_hash");
         let descriptor = IoState::get_descriptor(fd)?;
         match descriptor.target {
             DescriptorTarget::StaticEntry(e) => Ok(MetadataHashValue {
@@ -1004,6 +1098,7 @@ impl FilesystemTypes for VirtAdapter {
         path_flags: PathFlags,
         path: String,
     ) -> Result<MetadataHashValue, ErrorCode> {
+        debug!("CALL wasi:filesystem/types#metadata_hash_at");
         let descriptor = IoState::get_descriptor(fd)?;
         match descriptor.target {
             DescriptorTarget::StaticEntry(ptr) => {
@@ -1066,9 +1161,11 @@ fn stream_write_res_map<T>(res: Result<T, streams::WriteError>) -> Result<T, Wri
 
 impl Streams for VirtAdapter {
     fn read(sid: u32, len: u64) -> Result<(Vec<u8>, StreamStatus), ()> {
+        debug!("CALL wasi:io/streams#read");
         VirtAdapter::blocking_read(sid, len)
     }
     fn blocking_read(sid: u32, len: u64) -> Result<(Vec<u8>, StreamStatus), ()> {
+        debug!("CALL wasi:io/streams#blocking_read");
         let stream = IoState::get_stream(sid)?;
         match stream {
             Stream::StaticFile(filestream) => filestream.read(len),
@@ -1078,6 +1175,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn skip(sid: u32, offset: u64) -> Result<(u64, StreamStatus), ()> {
+        debug!("CALL wasi:io/streams#skip");
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((0, StreamStatus::Ended)),
             Stream::Err | Stream::StaticDir(_) | Stream::StaticFile(_) => Err(()),
@@ -1085,6 +1183,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn blocking_skip(sid: u32, offset: u64) -> Result<(u64, StreamStatus), ()> {
+        debug!("CALL wasi:io/streams#blocking_skip");
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((0, StreamStatus::Ended)),
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(()),
@@ -1092,6 +1191,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn subscribe_to_input_stream(sid: u32) -> u32 {
+        debug!("CALL wasi:io/streams#subscribe_to_input_stream");
         let Ok(stream) = IoState::get_stream(sid) else {
             panic!()
         };
@@ -1104,6 +1204,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn drop_input_stream(sid: u32) {
+        debug!("CALL wasi:io/streams#drop_input_stream");
         let Ok(stream) = IoState::get_stream(sid) else {
             return;
         };
@@ -1114,6 +1215,7 @@ impl Streams for VirtAdapter {
         unsafe { STATE.stream_table.remove(&sid) };
     }
     fn check_write(sid: u32) -> Result<u64, WriteError> {
+        debug!("CALL wasi:io/streams#check_write");
         let Ok(stream) = IoState::get_stream(sid) else {
             return Err(WriteError::Closed);
         };
@@ -1125,6 +1227,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn write(sid: u32, bytes: Vec<u8>) -> Result<(), WriteError> {
+        debug!("CALL wasi:io/streams#write");
         match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
             Stream::Null => Ok(()),
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
@@ -1132,6 +1235,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn blocking_write_and_flush(sid: u32, bytes: Vec<u8>) -> Result<(), WriteError> {
+        debug!("CALL wasi:io/streams#blocking_write_and_flush");
         match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
             Stream::Null => Ok(()),
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
@@ -1141,6 +1245,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn flush(sid: u32) -> Result<(), WriteError> {
+        debug!("CALL wasi:io/streams#flush");
         match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
             Stream::Null => Ok(()),
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
@@ -1148,6 +1253,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn blocking_flush(sid: u32) -> Result<(), WriteError> {
+        debug!("CALL wasi:io/streams#blocking_flush");
         match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
             Stream::Null => Ok(()),
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
@@ -1155,6 +1261,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn write_zeroes(sid: u32, len: u64) -> Result<(), WriteError> {
+        debug!("CALL wasi:io/streams#write_zeroes");
         match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
             Stream::Null => Ok(()),
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
@@ -1162,6 +1269,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn splice(to_sid: u32, from_sid: u32, len: u64) -> Result<(u64, StreamStatus), ()> {
+        debug!("CALL wasi:io/streams#splice");
         let to_sid = match IoState::get_stream(to_sid)? {
             Stream::Null => {
                 return Ok((len, StreamStatus::Ended));
@@ -1183,6 +1291,7 @@ impl Streams for VirtAdapter {
         stream_res_map(streams::splice(to_sid, from_sid, len))
     }
     fn blocking_splice(to_sid: u32, from_sid: u32, len: u64) -> Result<(u64, StreamStatus), ()> {
+        debug!("CALL wasi:io/streams#blocking_splice");
         let to_sid = match IoState::get_stream(to_sid)? {
             Stream::Null => {
                 return Ok((len, StreamStatus::Ended));
@@ -1204,6 +1313,7 @@ impl Streams for VirtAdapter {
         stream_res_map(streams::blocking_splice(to_sid, from_sid, len))
     }
     fn forward(to_sid: u32, from_sid: u32) -> Result<(u64, StreamStatus), ()> {
+        debug!("CALL wasi:io/streams#forward");
         let to_sid = match IoState::get_stream(to_sid)? {
             Stream::Null => {
                 return Ok((0, StreamStatus::Ended));
@@ -1225,6 +1335,7 @@ impl Streams for VirtAdapter {
         stream_res_map(streams::forward(to_sid, from_sid))
     }
     fn subscribe_to_output_stream(sid: u32) -> u32 {
+        debug!("CALL wasi:io/streams#subscribe_to_output_stream");
         let Ok(stream) = IoState::get_stream(sid) else {
             panic!();
         };
@@ -1237,6 +1348,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn drop_output_stream(sid: u32) {
+        debug!("CALL wasi:io/streams#drop_output_stream");
         let Ok(stream) = IoState::get_stream(sid) else {
             return;
         };
@@ -1252,50 +1364,61 @@ impl Streams for VirtAdapter {
 // then defer to the host descriptor number assignments indirectly
 impl Stdin for VirtAdapter {
     fn get_stdin() -> u32 {
+        debug!("CALL wasi:cli/stdin#get_stdin");
         0
     }
 }
 
 impl Stdout for VirtAdapter {
     fn get_stdout() -> u32 {
+        debug!("CALL wasi:cli/stdout#get_stdout");
         1
     }
 }
 
 impl Stderr for VirtAdapter {
     fn get_stderr() -> u32 {
+        debug!("CALL wasi:cli/stderr#get_stderr");
         2
     }
 }
 
 impl TerminalInput for VirtAdapter {
-    fn drop_terminal_input(_: u32) {}
+    fn drop_terminal_input(_: u32) {
+        debug!("CALL wasi:cli/terminal-input#drop_terminal_input");
+    }
 }
 
 impl TerminalOutput for VirtAdapter {
-    fn drop_terminal_output(_: u32) {}
+    fn drop_terminal_output(_: u32) {
+        debug!("CALL wasi:cli/terminal-output#drop_terminal_output");
+    }
 }
 
 impl TerminalStdin for VirtAdapter {
     fn get_terminal_stdin() -> Option<u32> {
+        debug!("CALL wasi:cli/terminal-stdin#get_terminal_stdin");
         Some(0)
     }
 }
 
 impl TerminalStdout for VirtAdapter {
     fn get_terminal_stdout() -> Option<u32> {
+        debug!("CALL wasi:cli/terminal-stdout#get_terminal_stdout");
         Some(1)
     }
 }
 
 impl TerminalStderr for VirtAdapter {
     fn get_terminal_stderr() -> Option<u32> {
+        debug!("CALL wasi:cli/terminal-stderr#get_terminal_stderr");
         Some(2)
     }
 }
 
 impl Poll for VirtAdapter {
     fn drop_pollable(pid: u32) {
+        debug!("CALL wasi:poll/poll#drop_pollable");
         let Some(poll) = IoState::get_poll(pid) else {
             return;
         };
@@ -1306,6 +1429,7 @@ impl Poll for VirtAdapter {
         unsafe { STATE.poll_table.remove(&pid) };
     }
     fn poll_oneoff(list: Vec<u32>) -> Vec<bool> {
+        debug!("CALL wasi:poll/poll#poll_oneoff");
         let has_host_polls = list
             .iter()
             .find(|&&pid| matches!(IoState::get_poll(pid), Some(PollTarget::Host(_))))
@@ -1346,12 +1470,15 @@ impl Poll for VirtAdapter {
 
 impl MonotonicClock for VirtAdapter {
     fn now() -> u64 {
+        debug!("CALL wasi:clocks/monotonic-clock#now");
         monotonic_clock::now()
     }
     fn resolution() -> u64 {
+        debug!("CALL wasi:clocks/monotonic-clock#resolution");
         monotonic_clock::resolution()
     }
     fn subscribe(when: u64, absolute: bool) -> u32 {
+        debug!("CALL wasi:clocks/monotonic-clock#subscribe");
         let host_pid = monotonic_clock::subscribe(when, absolute);
         IoState::new_poll(PollTarget::Host(host_pid))
     }
@@ -1359,57 +1486,75 @@ impl MonotonicClock for VirtAdapter {
 
 impl HttpTypes for VirtAdapter {
     fn drop_fields(fields: Fields) {
+        debug!("CALL wasi:http/types#drop_fields");
         http_types::drop_fields(fields)
     }
     fn new_fields(entries: Vec<(String, String)>) -> Fields {
+        debug!("CALL wasi:http/types#new_fields");
         http_types::new_fields(&entries)
     }
     fn fields_get(fields: Fields, name: String) -> Vec<Vec<u8>> {
+        debug!("CALL wasi:http/types#fields_get");
         http_types::fields_get(fields, &name)
     }
     fn fields_set(fields: Fields, name: String, value: Vec<Vec<u8>>) {
+        debug!("CALL wasi:http/types#fields_set");
         http_types::fields_set(fields, &name, value.as_slice())
     }
     fn fields_delete(fields: Fields, name: String) {
+        debug!("CALL wasi:http/types#fields_delete");
         http_types::fields_delete(fields, &name)
     }
     fn fields_append(fields: Fields, name: String, value: Vec<u8>) {
+        debug!("CALL wasi:http/types#fields_append");
         http_types::fields_append(fields, &name, &value)
     }
     fn fields_entries(fields: Fields) -> Vec<(String, Vec<u8>)> {
+        debug!("CALL wasi:http/types#fields_entries");
         http_types::fields_entries(fields)
     }
     fn fields_clone(fields: Fields) -> Fields {
+        debug!("CALL wasi:http/types#fields_clone");
         http_types::fields_clone(fields)
     }
     fn finish_incoming_stream(s: InputStream) -> Option<Trailers> {
+        debug!("CALL wasi:http/types#finish_incoming_stream");
         http_types::finish_incoming_stream(s)
     }
     fn finish_outgoing_stream(s: OutputStream, trailers: Option<Trailers>) {
+        debug!("CALL wasi:http/types#finish_outgoing_stream");
         http_types::finish_outgoing_stream(s, trailers)
     }
     fn drop_incoming_request(request: u32) {
+        debug!("CALL wasi:http/types#drop_incoming_request");
         http_types::drop_incoming_request(request)
     }
     fn drop_outgoing_request(request: u32) {
+        debug!("CALL wasi:http/types#drop_outgoing_request");
         http_types::drop_outgoing_request(request)
     }
     fn incoming_request_method(request: u32) -> Method {
+        debug!("CALL wasi:http/types#incoming_request_method");
         method_map_rev(http_types::incoming_request_method(request))
     }
     fn incoming_request_path_with_query(request: u32) -> Option<String> {
+        debug!("CALL wasi:http/types#incoming_request_path_with_query");
         http_types::incoming_request_path_with_query(request)
     }
     fn incoming_request_scheme(request: u32) -> Option<Scheme> {
+        debug!("CALL wasi:http/types#incoming_request_scheme");
         http_types::incoming_request_scheme(request).map(scheme_map_rev)
     }
     fn incoming_request_authority(request: u32) -> Option<String> {
+        debug!("CALL wasi:http/types#incoming_request_authority");
         http_types::incoming_request_authority(request)
     }
     fn incoming_request_headers(request: u32) -> Headers {
+        debug!("CALL wasi:http/types#incoming_request_headers");
         http_types::incoming_request_headers(request)
     }
     fn incoming_request_consume(request: u32) -> Result<InputStream, ()> {
+        debug!("CALL wasi:http/types#incoming_request_consume");
         http_types::incoming_request_consume(request)
     }
     fn new_outgoing_request(
@@ -1419,6 +1564,7 @@ impl HttpTypes for VirtAdapter {
         authority: Option<String>,
         headers: Headers,
     ) -> u32 {
+        debug!("CALL wasi:http/types#new_outgoing_request");
         http_types::new_outgoing_request(
             &method_map(method),
             path_with_query.as_deref(),
@@ -1428,12 +1574,15 @@ impl HttpTypes for VirtAdapter {
         )
     }
     fn outgoing_request_write(request: u32) -> Result<OutputStream, ()> {
+        debug!("CALL wasi:http/types#outgoing_request_write");
         http_types::outgoing_request_write(request)
     }
     fn drop_response_outparam(response: u32) {
+        debug!("CALL wasi:http/types#drop_response_outparam");
         http_types::drop_response_outparam(response)
     }
     fn set_response_outparam(param: u32, response: Result<u32, Error>) -> Result<(), ()> {
+        debug!("CALL wasi:http/types#set_response_outparam");
         match response {
             Ok(res) => http_types::set_response_outparam(param, Ok(res)),
             Err(err) => {
@@ -1443,33 +1592,43 @@ impl HttpTypes for VirtAdapter {
         }
     }
     fn drop_incoming_response(response: u32) {
+        debug!("CALL wasi:http/types#drop_incoming_response");
         http_types::drop_incoming_response(response)
     }
     fn drop_outgoing_response(response: u32) {
+        debug!("CALL wasi:http/types#drop_outgoing_response");
         http_types::drop_outgoing_response(response)
     }
     fn incoming_response_status(response: u32) -> StatusCode {
+        debug!("CALL wasi:http/types#incoming_response_status");
         http_types::incoming_response_status(response)
     }
     fn incoming_response_headers(response: u32) -> Headers {
+        debug!("CALL wasi:http/types#incoming_response_headers");
         http_types::incoming_response_headers(response)
     }
     fn incoming_response_consume(response: u32) -> Result<InputStream, ()> {
+        debug!("CALL wasi:http/types#incoming_response_consume");
         http_types::incoming_response_consume(response)
     }
     fn new_outgoing_response(status_code: StatusCode, headers: Headers) -> u32 {
+        debug!("CALL wasi:http/types#new_outgoing_response");
         http_types::new_outgoing_response(status_code, headers)
     }
     fn outgoing_response_write(response: u32) -> Result<OutputStream, ()> {
+        debug!("CALL wasi:http/types#outgoing_response_write");
         http_types::outgoing_response_write(response)
     }
     fn drop_future_incoming_response(f: u32) {
+        debug!("CALL wasi:http/types#drop_future_incoming_response");
         http_types::drop_future_incoming_response(f)
     }
     fn future_incoming_response_get(f: u32) -> Option<Result<u32, Error>> {
+        debug!("CALL wasi:http/types#future_incoming_response_get");
         http_types::future_incoming_response_get(f).map(|o| o.map_err(http_err_map_rev))
     }
     fn listen_to_future_incoming_response(f: u32) -> u32 {
+        debug!("CALL wasi:http/types#listen_to_future_incoming_response");
         http_types::listen_to_future_incoming_response(f)
     }
 }
@@ -1545,17 +1704,21 @@ impl IpNameLookup for VirtAdapter {
         address_family: Option<IpAddressFamily>,
         include_unavailable: bool,
     ) -> Result<ip_name_lookup::ResolveAddressStream, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/ip-name-lookup#resolve_addresses");
         ip_name_lookup::resolve_addresses(network, &name, address_family, include_unavailable)
     }
     fn resolve_next_address(
         this: ResolveAddressStream,
     ) -> Result<Option<IpAddress>, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/ip-name-lookup#resolve_next_address");
         ip_name_lookup::resolve_next_address(this)
     }
     fn drop_resolve_address_stream(this: ResolveAddressStream) {
+        debug!("CALL wasi:sockets/ip-name-lookup#drop_resolve_address_stream");
         ip_name_lookup::drop_resolve_address_stream(this)
     }
     fn subscribe(this: ResolveAddressStream) -> u32 {
+        debug!("CALL wasi:sockets/ip-name-lookup#subscribe");
         ip_name_lookup::subscribe(this)
     }
 }
@@ -1566,9 +1729,11 @@ impl Tcp for VirtAdapter {
         network: Network,
         local_address: IpSocketAddress,
     ) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#start_bind");
         tcp::start_bind(this, network, local_address)
     }
     fn finish_bind(this: TcpSocket) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#finish_bind");
         tcp::finish_bind(this)
     }
     fn start_connect(
@@ -1576,74 +1741,97 @@ impl Tcp for VirtAdapter {
         network: Network,
         remote_address: IpSocketAddress,
     ) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#start_connect");
         tcp::start_connect(this, network, remote_address)
     }
     fn finish_connect(this: TcpSocket) -> Result<(InputStream, OutputStream), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#finish_connect");
         tcp::finish_connect(this)
     }
     fn start_listen(this: TcpSocket) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#start_listen");
         tcp::start_listen(this)
     }
     fn finish_listen(this: TcpSocket) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#finish_listen");
         tcp::finish_listen(this)
     }
     fn accept(
         this: TcpSocket,
     ) -> Result<(tcp::TcpSocket, InputStream, OutputStream), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#accept");
         tcp::accept(this)
     }
     fn local_address(this: TcpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#local_address");
         tcp::local_address(this)
     }
     fn remote_address(this: TcpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#remote_address");
         tcp::remote_address(this)
     }
     fn address_family(this: TcpSocket) -> IpAddressFamily {
+        debug!("CALL wasi:sockets/tcp#address_family");
         tcp::address_family(this)
     }
     fn ipv6_only(this: TcpSocket) -> Result<bool, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#ipv6_only");
         tcp::ipv6_only(this)
     }
     fn set_ipv6_only(this: TcpSocket, value: bool) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#set_ipv6_only");
         tcp::set_ipv6_only(this, value)
     }
     fn set_listen_backlog_size(this: TcpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#set_listen_backlog_size");
         tcp::set_listen_backlog_size(this, value)
     }
     fn keep_alive(this: TcpSocket) -> Result<bool, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#keep_alive");
         tcp::keep_alive(this)
     }
     fn set_keep_alive(this: TcpSocket, value: bool) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#set_keep_alive");
         tcp::set_keep_alive(this, value)
     }
     fn no_delay(this: TcpSocket) -> Result<bool, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#no_delay");
         tcp::no_delay(this)
     }
     fn set_no_delay(this: TcpSocket, value: bool) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#set_no_delay");
         tcp::set_no_delay(this, value)
     }
     fn unicast_hop_limit(this: TcpSocket) -> Result<u8, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#unicast_hop_limit");
         tcp::unicast_hop_limit(this)
     }
     fn set_unicast_hop_limit(this: TcpSocket, value: u8) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#set_unicast_hop_limit");
         tcp::set_unicast_hop_limit(this, value)
     }
     fn receive_buffer_size(this: TcpSocket) -> Result<u64, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#receive_buffer_size");
         tcp::receive_buffer_size(this)
     }
     fn set_receive_buffer_size(this: TcpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#set_receive_buffer_size");
         tcp::set_receive_buffer_size(this, value)
     }
     fn send_buffer_size(this: TcpSocket) -> Result<u64, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#send_buffer_size");
         tcp::send_buffer_size(this)
     }
     fn set_send_buffer_size(this: TcpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#set_send_buffer_size");
         tcp::set_send_buffer_size(this, value)
     }
     fn subscribe(this: TcpSocket) -> u32 {
+        debug!("CALL wasi:sockets/tcp#subscribe");
         tcp::subscribe(this)
     }
     fn shutdown(this: TcpSocket, shutdown_type: ShutdownType) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#shutdown");
         tcp::shutdown(
             this,
             match shutdown_type {
@@ -1654,6 +1842,7 @@ impl Tcp for VirtAdapter {
         )
     }
     fn drop_tcp_socket(this: TcpSocket) {
+        debug!("CALL wasi:sockets/tcp#drop_tcp_socket");
         tcp::drop_tcp_socket(this)
     }
 }
@@ -1664,9 +1853,11 @@ impl Udp for VirtAdapter {
         network: Network,
         local_address: IpSocketAddress,
     ) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#start_bind");
         udp::start_bind(this, network, local_address)
     }
     fn finish_bind(this: UdpSocket) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#finish_bind");
         udp::finish_bind(this)
     }
     fn start_connect(
@@ -1674,12 +1865,15 @@ impl Udp for VirtAdapter {
         network: Network,
         remote_address: IpSocketAddress,
     ) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#start_connect");
         udp::start_connect(this, network, remote_address)
     }
     fn finish_connect(this: UdpSocket) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#finish_connect");
         udp::finish_connect(this)
     }
     fn receive(this: UdpSocket, max_results: u64) -> Result<Vec<Datagram>, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#receive");
         match udp::receive(this, max_results) {
             Ok(mut datagrams) => Ok(datagrams
                 .drain(..)
@@ -1692,6 +1886,7 @@ impl Udp for VirtAdapter {
         }
     }
     fn send(this: UdpSocket, mut datagrams: Vec<Datagram>) -> Result<u64, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#send");
         udp::send(
             this,
             datagrams
@@ -1705,42 +1900,55 @@ impl Udp for VirtAdapter {
         )
     }
     fn local_address(this: UdpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#local_address");
         udp::local_address(this)
     }
     fn remote_address(this: UdpSocket) -> Result<IpSocketAddress, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#remote_address");
         udp::remote_address(this)
     }
     fn address_family(this: UdpSocket) -> IpAddressFamily {
+        debug!("CALL wasi:sockets/udp#address_family");
         udp::address_family(this)
     }
     fn ipv6_only(this: UdpSocket) -> Result<bool, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#ipv6_only");
         udp::ipv6_only(this)
     }
     fn set_ipv6_only(this: UdpSocket, value: bool) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#set_ipv6_only");
         udp::set_ipv6_only(this, value)
     }
     fn unicast_hop_limit(this: UdpSocket) -> Result<u8, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#unicast_hop_limit");
         udp::unicast_hop_limit(this)
     }
     fn set_unicast_hop_limit(this: UdpSocket, value: u8) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#set_unicast_hop_limit");
         udp::set_unicast_hop_limit(this, value)
     }
     fn receive_buffer_size(this: UdpSocket) -> Result<u64, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#receive_buffer_size");
         udp::receive_buffer_size(this)
     }
     fn set_receive_buffer_size(this: UdpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#set_receive_buffer_size");
         udp::set_receive_buffer_size(this, value)
     }
     fn send_buffer_size(this: UdpSocket) -> Result<u64, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#send_buffer_size");
         udp::send_buffer_size(this)
     }
     fn set_send_buffer_size(this: UdpSocket, value: u64) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#set_send_buffer_size");
         udp::set_send_buffer_size(this, value)
     }
     fn subscribe(this: UdpSocket) -> u32 {
+        debug!("CALL wasi:sockets/udp#subscribe");
         udp::subscribe(this)
     }
     fn drop_udp_socket(this: UdpSocket) {
+        debug!("CALL wasi:sockets/udp#drop_udp_socket");
         udp::drop_udp_socket(this)
     }
 }

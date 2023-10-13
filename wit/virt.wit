@@ -7,9 +7,6 @@ world virtual-adapter {
   import wasi:filesystem/preopens
   import wasi:filesystem/types
   import wasi:io/streams
-  import console: interface {
-    log: func(msg: string) -> ()
-  }
   export wasi:io/streams
   export wasi:cli/environment
   export wasi:filesystem/types
@@ -45,9 +42,6 @@ world virtual-adapter {
 }
 
 world virtual-base {
-  import console: interface {
-    log: func(msg: string) -> ()
-  }
 }
 
 world virtual-io {

@@ -131,8 +131,11 @@ async fn virt_test() -> Result<()> {
         virt_component_path.set_extension("virt.wasm");
         let mut virt_opts = test.virt_opts.clone().unwrap_or_default();
         virt_opts.exit(Default::default());
-        if DEBUG && test_case_name != "encapsulate" {
-            virt_opts.wasm_opt = Some(false);
+        if DEBUG {
+            virt_opts.debug = true;
+            if test_case_name != "encapsulate" {
+                virt_opts.wasm_opt = Some(false);
+            }
         }
 
         let virt_component = virt_opts
@@ -218,13 +221,6 @@ async fn virt_test() -> Result<()> {
                 &mut self.wasi
             }
         }
-
-        // simple logger for debugging
-        let mut log_builder = linker.instance("console")?;
-        log_builder.func_wrap("log", |_store, params: (String,)| {
-            eprintln!("LOG: {}", params.0);
-            Ok(())
-        })?;
 
         add_to_linker(&mut linker)?;
         let mut store = Store::new(&engine, CommandCtx { table, wasi });
