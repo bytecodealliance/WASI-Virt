@@ -696,9 +696,10 @@ impl Preopens for VirtAdapter {
 
 impl FilesystemTypes for VirtAdapter {
     fn read_via_stream(fd: u32, offset: u64) -> Result<u32, ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#read_via_stream");
-        }
+        debug!(
+            "CALL wasi:filesystem/types#read_via_stream FD={} OFFSET={}",
+            fd, offset
+        );
         match IoState::get_descriptor(fd)?.target {
             DescriptorTarget::StaticEntry(_) => {
                 if offset != 0 {
@@ -713,58 +714,43 @@ impl FilesystemTypes for VirtAdapter {
             }
         }
     }
-    fn write_via_stream(_: u32, _: u64) -> Result<u32, ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#write_via_stream");
-        }
+    fn write_via_stream(fd: u32, offset: u64) -> Result<u32, ErrorCode> {
+        debug!(
+            "CALL wasi:filesystem/types#write_via_stream FD={} OFFSET={}",
+            fd, offset
+        );
         Err(ErrorCode::Access)
     }
-    fn append_via_stream(_fd: u32) -> Result<u32, ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#append_via_stream");
-        }
+    fn append_via_stream(fd: u32) -> Result<u32, ErrorCode> {
+        debug!("CALL wasi:filesystem/types#append_via_stream FD={}", fd);
         Err(ErrorCode::Access)
     }
-    fn advise(_: u32, _: u64, _: u64, _: Advice) -> Result<(), ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#advise");
-        }
+    fn advise(fd: u32, _: u64, _: u64, _: Advice) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#advise FD={}", fd);
         todo!()
     }
-    fn sync_data(_: u32) -> Result<(), ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#sync_data");
-        }
+    fn sync_data(fd: u32) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#sync_data FD={}", fd);
         Err(ErrorCode::Access)
     }
-    fn get_flags(_fd: u32) -> Result<DescriptorFlags, ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#get_flags");
-        }
+    fn get_flags(fd: u32) -> Result<DescriptorFlags, ErrorCode> {
+        debug!("CALL wasi:filesystem/types#get_flags FD={}", fd);
         Ok(DescriptorFlags::READ)
     }
     fn get_type(fd: u32) -> Result<DescriptorType, ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#get_type");
-        }
+        debug!("CALL wasi:filesystem/types#get_type FD={}", fd);
         IoState::get_descriptor(fd)?.get_type()
     }
-    fn set_size(_: u32, _: u64) -> Result<(), ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#set_size");
-        }
+    fn set_size(fd: u32, _: u64) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#set_size FD={}", fd);
         Err(ErrorCode::Access)
     }
-    fn set_times(_: u32, _: NewTimestamp, _: NewTimestamp) -> Result<(), ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#set_times");
-        }
+    fn set_times(fd: u32, _: NewTimestamp, _: NewTimestamp) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#set_times FD={}", fd);
         Err(ErrorCode::Access)
     }
     fn read(fd: u32, len: u64, offset: u64) -> Result<(Vec<u8>, bool), ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#read");
-        }
+        debug!("CALL wasi:filesystem/types#read FD={}", fd);
         let sid = VirtAdapter::read_via_stream(fd, offset)?;
         let stream = IoState::get_stream(sid).unwrap();
         let Stream::StaticFile(filestream) = stream else {
@@ -780,32 +766,27 @@ impl FilesystemTypes for VirtAdapter {
             },
         ))
     }
-    fn write(_: u32, _: Vec<u8>, _: u64) -> Result<u64, ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#write");
-        }
+    fn write(fd: u32, _: Vec<u8>, _: u64) -> Result<u64, ErrorCode> {
+        debug!("CALL wasi:filesystem/types#write FD={}", fd);
         Err(ErrorCode::Access)
     }
     fn read_directory(fd: u32) -> Result<u32, ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#read_directory");
-        }
+        debug!("CALL wasi:filesystem/types#read_directory FD={}", fd);
         let descriptor = IoState::get_descriptor(fd)?;
         if descriptor.get_type()? != DescriptorType::Directory {
             return Err(ErrorCode::NotDirectory);
         }
         Ok(IoState::new_stream(StaticDirStream::new(fd)))
     }
-    fn sync(_: u32) -> Result<(), ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#sync");
-        }
+    fn sync(fd: u32) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#sync FD={}", fd);
         Err(ErrorCode::Access)
     }
-    fn create_directory_at(_: u32, _: String) -> Result<(), ErrorCode> {
-        if DEBUG {
-            log("CALL wasi:filesystem/types#create_directory_at");
-        }
+    fn create_directory_at(fd: u32, path: String) -> Result<(), ErrorCode> {
+        debug!(
+            "CALL wasi:filesystem/types#create_directory_at FD={} PATH={}",
+            fd, &path
+        );
         Err(ErrorCode::Access)
     }
     fn stat(fd: u32) -> Result<DescriptorStat, ErrorCode> {
@@ -892,17 +873,23 @@ impl FilesystemTypes for VirtAdapter {
         }
     }
     fn set_times_at(
-        _: u32,
+        fd: u32,
         _: PathFlags,
-        _: String,
+        path: String,
         _: NewTimestamp,
         _: NewTimestamp,
     ) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#set_times_at");
+        debug!(
+            "CALL wasi:filesystem/types#set_times_at FD={} PATH={}",
+            fd, &path
+        );
         Err(ErrorCode::Access)
     }
-    fn link_at(_: u32, _: PathFlags, _: String, _: u32, _: String) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#link_at");
+    fn link_at(fd: u32, _: PathFlags, path: String, _: u32, _: String) -> Result<(), ErrorCode> {
+        debug!(
+            "CALL wasi:filesystem/types#link_at FD={} PATH={}",
+            fd, &path
+        );
         Err(ErrorCode::Access)
     }
     fn open_at(
@@ -913,7 +900,10 @@ impl FilesystemTypes for VirtAdapter {
         descriptor_flags: DescriptorFlags,
         modes: Modes,
     ) -> Result<u32, ErrorCode> {
-        debug!("CALL wasi:filesystem/types#open_at");
+        debug!(
+            "CALL wasi:filesystem/types#open_at FD={} PATH={}",
+            fd, &path
+        );
         let descriptor = IoState::get_descriptor(fd)?;
         match descriptor.target {
             DescriptorTarget::StaticEntry(ptr) => {
@@ -962,77 +952,104 @@ impl FilesystemTypes for VirtAdapter {
             }
         }
     }
-    fn readlink_at(_: u32, _: String) -> Result<String, ErrorCode> {
-        debug!("CALL wasi:filesystem/types#readlink_at");
+    fn readlink_at(fd: u32, path: String) -> Result<String, ErrorCode> {
+        debug!(
+            "CALL wasi:filesystem/types#readlink_ FD={} PATH={}",
+            fd, &path
+        );
         todo!()
     }
-    fn remove_directory_at(_: u32, _: String) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#remove_directory_at");
+    fn remove_directory_at(fd: u32, path: String) -> Result<(), ErrorCode> {
+        debug!(
+            "CALL wasi:filesystem/types#remove_directory_ FD={} PATH={}",
+            fd, &path
+        );
         Err(ErrorCode::Access)
     }
-    fn rename_at(_: u32, _: String, _: u32, _: String) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#rename_at");
+    fn rename_at(fd: u32, path: String, _: u32, _: String) -> Result<(), ErrorCode> {
+        debug!(
+            "CALL wasi:filesystem/types#rename_ FD={} PATH={}",
+            fd, &path
+        );
         Err(ErrorCode::Access)
     }
-    fn symlink_at(_: u32, _: String, _: String) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#symlink_at");
+    fn symlink_at(fd: u32, path: String, _: String) -> Result<(), ErrorCode> {
+        debug!(
+            "CALL wasi:filesystem/types#symlink_ FD={} PATH={}",
+            fd, &path
+        );
         Err(ErrorCode::Access)
     }
-    fn access_at(_: u32, _: PathFlags, _: String, _: AccessType) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#access_at");
+    fn access_at(fd: u32, _: PathFlags, path: String, _: AccessType) -> Result<(), ErrorCode> {
+        debug!(
+            "CALL wasi:filesystem/types#access_ FD={} PATH={}",
+            fd, &path
+        );
         Err(ErrorCode::Access)
     }
-    fn unlink_file_at(_: u32, _: String) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#unlink_file_at");
+    fn unlink_file_at(fd: u32, path: String) -> Result<(), ErrorCode> {
+        debug!(
+            "CALL wasi:filesystem/types#unlink_file_ FD={} PATH={}",
+            fd, &path
+        );
         Err(ErrorCode::Access)
     }
     fn change_file_permissions_at(
-        _: u32,
+        fd: u32,
         _: PathFlags,
-        _: String,
+        path: String,
         _: Modes,
     ) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#change_file_permissions_at");
+        debug!(
+            "CALL wasi:filesystem/types#change_file_permissions_ FD={} PATH={}",
+            fd, &path
+        );
         Err(ErrorCode::Access)
     }
     fn change_directory_permissions_at(
-        _: u32,
+        fd: u32,
         _: PathFlags,
-        _: String,
+        path: String,
         _: Modes,
     ) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#change_directory_permissions_at");
+        debug!(
+            "CALL wasi:filesystem/types#change_directory_permissions_ FD={} PATH={}",
+            fd, &path
+        );
         Err(ErrorCode::Access)
     }
-    fn lock_shared(_fd: u32) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#lock_shared");
+    fn lock_shared(fd: u32) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#lock_shared FD={}", fd);
         Ok(())
     }
-    fn lock_exclusive(_fd: u32) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#lock_exclusive");
+    fn lock_exclusive(fd: u32) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#lock_exclusive FD={}", fd);
         Ok(())
     }
-    fn try_lock_shared(_fd: u32) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#try_lock_shared");
+    fn try_lock_shared(fd: u32) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#try_lock_shared FD={}", fd);
         Ok(())
     }
-    fn try_lock_exclusive(_fd: u32) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#try_lock_exclusive");
+    fn try_lock_exclusive(fd: u32) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#try_lock_exclusive FD={}", fd);
         Ok(())
     }
-    fn unlock(_: u32) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#unlock");
+    fn unlock(fd: u32) -> Result<(), ErrorCode> {
+        debug!("CALL wasi:filesystem/types#unlock FD={}", fd);
         Ok(())
     }
     fn drop_descriptor(fd: u32) {
-        debug!("CALL wasi:filesystem/types#drop_descriptor");
+        debug!("CALL wasi:filesystem/types#drop_descriptor FD={}", fd);
         let Ok(descriptor) = IoState::get_descriptor(fd) else {
             return;
         };
         descriptor.drop();
     }
     fn read_directory_entry(sid: u32) -> Result<Option<DirectoryEntry>, ErrorCode> {
-        debug!("CALL wasi:filesystem/types#read_directory_entry");
+        debug!(
+            "CALL wasi:filesystem/types#read_directory_entry SID={}",
+            sid
+        );
         match IoState::get_stream(sid).map_err(|_| ErrorCode::BadDescriptor)? {
             Stream::StaticDir(dirstream) => dirstream.next(),
             Stream::Host(sid) => filesystem_types::read_directory_entry(*sid)
@@ -1044,7 +1061,10 @@ impl FilesystemTypes for VirtAdapter {
         }
     }
     fn drop_directory_entry_stream(sid: u32) {
-        debug!("CALL wasi:filesystem/types#drop_directory_entry_stream");
+        debug!(
+            "CALL wasi:filesystem/types#drop_directory_entry_stream SID={}",
+            sid
+        );
         let Ok(stream) = IoState::get_stream(sid) else {
             return;
         };
@@ -1056,7 +1076,10 @@ impl FilesystemTypes for VirtAdapter {
     }
 
     fn is_same_object(fd1: u32, fd2: u32) -> bool {
-        debug!("CALL wasi:filesystem/types#is_same_object");
+        debug!(
+            "CALL wasi:filesystem/types#is_same_object FD1={} FD2={}",
+            fd1, fd2
+        );
         let Ok(descriptor1) = IoState::get_descriptor(fd1) else {
             return false;
         };
@@ -1080,7 +1103,7 @@ impl FilesystemTypes for VirtAdapter {
     }
 
     fn metadata_hash(fd: u32) -> Result<MetadataHashValue, ErrorCode> {
-        debug!("CALL wasi:filesystem/types#metadata_hash");
+        debug!("CALL wasi:filesystem/types#metadata_hash FD={}", fd);
         let descriptor = IoState::get_descriptor(fd)?;
         match descriptor.target {
             DescriptorTarget::StaticEntry(e) => Ok(MetadataHashValue {
@@ -1098,7 +1121,10 @@ impl FilesystemTypes for VirtAdapter {
         path_flags: PathFlags,
         path: String,
     ) -> Result<MetadataHashValue, ErrorCode> {
-        debug!("CALL wasi:filesystem/types#metadata_hash_at");
+        debug!(
+            "CALL wasi:filesystem/types#metadata_hash_at FD={} PATH={}",
+            fd, &path
+        );
         let descriptor = IoState::get_descriptor(fd)?;
         match descriptor.target {
             DescriptorTarget::StaticEntry(ptr) => {
@@ -1161,11 +1187,11 @@ fn stream_write_res_map<T>(res: Result<T, streams::WriteError>) -> Result<T, Wri
 
 impl Streams for VirtAdapter {
     fn read(sid: u32, len: u64) -> Result<(Vec<u8>, StreamStatus), ()> {
-        debug!("CALL wasi:io/streams#read");
+        debug!("CALL wasi:io/streams#read SID={}", sid);
         VirtAdapter::blocking_read(sid, len)
     }
     fn blocking_read(sid: u32, len: u64) -> Result<(Vec<u8>, StreamStatus), ()> {
-        debug!("CALL wasi:io/streams#blocking_read");
+        debug!("CALL wasi:io/streams#blocking_read SID={}", sid);
         let stream = IoState::get_stream(sid)?;
         match stream {
             Stream::StaticFile(filestream) => filestream.read(len),
@@ -1175,7 +1201,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn skip(sid: u32, offset: u64) -> Result<(u64, StreamStatus), ()> {
-        debug!("CALL wasi:io/streams#skip");
+        debug!("CALL wasi:io/streams#skip SID={}", sid);
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((0, StreamStatus::Ended)),
             Stream::Err | Stream::StaticDir(_) | Stream::StaticFile(_) => Err(()),
@@ -1183,7 +1209,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn blocking_skip(sid: u32, offset: u64) -> Result<(u64, StreamStatus), ()> {
-        debug!("CALL wasi:io/streams#blocking_skip");
+        debug!("CALL wasi:io/streams#blocking_skip SID={}", sid);
         match IoState::get_stream(sid)? {
             Stream::Null => Ok((0, StreamStatus::Ended)),
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(()),
@@ -1191,7 +1217,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn subscribe_to_input_stream(sid: u32) -> u32 {
-        debug!("CALL wasi:io/streams#subscribe_to_input_stream");
+        debug!("CALL wasi:io/streams#subscribe_to_input_stream SID={}", sid);
         let Ok(stream) = IoState::get_stream(sid) else {
             panic!()
         };
@@ -1204,7 +1230,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn drop_input_stream(sid: u32) {
-        debug!("CALL wasi:io/streams#drop_input_stream");
+        debug!("CALL wasi:io/streams#drop_input_stream SID={}", sid);
         let Ok(stream) = IoState::get_stream(sid) else {
             return;
         };
@@ -1215,7 +1241,7 @@ impl Streams for VirtAdapter {
         unsafe { STATE.stream_table.remove(&sid) };
     }
     fn check_write(sid: u32) -> Result<u64, WriteError> {
-        debug!("CALL wasi:io/streams#check_write");
+        debug!("CALL wasi:io/streams#check_write SID={}", sid);
         let Ok(stream) = IoState::get_stream(sid) else {
             return Err(WriteError::Closed);
         };
@@ -1227,7 +1253,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn write(sid: u32, bytes: Vec<u8>) -> Result<(), WriteError> {
-        debug!("CALL wasi:io/streams#write");
+        debug!("CALL wasi:io/streams#write SID={}", sid);
         match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
             Stream::Null => Ok(()),
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
@@ -1235,7 +1261,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn blocking_write_and_flush(sid: u32, bytes: Vec<u8>) -> Result<(), WriteError> {
-        debug!("CALL wasi:io/streams#blocking_write_and_flush");
+        debug!("CALL wasi:io/streams#blocking_write_and_flush SID={}", sid);
         match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
             Stream::Null => Ok(()),
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
@@ -1245,7 +1271,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn flush(sid: u32) -> Result<(), WriteError> {
-        debug!("CALL wasi:io/streams#flush");
+        debug!("CALL wasi:io/streams#flush SID={}", sid);
         match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
             Stream::Null => Ok(()),
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
@@ -1253,7 +1279,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn blocking_flush(sid: u32) -> Result<(), WriteError> {
-        debug!("CALL wasi:io/streams#blocking_flush");
+        debug!("CALL wasi:io/streams#blocking_flush SID={}", sid);
         match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
             Stream::Null => Ok(()),
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
@@ -1261,7 +1287,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn write_zeroes(sid: u32, len: u64) -> Result<(), WriteError> {
-        debug!("CALL wasi:io/streams#write_zeroes");
+        debug!("CALL wasi:io/streams#write_zeroes SID={}", sid);
         match IoState::get_stream(sid).map_err(|_| WriteError::Closed)? {
             Stream::Null => Ok(()),
             Stream::Err | Stream::StaticFile(_) | Stream::StaticDir(_) => Err(WriteError::Closed),
@@ -1269,7 +1295,10 @@ impl Streams for VirtAdapter {
         }
     }
     fn splice(to_sid: u32, from_sid: u32, len: u64) -> Result<(u64, StreamStatus), ()> {
-        debug!("CALL wasi:io/streams#splice");
+        debug!(
+            "CALL wasi:io/streams#splice TO_SID={} FROM_SID={}",
+            to_sid, from_sid
+        );
         let to_sid = match IoState::get_stream(to_sid)? {
             Stream::Null => {
                 return Ok((len, StreamStatus::Ended));
@@ -1291,7 +1320,10 @@ impl Streams for VirtAdapter {
         stream_res_map(streams::splice(to_sid, from_sid, len))
     }
     fn blocking_splice(to_sid: u32, from_sid: u32, len: u64) -> Result<(u64, StreamStatus), ()> {
-        debug!("CALL wasi:io/streams#blocking_splice");
+        debug!(
+            "CALL wasi:io/streams#blocking_splice TO_SID={} FROM_SID={}",
+            to_sid, from_sid
+        );
         let to_sid = match IoState::get_stream(to_sid)? {
             Stream::Null => {
                 return Ok((len, StreamStatus::Ended));
@@ -1313,7 +1345,10 @@ impl Streams for VirtAdapter {
         stream_res_map(streams::blocking_splice(to_sid, from_sid, len))
     }
     fn forward(to_sid: u32, from_sid: u32) -> Result<(u64, StreamStatus), ()> {
-        debug!("CALL wasi:io/streams#forward");
+        debug!(
+            "CALL wasi:io/streams#forward TO_SID={} FROM_SID={}",
+            to_sid, from_sid
+        );
         let to_sid = match IoState::get_stream(to_sid)? {
             Stream::Null => {
                 return Ok((0, StreamStatus::Ended));
@@ -1335,7 +1370,10 @@ impl Streams for VirtAdapter {
         stream_res_map(streams::forward(to_sid, from_sid))
     }
     fn subscribe_to_output_stream(sid: u32) -> u32 {
-        debug!("CALL wasi:io/streams#subscribe_to_output_stream");
+        debug!(
+            "CALL wasi:io/streams#subscribe_to_output_stream SID={}",
+            sid
+        );
         let Ok(stream) = IoState::get_stream(sid) else {
             panic!();
         };
@@ -1348,7 +1386,7 @@ impl Streams for VirtAdapter {
         }
     }
     fn drop_output_stream(sid: u32) {
-        debug!("CALL wasi:io/streams#drop_output_stream");
+        debug!("CALL wasi:io/streams#drop_output_stream SID={}", sid);
         let Ok(stream) = IoState::get_stream(sid) else {
             return;
         };
@@ -1418,7 +1456,7 @@ impl TerminalStderr for VirtAdapter {
 
 impl Poll for VirtAdapter {
     fn drop_pollable(pid: u32) {
-        debug!("CALL wasi:poll/poll#drop_pollable");
+        debug!("CALL wasi:poll/poll#drop_pollable PID={}", pid);
         let Some(poll) = IoState::get_poll(pid) else {
             return;
         };
@@ -1429,7 +1467,13 @@ impl Poll for VirtAdapter {
         unsafe { STATE.poll_table.remove(&pid) };
     }
     fn poll_oneoff(list: Vec<u32>) -> Vec<bool> {
-        debug!("CALL wasi:poll/poll#poll_oneoff");
+        debug!(
+            "CALL wasi:poll/poll#poll_oneoff PIDS={}",
+            list.iter()
+                .map(|pid| pid.to_string())
+                .collect::<Vec<String>>()
+                .join(",")
+        );
         let has_host_polls = list
             .iter()
             .find(|&&pid| matches!(IoState::get_poll(pid), Some(PollTarget::Host(_))))
