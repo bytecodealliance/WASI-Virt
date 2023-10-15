@@ -1,12 +1,10 @@
-use crate::walrus_ops::{
-    bump_stack_global, get_active_data_segment, get_memory_id, remove_exported_func,
-    stub_imported_func,
-};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use walrus::{
     ir::Value, ActiveData, ActiveDataLocation, DataKind, ExportItem, GlobalKind, InitExpr, Module,
 };
+
+use crate::walrus_ops::{bump_stack_global, get_active_data_segment};
 
 #[derive(Deserialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields)]
@@ -95,7 +93,7 @@ pub(crate) fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Resu
         // we do arguments as well because virt assumes reactors for now...
     }
 
-    let memory = get_memory_id(module)?;
+    let memory = module.get_memory_id()?;
 
     // prepare the field data list vector for writing
     // strings must be sorted as binary searches are used against this data
@@ -213,17 +211,41 @@ pub(crate) fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Resu
     Ok(())
 }
 
+/// Functions that represent the environment functionality provided by WASI CLI
+const WASI_ENV_FNS: [&str; 3] = ["get-arguments", "get-environment", "initial-cwd"];
+
+/// Stub imported functions that implement the WASI CLI environment functionality
+///
+/// This function throws an error if any imported functions do not exist
 pub(crate) fn stub_env_virt(module: &mut Module) -> Result<()> {
-    stub_imported_func(module, "wasi:cli/environment", "get-arguments", true)?;
-    stub_imported_func(module, "wasi:cli/environment", "get-environment", true)?;
-    stub_imported_func(module, "wasi:cli/environment", "initial-cwd", true)?;
+    for fn_name in WASI_ENV_FNS {
+        module.replace_imported_func(
+            module.imports.get_func("wasi:cli/environment", fn_name)?,
+            |(body, _)| {
+                body.unreachable();
+            },
+        )?;
+    }
+
     Ok(())
 }
 
+/// Strip exported functions that implement the WASI CLI environment functionality
+///
+/// This function *does not* throw an error if an export does not exist.
 pub(crate) fn strip_env_virt(module: &mut Module) -> Result<()> {
     stub_env_virt(module)?;
-    remove_exported_func(module, "wasi:cli/environment#get-arguments")?;
-    remove_exported_func(module, "wasi:cli/environment#get-environment")?;
-    remove_exported_func(module, "wasi:cli/environment#initial-cwd")?;
+
+    for fn_name in WASI_ENV_FNS {
+        if let Ok(fid) = module
+            .exports
+            .get_func(format!("wasi:cli/environment#{fn_name}"))
+        {
+            module.replace_exported_func(fid, |(body, _)| {
+                body.unreachable();
+            })?;
+        };
+    }
+
     Ok(())
 }
