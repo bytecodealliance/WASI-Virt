@@ -83,9 +83,9 @@ macro_rules! debug {
 }
 
 fn log(msg: &str) {
-    if let Some(stdout) = unsafe { STATE.host_stdout } {
+    if let Some(stderr) = unsafe { STATE.host_stderr } {
         let msg = format!("{}\n", msg);
-        let _ = streams::blocking_write_and_flush(stdout, msg.as_bytes());
+        let _ = streams::blocking_write_and_flush(stderr, msg.as_bytes());
     }
 }
 
@@ -454,7 +454,7 @@ pub struct IoState {
     preopen_directories: Vec<(u32, String)>,
     host_preopen_directories: BTreeMap<String, u32>,
     descriptor_table: BTreeMap<u32, Descriptor>,
-    host_stdout: Option<u32>,
+    host_stderr: Option<u32>,
     stream_cnt: u32,
     stream_table: BTreeMap<u32, Stream>,
     poll_cnt: u32,
@@ -472,7 +472,7 @@ static mut STATE: IoState = IoState {
     preopen_directories: Vec::new(),
     host_preopen_directories: BTreeMap::new(),
     descriptor_table: BTreeMap::new(),
-    host_stdout: None,
+    host_stderr: None,
     stream_cnt: 0,
     stream_table: BTreeMap::new(),
     poll_cnt: 0,
@@ -570,16 +570,16 @@ impl IoState {
             AllowCfg::Deny => Stream::Err,
         });
         IoState::new_stream(match Io::stdout() {
-            AllowCfg::Allow => {
-                let stdout = stdout::get_stdout();
-                unsafe { STATE.host_stdout = Some(stdout) };
-                Stream::Host(stdout)
-            }
+            AllowCfg::Allow => Stream::Host(stdout::get_stdout()),
             AllowCfg::Ignore => Stream::Null,
             AllowCfg::Deny => Stream::Err,
         });
         IoState::new_stream(match Io::stderr() {
-            AllowCfg::Allow => Stream::Host(stderr::get_stderr()),
+            AllowCfg::Allow => {
+                let stderr = stderr::get_stderr();
+                unsafe { STATE.host_stderr = Some(stderr) };
+                Stream::Host(stderr)
+            }
             AllowCfg::Ignore => Stream::Null,
             AllowCfg::Deny => Stream::Err,
         });
