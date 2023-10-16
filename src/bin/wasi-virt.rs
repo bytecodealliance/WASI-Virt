@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::{ArgAction, Parser};
 use std::{env, error::Error, fs, path::PathBuf, time::SystemTime};
 use wasi_virt::{StdioCfg, WasiVirt};
@@ -13,6 +13,10 @@ struct Args {
     /// which can then be composed via `wasm-tools compose -d virt.wasm component.wasm`
     #[arg(required(false), value_name("component.wasm"), verbatim_doc_comment)]
     compose: Option<String>,
+
+    /// Enable debug tracing of all virtualized calls
+    #[arg(long, action = ArgAction::SetTrue)]
+    debug: Option<bool>,
 
     /// Output virtualization component Wasm file
     #[arg(short, long, value_name("virt.wasm"))]
@@ -112,6 +116,8 @@ fn main() -> Result<()> {
 
     let mut virt_opts = WasiVirt::default();
 
+    virt_opts.debug = args.debug.unwrap_or_default();
+
     // By default, we virtualize all subsystems
     // This ensures full encapsulation in the default (no argument) case
     let allow_all = args.allow_all;
@@ -136,9 +142,11 @@ fn main() -> Result<()> {
 
     // stdio
     virt_opts.stdio().stdin(args.stdin.unwrap_or(stdio.clone()));
-    virt_opts
-        .stdio()
-        .stdout(args.stdout.unwrap_or(stdio.clone()));
+    let stdout = args.stdout.unwrap_or(stdio.clone());
+    if virt_opts.debug && !matches!(stdout, StdioCfg::Allow) {
+        bail!("Debug build requires stdout to be enabled");
+    }
+    virt_opts.stdio().stdout(stdout);
     virt_opts.stdio().stderr(args.stderr.unwrap_or(stdio));
 
     // exit

@@ -24,6 +24,9 @@ pub use stub_preview1::stub_preview1;
 pub use virt_env::{HostEnv, VirtEnv};
 pub use virt_io::{FsEntry, StdioCfg, VirtFs, VirtualFiles};
 
+const VIRT_ADAPTER: &[u8] = include_bytes!("../lib/virtual_adapter.wasm");
+const VIRT_ADAPTER_DEBUG: &[u8] = include_bytes!("../lib/virtual_adapter.debug.wasm");
+
 /// Virtualization options
 ///
 /// When subsystems are not virtualized, their imports and exports
@@ -36,6 +39,9 @@ pub use virt_io::{FsEntry, StdioCfg, VirtFs, VirtualFiles};
 #[derive(Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct WasiVirt {
+    /// Debug mode traces all virt calls
+    #[serde(default)]
+    pub debug: bool,
     /// Environment virtualization
     pub env: Option<VirtEnv>,
     /// Filesystem virtualization
@@ -125,10 +131,12 @@ impl WasiVirt {
     }
 
     pub fn finish(&mut self) -> Result<VirtResult> {
-        let virt_adapter = include_bytes!("../lib/virtual_adapter.wasm");
-
         let config = walrus::ModuleConfig::new();
-        let mut module = config.parse(virt_adapter)?;
+        let mut module = if self.debug {
+            config.parse(VIRT_ADAPTER_DEBUG)
+        } else {
+            config.parse(VIRT_ADAPTER)
+        }?;
         module.name = Some("wasi_virt".into());
 
         // only env virtualization is independent of io
@@ -156,7 +164,11 @@ impl WasiVirt {
             .remove_raw("component-type:virtual-adapter")
             .context("Unable to find component section")?;
 
-        let (_, mut bindgen) = metadata::decode(virt_adapter)?;
+        let (_, mut bindgen) = if self.debug {
+            metadata::decode(VIRT_ADAPTER_DEBUG)
+        } else {
+            metadata::decode(VIRT_ADAPTER)
+        }?;
         let (_, pkg_id) = bindgen
             .resolve
             .package_names

@@ -142,6 +142,10 @@ wasi-virt component.wasm --stdio=deny -o virt.wasm
 wasi-virt component.wasm --stderr=allow -o virt.wasm
 ```
 
+### Debugging
+
+The `--debug` flag can be used to get tracing output of system calls.
+
 ## API
 
 When using the virtualization API, subsystems are passthrough by default instead of deny by default.
@@ -151,7 +155,7 @@ use std::fs;
 use wasi_virt::{WasiVirt, FsEntry};
 
 fn main() {
-    let mut virt = WasiVirt::new_reactor();
+    let mut virt = WasiVirt::new();
 
     // allow all subsystems initially
     virt.allow_all();
