@@ -514,8 +514,8 @@ struct StaticDirStream {
 }
 
 impl StaticFileStream {
-    fn new(fd: u32) -> Self {
-        Self { fd, offset: 0 }
+    fn new(fd: u32, offset: u64) -> Self {
+        Self { fd, offset }
     }
     fn read(&mut self, len: u64) -> Result<(Vec<u8>, StreamStatus), ()> {
         let descriptor = IoState::get_descriptor(self.fd).map_err(|_| ())?;
@@ -702,10 +702,7 @@ impl FilesystemTypes for VirtAdapter {
         );
         match IoState::get_descriptor(fd)?.target {
             DescriptorTarget::StaticEntry(_) => {
-                if offset != 0 {
-                    return Err(ErrorCode::InvalidSeek);
-                }
-                Ok(IoState::new_stream(StaticFileStream::new(fd)))
+                Ok(IoState::new_stream(StaticFileStream::new(fd, offset)))
             }
             DescriptorTarget::HostDescriptor(host_fd) => {
                 let host_sid =
