@@ -63,7 +63,7 @@ struct TestCase {
     expect: TestExpectation,
 }
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 
 #[tokio::test]
 async fn virt_test() -> Result<()> {

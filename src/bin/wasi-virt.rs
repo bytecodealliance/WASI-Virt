@@ -142,12 +142,14 @@ fn main() -> Result<()> {
 
     // stdio
     virt_opts.stdio().stdin(args.stdin.unwrap_or(stdio.clone()));
-    let stdout = args.stdout.unwrap_or(stdio.clone());
-    if virt_opts.debug && !matches!(stdout, StdioCfg::Allow) {
-        bail!("Debug build requires stdout to be enabled");
+    virt_opts
+        .stdio()
+        .stdout(args.stdout.unwrap_or(stdio.clone()));
+    let stderr = args.stderr.unwrap_or(stdio.clone());
+    if virt_opts.debug && !matches!(stderr, StdioCfg::Allow) {
+        bail!("Debug build requires stderr to be enabled");
     }
-    virt_opts.stdio().stdout(stdout);
-    virt_opts.stdio().stderr(args.stderr.unwrap_or(stdio));
+    virt_opts.stdio().stderr(stderr);
 
     // exit
     virt_opts.exit(args.allow_exit.unwrap_or_default());
