@@ -963,9 +963,13 @@ impl FilesystemTypes for VirtAdapter {
                     child.ty,
                     StaticIndexType::RuntimeDir | StaticIndexType::RuntimeFile
                 ) {
-                    Err(ErrorCode::Invalid)
+                    let Some((host_fd, path)) = IoState::get_host_preopen(child.runtime_path())
+                    else {
+                        return Err(ErrorCode::NoEntry);
+                    };
+                    filesystem_types::readlink_at(host_fd, &path).map_err(err_map)
                 } else {
-                    Err(ErrorCode::NoEntry)
+                    Err(ErrorCode::Invalid)
                 }
             }
             DescriptorTarget::HostDescriptor(host_fd) => {
