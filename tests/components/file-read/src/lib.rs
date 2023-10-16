@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, io::ErrorKind};
 
 wit_bindgen::generate!({
   path: "../../../wit",
@@ -22,6 +22,16 @@ impl Guest for VirtTestComponent {
             }
         };
         if meta.is_file() {
+            let path = match fs::read_link(&path) {
+                Ok(path) => path.to_string_lossy().to_string(),
+                Err(err) => {
+                    if err.kind() == ErrorKind::InvalidInput {
+                        path
+                    } else {
+                        return format!("ERR: {:?}", err);
+                    }
+                }
+            };
             match fs::read_to_string(&path) {
                 Ok(source) => source,
                 Err(err) => format!("ERR: {:?}", err),

@@ -514,8 +514,8 @@ struct StaticDirStream {
 }
 
 impl StaticFileStream {
-    fn new(fd: u32) -> Self {
-        Self { fd, offset: 0 }
+    fn new(fd: u32, offset: u64) -> Self {
+        Self { fd, offset }
     }
     fn read(&mut self, len: u64) -> Result<(Vec<u8>, StreamStatus), ()> {
         let descriptor = IoState::get_descriptor(self.fd).map_err(|_| ())?;
@@ -702,10 +702,7 @@ impl FilesystemTypes for VirtAdapter {
         );
         match IoState::get_descriptor(fd)?.target {
             DescriptorTarget::StaticEntry(_) => {
-                if offset != 0 {
-                    return Err(ErrorCode::InvalidSeek);
-                }
-                Ok(IoState::new_stream(StaticFileStream::new(fd)))
+                Ok(IoState::new_stream(StaticFileStream::new(fd, offset)))
             }
             DescriptorTarget::HostDescriptor(host_fd) => {
                 let host_sid =
@@ -954,42 +951,63 @@ impl FilesystemTypes for VirtAdapter {
     }
     fn readlink_at(fd: u32, path: String) -> Result<String, ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#readlink_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#readlink_at FD={} PATH={}",
             fd, &path
         );
-        todo!()
+        let descriptor = IoState::get_descriptor(fd)?;
+        match descriptor.target {
+            DescriptorTarget::StaticEntry(ptr) => {
+                let entry = entry(ptr);
+                let child = entry.dir_lookup(&path)?;
+                if matches!(
+                    child.ty,
+                    StaticIndexType::RuntimeDir | StaticIndexType::RuntimeFile
+                ) {
+                    let Some((host_fd, path)) = IoState::get_host_preopen(child.runtime_path())
+                    else {
+                        return Err(ErrorCode::NoEntry);
+                    };
+                    filesystem_types::readlink_at(host_fd, &path).map_err(err_map)
+                } else {
+                    Err(ErrorCode::Invalid)
+                }
+            }
+            DescriptorTarget::HostDescriptor(host_fd) => {
+                filesystem_types::readlink_at(host_fd, &path).map_err(err_map)
+            }
+        }
     }
     fn remove_directory_at(fd: u32, path: String) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#remove_directory_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#remove_directory_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
     }
     fn rename_at(fd: u32, path: String, _: u32, _: String) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#rename_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#rename_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
     }
     fn symlink_at(fd: u32, path: String, _: String) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#symlink_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#symlink_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
     }
     fn access_at(fd: u32, _: PathFlags, path: String, _: AccessType) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#access_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#access_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
     }
     fn unlink_file_at(fd: u32, path: String) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#unlink_file_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#unlink_file_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
@@ -1001,7 +1019,7 @@ impl FilesystemTypes for VirtAdapter {
         _: Modes,
     ) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#change_file_permissions_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#change_file_permissions_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
@@ -1013,7 +1031,7 @@ impl FilesystemTypes for VirtAdapter {
         _: Modes,
     ) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#change_directory_permissions_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#change_directory_permissions_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
