@@ -957,7 +957,24 @@ impl FilesystemTypes for VirtAdapter {
             "CALL wasi:filesystem/types#readlink_at FD={} PATH={}",
             fd, &path
         );
-        Ok(path)
+        let descriptor = IoState::get_descriptor(fd)?;
+        match descriptor.target {
+            DescriptorTarget::StaticEntry(ptr) => {
+                let entry = entry(ptr);
+                let child = entry.dir_lookup(&path)?;
+                if matches!(
+                    child.ty,
+                    StaticIndexType::RuntimeDir | StaticIndexType::RuntimeFile
+                ) {
+                    Err(ErrorCode::Invalid)
+                } else {
+                    Err(ErrorCode::NoEntry)
+                }
+            }
+            DescriptorTarget::HostDescriptor(host_fd) => {
+                filesystem_types::readlink_at(host_fd, &path).map_err(err_map)
+            }
+        }
     }
     fn remove_directory_at(fd: u32, path: String) -> Result<(), ErrorCode> {
         debug!(
