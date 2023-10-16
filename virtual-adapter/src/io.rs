@@ -954,42 +954,42 @@ impl FilesystemTypes for VirtAdapter {
     }
     fn readlink_at(fd: u32, path: String) -> Result<String, ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#readlink_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#readlink_at FD={} PATH={}",
             fd, &path
         );
         Ok(path)
     }
     fn remove_directory_at(fd: u32, path: String) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#remove_directory_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#remove_directory_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
     }
     fn rename_at(fd: u32, path: String, _: u32, _: String) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#rename_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#rename_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
     }
     fn symlink_at(fd: u32, path: String, _: String) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#symlink_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#symlink_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
     }
     fn access_at(fd: u32, _: PathFlags, path: String, _: AccessType) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#access_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#access_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
     }
     fn unlink_file_at(fd: u32, path: String) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#unlink_file_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#unlink_file_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
@@ -1001,7 +1001,7 @@ impl FilesystemTypes for VirtAdapter {
         _: Modes,
     ) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#change_file_permissions_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#change_file_permissions_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
@@ -1013,7 +1013,7 @@ impl FilesystemTypes for VirtAdapter {
         _: Modes,
     ) -> Result<(), ErrorCode> {
         debug!(
-            "CALL wasi:filesystem/types#change_directory_permissions_ FD={} PATH={}",
+            "CALL wasi:filesystem/types#change_directory_permissions_at FD={} PATH={}",
             fd, &path
         );
         Err(ErrorCode::Access)
