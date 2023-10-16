@@ -22,6 +22,7 @@ impl Guest for VirtTestComponent {
             }
         };
         if meta.is_file() {
+            let path = fs::read_link(&path).unwrap();
             match fs::read_to_string(&path) {
                 Ok(source) => source,
                 Err(err) => format!("ERR: {:?}", err),

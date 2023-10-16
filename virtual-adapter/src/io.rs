@@ -957,7 +957,7 @@ impl FilesystemTypes for VirtAdapter {
             "CALL wasi:filesystem/types#readlink_ FD={} PATH={}",
             fd, &path
         );
-        todo!()
+        Ok(path)
     }
     fn remove_directory_at(fd: u32, path: String) -> Result<(), ErrorCode> {
         debug!(
