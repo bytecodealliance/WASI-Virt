@@ -241,7 +241,10 @@ impl FsEntry {
                 visit(sub_entry, name, base_path)?;
             }
             for (name, sub_entry) in dir.iter_mut() {
-                let path = format!("{base_path}/{name}");
+                let path = format!(
+                    "{base_path}{}{name}",
+                    if base_path.ends_with('/') { "" } else { "/" }
+                );
                 sub_entry.visit_pre_mut_inner(visit, &path)?;
             }
         }
@@ -288,7 +291,10 @@ impl FsEntry {
                     for (name, sub_entry) in dir.iter() {
                         visit(sub_entry, name, &base_path, child_offset)?;
                         child_offset -= 1;
-                        let path = format!("{base_path}/{name}");
+                        let path = format!(
+                            "{base_path}{}{name}",
+                            if base_path.ends_with('/') { "" } else { "/" }
+                        );
                         next_children_of.push((path, sub_entry));
                         if let FsEntry::Dir(dir) = sub_entry {
                             child_offset += dir.iter().len();
@@ -417,7 +423,7 @@ pub(crate) fn create_io_virt<'a>(
         false
     };
 
-    // Next we linearize the pre-order directory graph as the static file data
+    // Next we linearize the bfs-order directory graph as the static file data
     // Using a pre-order traversal
     // Each parent node is formed along with its child length and deep subgraph
     // length.
