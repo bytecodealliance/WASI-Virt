@@ -43,7 +43,7 @@ Using WASI Virt, those specific file paths can be mounted and virtualized into t
 
 ## Basic Usage
 
-Make sure to run Cargo nightly (`rustup default nightly`).
+Note: This project requires [Cargo nightly](./rust-toolchain.toml).
 
 Then:
 
