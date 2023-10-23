@@ -1900,8 +1900,7 @@ dependencies = [
 [[package]]
 name = "walrus"
 version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc27d837c587f863d99515dc8cae7cef1098bd1d99fa29373e3660c12766265e"
+source = "git+https://github.com/rustwasm/walrus?rev=db5d437b91e80c564f5e45204b8b165027d2a870#db5d437b91e80c564f5e45204b8b165027d2a870"
 dependencies = [
  "anyhow",
  "gimli 0.26.2",
@@ -1916,13 +1915,12 @@ dependencies = [
 [[package]]
 name = "walrus-macro"
 version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a6e5bd22c71e77d60140b0bd5be56155a37e5bd14e24f5f87298040d0cc40d7"
+source = "git+https://github.com/rustwasm/walrus?rev=db5d437b91e80c564f5e45204b8b165027d2a870#db5d437b91e80c564f5e45204b8b165027d2a870"
 dependencies = [
  "heck 0.3.3",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.37",
 ]
 
 [[package]]

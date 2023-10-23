@@ -1,12 +1,11 @@
-use crate::walrus_ops::{
-    bump_stack_global, get_exported_func, get_memory_id, remove_exported_func,
-};
 use anyhow::{bail, Result};
 use std::collections::HashMap;
 use walrus::{
     ActiveData, ActiveDataLocation, DataKind, ElementKind, FunctionBuilder, FunctionId,
     FunctionKind, InitExpr, Module, ValType,
 };
+
+use crate::walrus_ops::bump_stack_global;
 
 /// Data section
 /// Because data is stack-allocated we create a corresponding byte vector as large
@@ -115,7 +114,7 @@ impl Data {
     }
     pub fn finish(mut self, module: &mut Module) -> Result<()> {
         // stack embedding
-        let memory = get_memory_id(module)?;
+        let memory = module.get_memory_id()?;
         let rem = (self.stack_start - self.stack_ptr) % 8;
         if rem != 0 {
             self.stack_ptr -= 8 - rem;
@@ -132,7 +131,7 @@ impl Data {
         // passive segment embedding
         // we create one function for each passive segment, due to
         if self.passive_segments.len() > 0 {
-            let alloc_fid = get_exported_func(module, "cabi_realloc")?;
+            let alloc_fid = module.exports.get_func("cabi_realloc")?;
 
             let offset_local = module.locals.add(ValType::I32);
             let len_local = module.locals.add(ValType::I32);
@@ -206,13 +205,13 @@ impl Data {
                 .call_indirect(passive_fn_alloc_type, passive_tid);
 
             // update the existing passive_alloc function export with the new function body
-            let passive_alloc_fid = get_exported_func(module, "passive_alloc")?;
+            let passive_alloc_fid = module.exports.get_func("passive_alloc")?;
             let passive_alloc_func = module.funcs.get_mut(passive_alloc_fid);
             passive_alloc_func.kind =
                 FunctionKind::Local(builder.local_func(vec![passive_idx, offset_local, len_local]));
         }
 
-        remove_exported_func(module, "passive_alloc")?;
+        module.exports.remove("passive_alloc")?;
 
         Ok(())
     }

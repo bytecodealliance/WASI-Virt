@@ -267,7 +267,7 @@ async fn virt_test() -> Result<()> {
             }
         }
 
-        if let Some(expect_stdout) = &test.expect.stdout {
+        if let Some(_expect_stdout) = &test.expect.stdout {
             // todo: expectation pending wasmtime stream flushing
             instance.call_test_stdio(&mut store).await?;
         }

@@ -18,7 +18,7 @@ members = [
   "tests/components/do-everything",
   "tests/components/file-read",
   "tests/components/get-env",
-  "tests/components/stdio"
+  "tests/components/stdio",
 ]
 
 [profile.release]
@@ -33,7 +33,8 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.7"
-walrus = "0.20.1"
+# TODO: use published version of walrus
+walrus = { git = "https://github.com/rustwasm/walrus", rev = "db5d437b91e80c564f5e45204b8b165027d2a870" }
 wasm-compose = "0.4.2"
 wasm-metadata = "0.10.5"
 wasm-opt = "0.114.1"
@@ -45,9 +46,11 @@ anyhow = "1"
 [dev-dependencies]
 anyhow = "1"
 cap-std = "1.0.12"
-heck =  { version = "0.4" }
+heck = { version = "0.4" }
 tokio = { version = "1.30.0", features = ["macros"] }
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", features = ["component-model"] }
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", features = [
+  "component-model",
+] }
 wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime" }
 wasmparser = "0.113.1"
 
