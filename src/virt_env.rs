@@ -220,7 +220,9 @@ const WASI_ENV_FNS: [&str; 3] = ["get-arguments", "get-environment", "initial-cw
 pub(crate) fn stub_env_virt(module: &mut Module) -> Result<()> {
     for fn_name in WASI_ENV_FNS {
         module.replace_imported_func(
-            module.imports.get_func("wasi:cli/environment", fn_name)?,
+            module
+                .imports
+                .get_func("wasi:cli/environment@0.2.0-rc-2023-10-18", fn_name)?,
             |(body, _)| {
                 body.unreachable();
             },
@@ -237,10 +239,9 @@ pub(crate) fn strip_env_virt(module: &mut Module) -> Result<()> {
     stub_env_virt(module)?;
 
     for fn_name in WASI_ENV_FNS {
-        if let Ok(fid) = module
-            .exports
-            .get_func(format!("wasi:cli/environment#{fn_name}"))
-        {
+        if let Ok(fid) = module.exports.get_func(format!(
+            "wasi:cli/environment@0.2.0-rc-2023-10-18#{fn_name}"
+        )) {
             module.replace_exported_func(fid, |(body, _)| {
                 body.unreachable();
             })?;

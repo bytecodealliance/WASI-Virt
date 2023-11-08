@@ -6,70 +6,117 @@ use super::StubRequirement;
 /// Imports exposed by WASI for IO functionality
 ///
 /// Some imports are required, and others are optional.
-const WASI_IO_IMPORTS: [(&str, &str, &StubRequirement); 19] = [
+const WASI_IO_IMPORTS: &[(&str, &str, &StubRequirement)] = &[
     (
-        "wasi:io/streams",
-        "blocking-flush",
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]output-stream.blocking-flush",
         &StubRequirement::Optional,
     ),
     (
-        "wasi:io/streams",
-        "blocking-read",
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]input-stream.blocking-read",
         &StubRequirement::Required,
     ),
     (
-        "wasi:io/streams",
-        "blocking-skip",
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]input-stream.blocking-skip",
         &StubRequirement::Required,
     ),
     (
-        "wasi:io/streams",
-        "blocking-splice",
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]output-stream.blocking-splice",
         &StubRequirement::Required,
     ),
     (
-        "wasi:io/streams",
-        "blocking-write-and-flush",
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]output-stream.blocking-write-and-flush",
         &StubRequirement::Optional,
     ),
-    ("wasi:io/streams", "check-write", &StubRequirement::Optional),
     (
-        "wasi:io/streams",
-        "drop-input-stream",
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]output-stream.check-write",
+        &StubRequirement::Optional,
+    ),
+    (
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[resource-drop]input-stream",
         &StubRequirement::Required,
     ),
     (
-        "wasi:io/streams",
-        "drop-output-stream",
-        &StubRequirement::Required,
-    ),
-    ("wasi:io/streams", "flush", &StubRequirement::Optional),
-    ("wasi:io/streams", "forward", &StubRequirement::Required),
-    ("wasi:io/streams", "read", &StubRequirement::Optional),
-    ("wasi:io/streams", "skip", &StubRequirement::Required),
-    ("wasi:io/streams", "splice", &StubRequirement::Required),
-    (
-        "wasi:io/streams",
-        "subscribe-to-input-stream",
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[resource-drop]output-stream",
         &StubRequirement::Required,
     ),
     (
-        "wasi:io/streams",
-        "subscribe-to-output-stream",
-        &StubRequirement::Required,
-    ),
-    ("wasi:io/streams", "write", &StubRequirement::Required),
-    (
-        "wasi:io/streams",
-        "write-zeroes",
-        &StubRequirement::Required,
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]output-stream.flush",
+        &StubRequirement::Optional,
     ),
     (
-        "wasi:poll/poll",
-        "drop-pollable",
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]output-stream.forward",
         &StubRequirement::Required,
     ),
-    ("wasi:poll/poll", "poll-oneoff", &StubRequirement::Required),
+    (
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]input-stream.read",
+        &StubRequirement::Optional,
+    ),
+    (
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]input-stream.skip",
+        &StubRequirement::Required,
+    ),
+    (
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]output-stream.splice",
+        &StubRequirement::Required,
+    ),
+    (
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]input-stream.subscribe",
+        &StubRequirement::Required,
+    ),
+    (
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]output-stream.subscribe",
+        &StubRequirement::Required,
+    ),
+    (
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]output-stream.write",
+        &StubRequirement::Required,
+    ),
+    (
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]output-stream.write-zeroes",
+        &StubRequirement::Required,
+    ),
+    (
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[method]output-stream.blocking-write-zeroes-and-flush",
+        &StubRequirement::Required,
+    ),
+    (
+        "wasi:io/streams@0.2.0-rc-2023-10-18",
+        "[resource-drop]error",
+        &StubRequirement::Required,
+    ),
+    (
+        "wasi:io/poll@0.2.0-rc-2023-10-18",
+        "[resource-drop]pollable",
+        &StubRequirement::Required,
+    ),
+    (
+        "wasi:io/poll@0.2.0-rc-2023-10-18",
+        "poll-list",
+        &StubRequirement::Required,
+    ),
+    (
+        "wasi:io/poll@0.2.0-rc-2023-10-18",
+        "poll-one",
+        &StubRequirement::Optional,
+    ),
 ];
 
 /// Replace imported WASI functions that implement general I/O access with no-ops
@@ -80,7 +127,7 @@ pub(crate) fn stub_io_virt(module: &mut Module) -> Result<()> {
             // If the stub is always required we *must* find the function and replace it
             StubRequirement::Required => {
                 let fid = module.imports.get_func(module_name, func_name)
-                    .with_context(|| format!("failed to find required filesystem import [{func_name}] in module [{module_name}]"))?;
+                    .with_context(|| format!("failed to find required io import [{func_name}] in module [{module_name}]"))?;
 
                 module
                     .replace_imported_func(fid, |(body, _)| {
@@ -110,32 +157,36 @@ pub(crate) fn stub_io_virt(module: &mut Module) -> Result<()> {
 }
 
 /// Exported functions related to IO
-const WASI_IO_EXPORTS: [&str; 19] = [
-    "wasi:io/streams#blocking-flush",
-    "wasi:io/streams#blocking-read",
-    "wasi:io/streams#blocking-skip",
-    "wasi:io/streams#blocking-splice",
-    "wasi:io/streams#blocking-write-and-flush",
-    "wasi:io/streams#check-write",
-    "wasi:io/streams#drop-input-stream",
-    "wasi:io/streams#drop-output-stream",
-    "wasi:io/streams#flush",
-    "wasi:io/streams#forward",
-    "wasi:io/streams#read",
-    "wasi:io/streams#skip",
-    "wasi:io/streams#splice",
-    "wasi:io/streams#subscribe-to-input-stream",
-    "wasi:io/streams#subscribe-to-output-stream",
-    "wasi:io/streams#write",
-    "wasi:io/streams#write-zeroes",
-    "wasi:poll/poll#drop-pollable",
-    "wasi:poll/poll#poll-oneoff",
+const WASI_IO_EXPORTS: &[&str] = &[
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]output-stream.blocking-flush",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]input-stream.blocking-read",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]input-stream.blocking-skip",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]output-stream.blocking-splice",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]output-stream.blocking-write-and-flush",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]output-stream.check-write",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[dtor]input-stream",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[dtor]output-stream",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[dtor]error",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]error.to-debug-string",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]output-stream.flush",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]output-stream.forward",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]input-stream.read",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]input-stream.skip",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]output-stream.splice",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]input-stream.subscribe",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]output-stream.subscribe",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]output-stream.write",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]output-stream.write-zeroes",
+    "wasi:io/streams@0.2.0-rc-2023-10-18#[method]output-stream.blocking-write-zeroes-and-flush",
+    "wasi:io/poll@0.2.0-rc-2023-10-18#[dtor]pollable",
+    "wasi:io/poll@0.2.0-rc-2023-10-18#poll-list",
+    "wasi:io/poll@0.2.0-rc-2023-10-18#poll-one",
 ];
 
 /// Strip exported WASI functions that implement IO (streams, polling) access
 pub(crate) fn strip_io_virt(module: &mut Module) -> Result<()> {
     stub_io_virt(module)?;
-    for export_name in WASI_IO_EXPORTS {
+    for &export_name in WASI_IO_EXPORTS {
         module.exports.remove(export_name).with_context(|| {
             format!("failed to strip general I/O export function [{export_name}]")
         })?;

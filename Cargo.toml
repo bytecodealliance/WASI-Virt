@@ -35,10 +35,11 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.7"
 # TODO: use published version of walrus
 walrus = { git = "https://github.com/rustwasm/walrus", rev = "db5d437b91e80c564f5e45204b8b165027d2a870" }
-wasm-compose = "0.4.2"
-wasm-metadata = "0.10.5"
+# TODO: switch to upstream once https://github.com/bytecodealliance/wasm-tools/pull/1261 is merged
+wasm-compose = { git = "https://github.com/dicej/wasm-tools", branch = "wasm-compose-resource-imports" }
+wasm-metadata = "0.10.11"
 wasm-opt = "0.114.1"
-wit-component = "0.14.2"
+wit-component = "0.18.0"
 
 [build-dependencies]
 anyhow = "1"
@@ -48,12 +49,11 @@ anyhow = "1"
 cap-std = "1.0.12"
 heck = { version = "0.4" }
 tokio = { version = "1.30.0", features = ["macros"] }
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", features = [
-  "component-model",
-] }
-wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime" }
-wasmparser = "0.113.1"
+wasmtime = { version = "14.0.4", features = ["component-model"] }
+wasmtime-wasi = "14.0.4"
+wasmparser = "0.116.1"
 
 [workspace.dependencies]
 anyhow = "1"
-wit-bindgen = "0.12.0"
+# TODO: switch to upstream once https://github.com/bytecodealliance/wit-bindgen/pull/753 is merged
+wit-bindgen = { git = "https://github.com/dicej/wit-bindgen", branch = "resource-take" }
