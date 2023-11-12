@@ -6,17 +6,17 @@ use super::StubRequirement;
 /// Imports exposed by WASI for clocks functionality which are allowed to be
 const WASI_CLOCKS_IMPORTS: [(&str, &str, &StubRequirement); 3] = [
     (
-        "wasi:clocks/monotonic-clock",
+        "wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18",
         "now",
         &StubRequirement::Required,
     ),
     (
-        "wasi:clocks/monotonic-clock",
+        "wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18",
         "resolution",
         &StubRequirement::Required,
     ),
     (
-        "wasi:clocks/monotonic-clock",
+        "wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18",
         "subscribe",
         &StubRequirement::Required,
     ),
@@ -51,9 +51,9 @@ pub(crate) fn stub_clocks_virt(module: &mut Module) -> Result<()> {
 
 /// Exported functions related to WASI clocks
 const WASI_CLOCK_EXPORTS: [&str; 3] = [
-    "wasi:clocks/monotonic-clock#now",
-    "wasi:clocks/monotonic-clock#resolution",
-    "wasi:clocks/monotonic-clock#subscribe",
+    "wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18#now",
+    "wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18#resolution",
+    "wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18#subscribe",
 ];
 
 /// Strip exported WASI functions that implement clock access

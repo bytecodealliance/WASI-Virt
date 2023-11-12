@@ -296,6 +296,7 @@ impl WasiVirt {
             base_world,
             StringEncoding::UTF8,
             Some(&producers),
+            None,
         )?;
 
         module.customs.add(component_section);

@@ -189,8 +189,8 @@ async fn virt_test() -> Result<()> {
                 builder.env(k, v);
             }
         }
-        let mut table = Table::new();
-        let wasi = builder.build(&mut table)?;
+        let table = Table::new();
+        let wasi = builder.build();
 
         let mut config = Config::new();
         config.cache_config_load_default().unwrap();
@@ -260,6 +260,8 @@ async fn virt_test() -> Result<()> {
                 eprintln!("> {}", file_read);
             }
             if !file_read.eq(expect_file_read) {
+                eprintln!("expected: {expect_file_read}\n");
+                eprintln!("got: {file_read}\n");
                 return Err(anyhow!(
                     "Unexpected file read result testing {:?}",
                     test_case_path
@@ -303,7 +305,9 @@ fn has_component_import(bytes: &[u8]) -> Result<Option<String>> {
                         Payload::ImportSection(impt_section_reader) => {
                             for impt in impt_section_reader {
                                 let impt = impt?;
-                                return Ok(Some(format!("{}#{}", impt.module, impt.name)));
+                                if !impt.module.starts_with("[export]") {
+                                    return Ok(Some(format!("{}#{}", impt.module, impt.name)));
+                                }
                             }
                         }
                         Payload::End(_) => return Ok(None),

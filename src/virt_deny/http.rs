@@ -15,12 +15,12 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
     WASI_HTTP_FNS.get_or_init(|| {
         Vec::from([
             (
-                "wasi:http/incoming-handler#handle",
+                "wasi:http/incoming-handler@0.2.0-rc-2023-10-18#handle",
                 vec![ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/outgoing-handler#handle",
+                "wasi:http/outgoing-handler@0.2.0-rc-2023-10-18#handle",
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -33,19 +33,23 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
                 ],
                 vec![ValType::I32],
             ),
-            ("wasi:http/types#drop-fields", vec![ValType::I32], vec![]),
             (
-                "wasi:http/types#new-fields",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[dtor]fields",
+                vec![ValType::I32],
+                vec![],
+            ),
+            (
+                "wasi:http/types@0.2.0-rc-2023-10-18#[constructor]fields",
                 vec![ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#fields-get",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]fields.get",
                 vec![ValType::I32, ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#fields-set",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]fields.set",
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -56,12 +60,12 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
                 vec![],
             ),
             (
-                "wasi:http/types#fields-delete",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]fields.delete",
                 vec![ValType::I32, ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types#fields-append",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]fields.append",
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -72,67 +76,87 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
                 vec![],
             ),
             (
-                "wasi:http/types#fields-entries",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]fields.entries",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#fields-clone",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]fields.clone",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#finish-incoming-stream",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[dtor]incoming-body",
+                vec![ValType::I32],
+                vec![],
+            ),
+            (
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]incoming-body.stream",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#finish-outgoing-stream",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[static]incoming-body.finish",
+                vec![ValType::I32],
+                vec![ValType::I32],
+            ),
+            (
+                "wasi:http/types@0.2.0-rc-2023-10-18#[dtor]outgoing-body",
+                vec![ValType::I32],
+                vec![],
+            ),
+            (
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]outgoing-body.write",
+                vec![ValType::I32],
+                vec![ValType::I32],
+            ),
+            (
+                "wasi:http/types@0.2.0-rc-2023-10-18#[static]outgoing-body.finish",
                 vec![ValType::I32, ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types#drop-incoming-request",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[dtor]incoming-request",
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types#drop-outgoing-request",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[dtor]outgoing-request",
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types#incoming-request-method",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]incoming-request.method",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#incoming-request-path-with-query",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]incoming-request.path-with-query",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#incoming-request-scheme",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]incoming-request.scheme",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#incoming-request-authority",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]incoming-request.authority",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#incoming-request-headers",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]incoming-request.headers",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#incoming-request-consume",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]incoming-request.consume",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#new-outgoing-request",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[constructor]outgoing-request",
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -152,17 +176,17 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#outgoing-request-write",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]outgoing-request.write",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#drop-response-outparam",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[dtor]response-outparam",
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types#set-response-outparam",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[static]response-outparam.set",
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -173,52 +197,67 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#drop-incoming-response",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[dtor]incoming-response",
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types#drop-outgoing-response",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[dtor]outgoing-response",
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types#incoming-response-status",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]incoming-response.status",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#incoming-response-headers",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]incoming-response.headers",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#incoming-response-consume",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]incoming-response.consume",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#new-outgoing-response",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[constructor]outgoing-response",
                 vec![ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#outgoing-response-write",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]outgoing-response.write",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#drop-future-incoming-response",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[dtor]future-incoming-response",
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types#future-incoming-response-get",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]future-incoming-response.get",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types#listen-to-future-incoming-response",
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]future-incoming-response.subscribe",
+                vec![ValType::I32],
+                vec![ValType::I32],
+            ),
+            (
+                "wasi:http/types@0.2.0-rc-2023-10-18#[dtor]future-trailers",
+                vec![ValType::I32],
+                vec![],
+            ),
+            (
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]future-trailers.subscribe",
+                vec![ValType::I32],
+                vec![ValType::I32],
+            ),
+            (
+                "wasi:http/types@0.2.0-rc-2023-10-18#[method]future-trailers.get",
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),

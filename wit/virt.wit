@@ -1,189 +1,189 @@
-package local:virt
+package local:virt;
 
 // in future this should be defined as a union world of the various
 // virtual subsystems, when union syntax lands
 world virtual-adapter {
-  import wasi:cli/environment
-  import wasi:filesystem/preopens
-  import wasi:filesystem/types
-  import wasi:io/streams
-  export wasi:io/streams
-  export wasi:cli/environment
-  export wasi:filesystem/types
-  export wasi:filesystem/preopens
-  import wasi:cli/stdin
-  import wasi:cli/stdout
-  import wasi:cli/stderr
-  import wasi:cli/terminal-input
-  import wasi:cli/terminal-output
-  import wasi:cli/terminal-stdin
-  import wasi:cli/terminal-stdout
-  import wasi:cli/terminal-stderr
-  export wasi:cli/stdin
-  export wasi:cli/stdout
-  export wasi:cli/stderr
-  export wasi:cli/terminal-input
-  export wasi:cli/terminal-output
-  export wasi:cli/terminal-stdin
-  export wasi:cli/terminal-stdout
-  export wasi:cli/terminal-stderr
-  import wasi:poll/poll
-  export wasi:poll/poll
-  import wasi:clocks/monotonic-clock
-  export wasi:clocks/monotonic-clock
-  import wasi:http/types
-  export wasi:http/types
-  import wasi:sockets/ip-name-lookup
-  export wasi:sockets/ip-name-lookup
-  import wasi:sockets/tcp
-  export wasi:sockets/tcp
-  import wasi:sockets/udp
-  export wasi:sockets/udp
+  import wasi:cli/environment@0.2.0-rc-2023-10-18;
+  import wasi:filesystem/preopens@0.2.0-rc-2023-10-18;
+  import wasi:filesystem/types@0.2.0-rc-2023-10-18;
+  import wasi:io/streams@0.2.0-rc-2023-10-18;
+  export wasi:io/streams@0.2.0-rc-2023-10-18;
+  import wasi:io/poll@0.2.0-rc-2023-10-18;
+  export wasi:io/poll@0.2.0-rc-2023-10-18;
+  export wasi:cli/environment@0.2.0-rc-2023-10-18;
+  export wasi:filesystem/types@0.2.0-rc-2023-10-18;
+  export wasi:filesystem/preopens@0.2.0-rc-2023-10-18;
+  import wasi:cli/stdin@0.2.0-rc-2023-10-18;
+  import wasi:cli/stdout@0.2.0-rc-2023-10-18;
+  import wasi:cli/stderr@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-input@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-output@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-stdin@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-stdout@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-stderr@0.2.0-rc-2023-10-18;
+  export wasi:cli/stdin@0.2.0-rc-2023-10-18;
+  export wasi:cli/stdout@0.2.0-rc-2023-10-18;
+  export wasi:cli/stderr@0.2.0-rc-2023-10-18;
+  export wasi:cli/terminal-input@0.2.0-rc-2023-10-18;
+  export wasi:cli/terminal-output@0.2.0-rc-2023-10-18;
+  export wasi:cli/terminal-stdin@0.2.0-rc-2023-10-18;
+  export wasi:cli/terminal-stdout@0.2.0-rc-2023-10-18;
+  export wasi:cli/terminal-stderr@0.2.0-rc-2023-10-18;
+  import wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18;
+  export wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18;
+  import wasi:http/types@0.2.0-rc-2023-10-18;
+  export wasi:http/types@0.2.0-rc-2023-10-18;
+  import wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
+  export wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
+  import wasi:sockets/tcp@0.2.0-rc-2023-10-18;
+  export wasi:sockets/tcp@0.2.0-rc-2023-10-18;
+  import wasi:sockets/udp@0.2.0-rc-2023-10-18;
+  export wasi:sockets/udp@0.2.0-rc-2023-10-18;
 }
 
 world virtual-base {
 }
 
 world virtual-io {
-  import wasi:io/streams
-  export wasi:io/streams
-  import wasi:poll/poll
-  export wasi:poll/poll
+  import wasi:io/streams@0.2.0-rc-2023-10-18;
+  export wasi:io/streams@0.2.0-rc-2023-10-18;
+  import wasi:io/poll@0.2.0-rc-2023-10-18;
+  export wasi:io/poll@0.2.0-rc-2023-10-18;
 }
 
 // io components of subsystems
 // where there is an intersection of
 // streams + poll
 world virtual-io-sockets {
-  import wasi:sockets/ip-name-lookup
-  export wasi:sockets/ip-name-lookup
-  import wasi:sockets/tcp
-  export wasi:sockets/tcp
-  import wasi:sockets/udp
-  export wasi:sockets/udp
+  import wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
+  export wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
+  import wasi:sockets/tcp@0.2.0-rc-2023-10-18;
+  export wasi:sockets/tcp@0.2.0-rc-2023-10-18;
+  import wasi:sockets/udp@0.2.0-rc-2023-10-18;
+  export wasi:sockets/udp@0.2.0-rc-2023-10-18;
 }
 
 world virtual-io-clocks {
-  import wasi:clocks/monotonic-clock
-  export wasi:clocks/monotonic-clock
+  import wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18;
+  export wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18;
 }
 
 world virtual-io-http {
-  import wasi:http/types
-  export wasi:http/types
+  import wasi:http/types@0.2.0-rc-2023-10-18;
+  export wasi:http/types@0.2.0-rc-2023-10-18;
 }
 
 world virtual-fs {
-  import wasi:filesystem/preopens
-  import wasi:filesystem/types
-  export wasi:filesystem/types
-  export wasi:filesystem/preopens
+  import wasi:filesystem/preopens@0.2.0-rc-2023-10-18;
+  import wasi:filesystem/types@0.2.0-rc-2023-10-18;
+  export wasi:filesystem/types@0.2.0-rc-2023-10-18;
+  export wasi:filesystem/preopens@0.2.0-rc-2023-10-18;
 }
 
 world virtual-stdio {
-  import wasi:cli/stdin
-  import wasi:cli/stdout
-  import wasi:cli/stderr
-  import wasi:cli/terminal-input
-  import wasi:cli/terminal-output
-  import wasi:cli/terminal-stdin
-  import wasi:cli/terminal-stdout
-  import wasi:cli/terminal-stderr
-  export wasi:cli/stdin
-  export wasi:cli/stdout
-  export wasi:cli/stderr
-  export wasi:cli/terminal-input
-  export wasi:cli/terminal-output
-  export wasi:cli/terminal-stdin
-  export wasi:cli/terminal-stdout
-  export wasi:cli/terminal-stderr
+  import wasi:cli/stdin@0.2.0-rc-2023-10-18;
+  import wasi:cli/stdout@0.2.0-rc-2023-10-18;
+  import wasi:cli/stderr@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-input@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-output@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-stdin@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-stdout@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-stderr@0.2.0-rc-2023-10-18;
+  export wasi:cli/stdin@0.2.0-rc-2023-10-18;
+  export wasi:cli/stdout@0.2.0-rc-2023-10-18;
+  export wasi:cli/stderr@0.2.0-rc-2023-10-18;
+  export wasi:cli/terminal-input@0.2.0-rc-2023-10-18;
+  export wasi:cli/terminal-output@0.2.0-rc-2023-10-18;
+  export wasi:cli/terminal-stdin@0.2.0-rc-2023-10-18;
+  export wasi:cli/terminal-stdout@0.2.0-rc-2023-10-18;
+  export wasi:cli/terminal-stderr@0.2.0-rc-2023-10-18;
 }
 
 // remaining subsystems
 world virtual-env {
-  import wasi:cli/environment
-  export wasi:cli/environment
+  import wasi:cli/environment@0.2.0-rc-2023-10-18;
+  export wasi:cli/environment@0.2.0-rc-2023-10-18;
 }
 
 world virtual-clocks {
-  import wasi:clocks/monotonic-clock
-  export wasi:clocks/monotonic-clock
-  import wasi:clocks/wall-clock
-  import wasi:clocks/timezone
-  export wasi:clocks/wall-clock
-  export wasi:clocks/timezone
+  import wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18;
+  export wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18;
+  import wasi:clocks/wall-clock@0.2.0-rc-2023-10-18;
+  import wasi:clocks/timezone@0.2.0-rc-2023-10-18;
+  export wasi:clocks/wall-clock@0.2.0-rc-2023-10-18;
+  export wasi:clocks/timezone@0.2.0-rc-2023-10-18;
 }
 
 world virtual-random {
-  import wasi:random/insecure-seed
-  import wasi:random/insecure
-  import wasi:random/random
-  export wasi:random/insecure-seed
-  export wasi:random/insecure
-  export wasi:random/random
+  import wasi:random/insecure-seed@0.2.0-rc-2023-10-18;
+  import wasi:random/insecure@0.2.0-rc-2023-10-18;
+  import wasi:random/random@0.2.0-rc-2023-10-18;
+  export wasi:random/insecure-seed@0.2.0-rc-2023-10-18;
+  export wasi:random/insecure@0.2.0-rc-2023-10-18;
+  export wasi:random/random@0.2.0-rc-2023-10-18;
 }
 
 world virtual-sockets {
-  import wasi:sockets/ip-name-lookup
-  export wasi:sockets/ip-name-lookup
-  import wasi:sockets/tcp
-  export wasi:sockets/tcp
-  import wasi:sockets/udp
-  export wasi:sockets/udp
-  import wasi:sockets/instance-network
-  import wasi:sockets/tcp-create-socket
-  import wasi:sockets/udp-create-socket
-  export wasi:sockets/instance-network
-  export wasi:sockets/tcp-create-socket
-  export wasi:sockets/udp-create-socket
-  import wasi:sockets/network
-  export wasi:sockets/network
+  import wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
+  export wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
+  import wasi:sockets/tcp@0.2.0-rc-2023-10-18;
+  export wasi:sockets/tcp@0.2.0-rc-2023-10-18;
+  import wasi:sockets/udp@0.2.0-rc-2023-10-18;
+  export wasi:sockets/udp@0.2.0-rc-2023-10-18;
+  import wasi:sockets/instance-network@0.2.0-rc-2023-10-18;
+  import wasi:sockets/tcp-create-socket@0.2.0-rc-2023-10-18;
+  import wasi:sockets/udp-create-socket@0.2.0-rc-2023-10-18;
+  export wasi:sockets/instance-network@0.2.0-rc-2023-10-18;
+  export wasi:sockets/tcp-create-socket@0.2.0-rc-2023-10-18;
+  export wasi:sockets/udp-create-socket@0.2.0-rc-2023-10-18;
+  import wasi:sockets/network@0.2.0-rc-2023-10-18;
+  export wasi:sockets/network@0.2.0-rc-2023-10-18;
 }
 
 world virtual-http {
-  import wasi:http/types
-  export wasi:http/types
-  import wasi:http/incoming-handler
-  import wasi:http/outgoing-handler
-  export wasi:http/incoming-handler
-  export wasi:http/outgoing-handler
+  import wasi:http/types@0.2.0-rc-2023-10-18;
+  export wasi:http/types@0.2.0-rc-2023-10-18;
+  import wasi:http/incoming-handler@0.2.0-rc-2023-10-18;
+  import wasi:http/outgoing-handler@0.2.0-rc-2023-10-18;
+  export wasi:http/incoming-handler@0.2.0-rc-2023-10-18;
+  export wasi:http/outgoing-handler@0.2.0-rc-2023-10-18;
 }
 
 world virtual-exit {
-  import wasi:cli/exit
-  export wasi:cli/exit
+  import wasi:cli/exit@0.2.0-rc-2023-10-18;
+  export wasi:cli/exit@0.2.0-rc-2023-10-18;
 }
 
 world virt-test {
-  import wasi:clocks/wall-clock
-  import wasi:clocks/monotonic-clock
-  import wasi:clocks/timezone
-  import wasi:filesystem/types
-  import wasi:sockets/instance-network
-  import wasi:sockets/ip-name-lookup
-  import wasi:sockets/network
-  import wasi:sockets/tcp-create-socket
-  import wasi:sockets/tcp
-  import wasi:sockets/udp-create-socket
-  import wasi:sockets/udp
-  import wasi:random/random
-  import wasi:random/insecure
-  import wasi:random/insecure-seed
-  import wasi:poll/poll
-  import wasi:io/streams
-  import wasi:cli/environment
-  import wasi:filesystem/preopens
-  import wasi:cli/exit
-  import wasi:cli/stdin
-  import wasi:cli/stdout
-  import wasi:cli/stderr
-  import wasi:cli/terminal-input
-  import wasi:cli/terminal-output
-  import wasi:cli/terminal-stdin
-  import wasi:cli/terminal-stdout
-  import wasi:cli/terminal-stderr
+  import wasi:clocks/wall-clock@0.2.0-rc-2023-10-18;
+  import wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18;
+  import wasi:clocks/timezone@0.2.0-rc-2023-10-18;
+  import wasi:filesystem/types@0.2.0-rc-2023-10-18;
+  import wasi:sockets/instance-network@0.2.0-rc-2023-10-18;
+  import wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
+  import wasi:sockets/network@0.2.0-rc-2023-10-18;
+  import wasi:sockets/tcp-create-socket@0.2.0-rc-2023-10-18;
+  import wasi:sockets/tcp@0.2.0-rc-2023-10-18;
+  import wasi:sockets/udp-create-socket@0.2.0-rc-2023-10-18;
+  import wasi:sockets/udp@0.2.0-rc-2023-10-18;
+  import wasi:random/random@0.2.0-rc-2023-10-18;
+  import wasi:random/insecure@0.2.0-rc-2023-10-18;
+  import wasi:random/insecure-seed@0.2.0-rc-2023-10-18;
+  import wasi:io/poll@0.2.0-rc-2023-10-18;
+  import wasi:io/streams@0.2.0-rc-2023-10-18;
+  import wasi:cli/environment@0.2.0-rc-2023-10-18;
+  import wasi:filesystem/preopens@0.2.0-rc-2023-10-18;
+  import wasi:cli/exit@0.2.0-rc-2023-10-18;
+  import wasi:cli/stdin@0.2.0-rc-2023-10-18;
+  import wasi:cli/stdout@0.2.0-rc-2023-10-18;
+  import wasi:cli/stderr@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-input@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-output@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-stdin@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-stdout@0.2.0-rc-2023-10-18;
+  import wasi:cli/terminal-stderr@0.2.0-rc-2023-10-18;
 
-  export test-get-env: func() -> list<tuple<string, string>>
-  export test-file-read: func(path: string) -> string
-  export test-stdio: func() -> ()
+  export test-get-env: func() -> list<tuple<string, string>>;
+  export test-file-read: func(path: string) -> string;
+  export test-stdio: func() -> ();
 }
