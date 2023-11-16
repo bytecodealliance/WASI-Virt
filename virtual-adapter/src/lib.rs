@@ -39,6 +39,7 @@ wit_bindgen::generate!({
         "wasi:http/types/outgoing-request": io::HttpOutgoingRequest,
         "wasi:http/types/outgoing-response": io::HttpOutgoingResponse,
         "wasi:http/types/response-outparam": io::HttpResponseOutparam,
+        "wasi:http/outgoing-handler": VirtAdapter,
         "wasi:sockets/ip-name-lookup": VirtAdapter,
         "wasi:sockets/ip-name-lookup/resolve-address-stream": io::SocketsResolveAddressStream,
         "wasi:sockets/tcp/tcp-socket": io::SocketsTcpSocket,

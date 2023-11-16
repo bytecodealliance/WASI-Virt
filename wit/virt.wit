@@ -33,6 +33,8 @@ world virtual-adapter {
   export wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18;
   import wasi:http/types@0.2.0-rc-2023-10-18;
   export wasi:http/types@0.2.0-rc-2023-10-18;
+  import wasi:http/outgoing-handler@0.2.0-rc-2023-10-18;
+  export wasi:http/outgoing-handler@0.2.0-rc-2023-10-18;
   import wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
   export wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
   import wasi:sockets/tcp@0.2.0-rc-2023-10-18;
@@ -71,6 +73,8 @@ world virtual-io-clocks {
 world virtual-io-http {
   import wasi:http/types@0.2.0-rc-2023-10-18;
   export wasi:http/types@0.2.0-rc-2023-10-18;
+  import wasi:http/outgoing-handler@0.2.0-rc-2023-10-18;
+  export wasi:http/outgoing-handler@0.2.0-rc-2023-10-18;
 }
 
 world virtual-fs {
