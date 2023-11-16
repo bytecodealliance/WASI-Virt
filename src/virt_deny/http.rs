@@ -261,6 +261,11 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
+            (
+                "wasi:http/outgoing-handler@0.2.0-rc-2023-10-18#handle",
+                vec![ValType::I32; 8],
+                vec![ValType::I32],
+            ),
         ])
     })
 }
