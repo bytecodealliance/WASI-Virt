@@ -13,12 +13,13 @@ use crate::exports::wasi::filesystem::types::{
     DirectoryEntry, DirectoryEntryStream, ErrorCode, Guest as FilesystemTypes, GuestDescriptor,
     GuestDirectoryEntryStream, MetadataHashValue, Modes, NewTimestamp, OpenFlags, PathFlags,
 };
+use crate::exports::wasi::http::outgoing_handler::Guest as OutgoingHandler;
 use crate::exports::wasi::http::types::{
     Error as HttpError, Fields, FutureIncomingResponse, FutureTrailers, GuestFields,
     GuestFutureIncomingResponse, GuestFutureTrailers, GuestIncomingBody, GuestIncomingRequest,
     GuestIncomingResponse, GuestOutgoingBody, GuestOutgoingRequest, GuestOutgoingResponse,
     GuestResponseOutparam, IncomingBody, IncomingRequest, IncomingResponse, Method, OutgoingBody,
-    OutgoingRequest, OutgoingResponse, ResponseOutparam, Scheme, StatusCode,
+    OutgoingRequest, OutgoingResponse, RequestOptions, ResponseOutparam, Scheme, StatusCode,
 };
 use crate::exports::wasi::io::poll::{Guest as Poll, Pollable};
 use crate::exports::wasi::io::streams::{
@@ -43,6 +44,7 @@ use crate::wasi::io::streams;
 
 // these are all the subsystems which touch streams + poll
 use crate::wasi::clocks::monotonic_clock;
+use crate::wasi::http::outgoing_handler;
 use crate::wasi::http::types as http_types;
 use crate::wasi::io::poll;
 use crate::wasi::sockets::ip_name_lookup;
@@ -594,6 +596,17 @@ impl Preopens for VirtAdapter {
             .iter()
             .map(|(fd, name)| (Resource::new(fd.clone()), name.clone()))
             .collect()
+    }
+}
+
+impl OutgoingHandler for VirtAdapter {
+    fn handle(
+        request: Resource<OutgoingRequest>,
+        options: Option<RequestOptions>,
+    ) -> Result<Resource<FutureIncomingResponse>, HttpError> {
+        outgoing_handler::handle(Resource::take(request).0, options.map(request_options_map))
+            .map(|response| Resource::new(HttpFutureIncomingResponse(response)))
+            .map_err(http_err_map_rev)
     }
 }
 
@@ -1802,6 +1815,14 @@ fn http_err_map_rev(err: http_types::Error) -> HttpError {
         http_types::Error::TimeoutError(s) => HttpError::TimeoutError(s),
         http_types::Error::ProtocolError(s) => HttpError::ProtocolError(s),
         http_types::Error::UnexpectedError(s) => HttpError::UnexpectedError(s),
+    }
+}
+
+fn request_options_map(options: RequestOptions) -> http_types::RequestOptions {
+    http_types::RequestOptions {
+        connect_timeout_ms: options.connect_timeout_ms,
+        first_byte_timeout_ms: options.first_byte_timeout_ms,
+        between_bytes_timeout_ms: options.between_bytes_timeout_ms,
     }
 }
 
