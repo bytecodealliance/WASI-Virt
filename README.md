@@ -93,7 +93,7 @@ wasi-virt component.wasm -e CUSTOM=VAR --allow-env=SOME,ENV_VARS -o virt.wasm
 wasi-virt component.wasm --allow-exit -o virt.wasm
 ```
 
-### FS
+### Filesystem
 
 ```sh
 # Mounting a virtual directory
