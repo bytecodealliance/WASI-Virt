@@ -19,7 +19,7 @@ Supports all of the current WASI subsystems:
 - [Clocks](#clocks): Allow / Deny
 - [Environment](#env): Set environment variables, configure host environment variable permissions
 - [Exit](#exit): Allow / Deny
-- [Filesystem](#filesystem): Mount a read-only filesystem, configure host filesystem preopen remappings or pass-through.
+- [Filesystem](#fs): Mount a read-only filesystem, configure host filesystem preopen remappings or pass-through.
 - [HTTP](#http): Allow / Deny
 - [Random](#random): Allow / Deny
 - [Sockets](#sockets): Allow / Deny
