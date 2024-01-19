@@ -196,7 +196,7 @@ fn main() -> Result<()> {
     let out_bytes = if let Some(compose_path) = args.compose {
         let compose_path = PathBuf::from(compose_path);
         let dir = env::temp_dir();
-        let tmp_virt = dir.join(format!("virt.{}.wasm", timestamp()));
+        let tmp_virt = dir.join(format!("virt{}.wasm", timestamp()));
         fs::write(&tmp_virt, virt_component.adapter)?;
 
         let composed_bytes = ComponentComposer::new(

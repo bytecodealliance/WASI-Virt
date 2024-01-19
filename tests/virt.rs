@@ -128,7 +128,7 @@ async fn virt_test() -> Result<()> {
         }
 
         let mut virt_component_path = generated_path.join(test_case_name);
-        virt_component_path.set_extension("virt.wasm");
+        virt_component_path.set_extension("wasm");
         let mut virt_opts = test.virt_opts.clone().unwrap_or_default();
         virt_opts.exit(Default::default());
         if DEBUG {

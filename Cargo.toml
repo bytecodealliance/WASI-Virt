@@ -36,10 +36,10 @@ toml = "0.7"
 # TODO: use published version of walrus
 walrus = { git = "https://github.com/rustwasm/walrus", rev = "db5d437b91e80c564f5e45204b8b165027d2a870" }
 # TODO: switch to upstream once https://github.com/bytecodealliance/wasm-tools/pull/1261 is merged
-wasm-compose = { git = "https://github.com/dicej/wasm-tools", branch = "wasm-compose-resource-imports" }
-wasm-metadata = "0.10.11"
+wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools", rev="8b9ba68a18f1bac2f31c4889cc6c462cde3f13a0" }
+wasm-metadata = "0.10.15"
 wasm-opt = "0.114.1"
-wit-component = "0.18.0"
+wit-component = "0.19.1"
 
 [build-dependencies]
 anyhow = "1"
@@ -51,7 +51,7 @@ heck = { version = "0.4" }
 tokio = { version = "1.30.0", features = ["macros"] }
 wasmtime = { version = "14.0.4", features = ["component-model"] }
 wasmtime-wasi = "14.0.4"
-wasmparser = "0.116.1"
+wasmparser = "0.119.0"
 
 [workspace.dependencies]
 anyhow = "1"
