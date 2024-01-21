@@ -610,9 +610,12 @@ impl OutgoingHandler for VirtAdapter {
         request: Resource<OutgoingRequest>,
         options: Option<RequestOptions>,
     ) -> Result<Resource<FutureIncomingResponse>, HttpError> {
-        outgoing_handler::handle(Resource::take(request).0, options.map(request_options_map))
-            .map(|response| Resource::new(HttpFutureIncomingResponse(response)))
-            .map_err(http_err_map_rev)
+        outgoing_handler::handle(
+            Resource::into_inner(request).0,
+            options.map(request_options_map),
+        )
+        .map(|response| Resource::new(HttpFutureIncomingResponse(response)))
+        .map_err(http_err_map_rev)
     }
 }
 
@@ -1269,9 +1272,9 @@ impl GuestOutgoingRequest for OutgoingRequest {
 impl GuestResponseOutparam for ResponseOutparam {
     fn set(param: Resource<Self>, response: Result<Resource<OutgoingResponse>, HttpError>) {
         debug!("CALL wasi:http/types#response-outparam.set");
-        let param = Resource::take(param).0;
+        let param = Resource::into_inner(param).0;
         match response {
-            Ok(res) => http_types::ResponseOutparam::set(param, Ok(Resource::take(res).0)),
+            Ok(res) => http_types::ResponseOutparam::set(param, Ok(Resource::into_inner(res).0)),
             Err(err) => http_types::ResponseOutparam::set(param, Err(&http_err_map(err))),
         }
     }
@@ -1301,7 +1304,7 @@ impl GuestIncomingBody for IncomingBody {
     fn finish(body: Resource<IncomingBody>) -> Resource<FutureTrailers> {
         debug!("CALL wasi:http/types#incoming-body.finish");
         Resource::new(HttpFutureTrailers(http_types::IncomingBody::finish(
-            Resource::take(body).0,
+            Resource::into_inner(body).0,
         )))
     }
 }
@@ -1349,8 +1352,8 @@ impl GuestOutgoingBody for OutgoingBody {
     fn finish(body: Resource<OutgoingBody>, trailers: Option<Resource<Fields>>) {
         debug!("CALL wasi:http/types#outgoing-body.finish");
         http_types::OutgoingBody::finish(
-            Resource::take(body).0,
-            trailers.map(|fields| Resource::take(fields).0),
+            Resource::into_inner(body).0,
+            trailers.map(|fields| Resource::into_inner(fields).0),
         )
     }
 }

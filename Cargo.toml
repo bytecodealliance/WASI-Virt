@@ -33,10 +33,8 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.7"
-# TODO: use published version of walrus
-walrus = { git = "https://github.com/rustwasm/walrus", rev = "db5d437b91e80c564f5e45204b8b165027d2a870" }
-# TODO: switch to upstream once https://github.com/bytecodealliance/wasm-tools/pull/1261 is merged
-wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools", rev="8b9ba68a18f1bac2f31c4889cc6c462cde3f13a0" }
+walrus = "0.20.3"
+wasm-compose = "0.4.16"
 wasm-metadata = "0.10.15"
 wasm-opt = "0.114.1"
 wit-component = "0.19.1"
@@ -55,5 +53,4 @@ wasmparser = "0.119.0"
 
 [workspace.dependencies]
 anyhow = "1"
-# TODO: switch to upstream once https://github.com/bytecodealliance/wit-bindgen/pull/753 is merged
-wit-bindgen = { git = "https://github.com/dicej/wit-bindgen", branch = "resource-take" }
+wit-bindgen = "0.16.0"
