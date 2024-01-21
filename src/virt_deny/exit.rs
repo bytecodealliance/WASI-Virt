@@ -12,7 +12,7 @@ static WASI_EXIT_FNS: OnceLock<Vec<(&str, FuncParams, FuncResults)>> = OnceLock:
 fn get_wasi_exit_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> {
     WASI_EXIT_FNS.get_or_init(|| {
         Vec::from([(
-            "wasi:cli/exit@0.2.0-rc-2023-10-18#exit",
+            "wasi:cli/exit@0.2.0-rc-2023-12-05#exit",
             vec![ValType::I32],
             vec![],
         )])

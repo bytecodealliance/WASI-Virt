@@ -9,9 +9,9 @@ use crate::exports::wasi::cli::terminal_stdout::Guest as TerminalStdout;
 use crate::exports::wasi::clocks::monotonic_clock::Guest as MonotonicClock;
 use crate::exports::wasi::filesystem::preopens::Guest as Preopens;
 use crate::exports::wasi::filesystem::types::{
-    AccessType, Advice, Descriptor, DescriptorFlags, DescriptorStat, DescriptorType,
-    DirectoryEntry, DirectoryEntryStream, ErrorCode, Guest as FilesystemTypes, GuestDescriptor,
-    GuestDirectoryEntryStream, MetadataHashValue, Modes, NewTimestamp, OpenFlags, PathFlags,
+    Advice, Descriptor, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry,
+    DirectoryEntryStream, ErrorCode, Guest as FilesystemTypes, GuestDescriptor,
+    GuestDirectoryEntryStream, MetadataHashValue, NewTimestamp, OpenFlags, PathFlags,
 };
 use crate::exports::wasi::http::outgoing_handler::Guest as OutgoingHandler;
 use crate::exports::wasi::http::types::{
@@ -21,10 +21,11 @@ use crate::exports::wasi::http::types::{
     GuestResponseOutparam, IncomingBody, IncomingRequest, IncomingResponse, Method, OutgoingBody,
     OutgoingRequest, OutgoingResponse, RequestOptions, ResponseOutparam, Scheme, StatusCode,
 };
-use crate::exports::wasi::io::poll::{Guest as Poll, Pollable};
+use crate::exports::wasi::io::error::GuestError as GuestStreamsError;
+use crate::exports::wasi::io::poll::{Guest as Poll, GuestPollable, Pollable};
 use crate::exports::wasi::io::streams::{
-    Error as StreamsError, GuestError as GuestStreamsError, GuestInputStream, GuestOutputStream,
-    InputStream, OutputStream, StreamError,
+    Error as StreamsError, GuestInputStream, GuestOutputStream, InputStream, OutputStream,
+    StreamError,
 };
 use crate::exports::wasi::sockets::ip_name_lookup::{
     Guest as IpNameLookup, GuestResolveAddressStream, IpAddress, IpAddressFamily, Network,
@@ -572,9 +573,14 @@ impl MonotonicClock for VirtAdapter {
         debug!("CALL wasi:clocks/monotonic-clock#resolution");
         monotonic_clock::resolution()
     }
-    fn subscribe(when: u64, absolute: bool) -> Resource<Pollable> {
-        debug!("CALL wasi:clocks/monotonic-clock#subscribe");
-        let host_pollable = monotonic_clock::subscribe(when, absolute);
+    fn subscribe_instant(when: u64) -> Resource<Pollable> {
+        debug!("CALL wasi:clocks/monotonic-clock#subscribe-instant");
+        let host_pollable = monotonic_clock::subscribe_instant(when);
+        Resource::new(Pollable::Host(host_pollable))
+    }
+    fn subscribe_duration(when: u64) -> Resource<Pollable> {
+        debug!("CALL wasi:clocks/monotonic-clock#subscribe-duration");
+        let host_pollable = monotonic_clock::subscribe_duration(when);
         Resource::new(Pollable::Host(host_pollable))
     }
 }
@@ -610,13 +616,31 @@ impl OutgoingHandler for VirtAdapter {
     }
 }
 
+impl GuestPollable for IoPollable {
+    fn ready(&self) -> bool {
+        debug!("CALL wasi:io/poll#pollable.ready PID={self:?}",);
+        match self {
+            IoPollable::Host(pid) => pid.ready(),
+            IoPollable::Null => true,
+        }
+    }
+
+    fn block(&self) {
+        debug!("CALL wasi:io/poll#pollable.block PID={self:?}",);
+        match self {
+            IoPollable::Host(pid) => pid.block(),
+            IoPollable::Null => (),
+        }
+    }
+}
+
 impl Poll for VirtAdapter {
-    fn poll_list(list: Vec<&Pollable>) -> Vec<u32> {
+    fn poll(list: Vec<&Pollable>) -> Vec<u32> {
         debug!("CALL wasi:io/poll#poll-list PIDS={list:?}",);
         let has_host_polls = list.iter().any(|&pid| matches!(pid, Pollable::Host(_)));
         let has_virt_polls = list.iter().any(|&pid| matches!(pid, Pollable::Null));
         if has_host_polls && !has_virt_polls {
-            return poll::poll_list(
+            return poll::poll(
                 &list
                     .iter()
                     .map(|&pid| {
@@ -640,7 +664,7 @@ impl Poll for VirtAdapter {
                 host_map.push(u32::try_from(index).unwrap());
             }
         }
-        let mut ready = poll::poll_list(&host_polls)
+        let mut ready = poll::poll(&host_polls)
             .into_iter()
             .map(|index| host_map[usize::try_from(index).unwrap()])
             .collect::<Vec<_>>();
@@ -650,11 +674,6 @@ impl Poll for VirtAdapter {
             }
         }
         ready
-    }
-
-    fn poll_one(pollable: &Pollable) {
-        debug!("CALL wasi:io/poll#poll-one PID={pollable:?}",);
-        Self::poll_list(vec![pollable]);
     }
 }
 
@@ -828,7 +847,6 @@ impl GuestDescriptor for Descriptor {
         path: String,
         open_flags: OpenFlags,
         descriptor_flags: DescriptorFlags,
-        modes: Modes,
     ) -> Result<Resource<Self>, ErrorCode> {
         debug!("CALL wasi:filesystem/types#descriptor.open-at FD={self:?} PATH={path}",);
         match self {
@@ -849,7 +867,6 @@ impl GuestDescriptor for Descriptor {
                             filesystem_types::OpenFlags::from_bits(open_flags.bits()).unwrap(),
                             filesystem_types::DescriptorFlags::from_bits(descriptor_flags.bits())
                                 .unwrap(),
-                            filesystem_types::Modes::from_bits(modes.bits()).unwrap(),
                         )
                         .map_err(err_map)?;
                     Ok(Resource::new(Self::Host(Rc::new(child_fd))))
@@ -865,7 +882,6 @@ impl GuestDescriptor for Descriptor {
                         filesystem_types::OpenFlags::from_bits(open_flags.bits()).unwrap(),
                         filesystem_types::DescriptorFlags::from_bits(descriptor_flags.bits())
                             .unwrap(),
-                        filesystem_types::Modes::from_bits(modes.bits()).unwrap(),
                     )
                     .map_err(err_map)?;
                 Ok(Resource::new(Self::Host(Rc::new(child_fd))))
@@ -905,53 +921,9 @@ impl GuestDescriptor for Descriptor {
         debug!("CALL wasi:filesystem/types#descriptor.symlink-at FD={self:?} PATH={path}",);
         Err(ErrorCode::Access)
     }
-    fn access_at(&self, _: PathFlags, path: String, _: AccessType) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#descriptor.access-at FD={self:?} PATH={path}",);
-        Err(ErrorCode::Access)
-    }
     fn unlink_file_at(&self, path: String) -> Result<(), ErrorCode> {
         debug!("CALL wasi:filesystem/types#descriptor.unlink-file-at FD={self:?} PATH={path}",);
         Err(ErrorCode::Access)
-    }
-    fn change_file_permissions_at(
-        &self,
-        _: PathFlags,
-        path: String,
-        _: Modes,
-    ) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#descriptor.change-file-permissions_at FD={self:?} PATH={path}",);
-        Err(ErrorCode::Access)
-    }
-    fn change_directory_permissions_at(
-        &self,
-        _: PathFlags,
-        path: String,
-        _: Modes,
-    ) -> Result<(), ErrorCode> {
-        debug!(
-            "CALL wasi:filesystem/types#descriptor.change-directory-permissions_at FD={self:?} PATH={path}",
-        );
-        Err(ErrorCode::Access)
-    }
-    fn lock_shared(&self) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#descriptor.lock-shared FD={self:?}");
-        Ok(())
-    }
-    fn lock_exclusive(&self) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#descriptor.lock-exclusive FD={self:?}");
-        Ok(())
-    }
-    fn try_lock_shared(&self) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#descriptor.try-lock-shared FD={self:?}");
-        Ok(())
-    }
-    fn try_lock_exclusive(&self) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#descriptor.try-lock-exclusive FD={self:?}");
-        Ok(())
-    }
-    fn unlock(&self) -> Result<(), ErrorCode> {
-        debug!("CALL wasi:filesystem/types#descriptor.unlock FD={self:?}");
-        Ok(())
     }
     fn is_same_object(&self, other: &Self) -> bool {
         debug!("CALL wasi:filesystem/types#descriptor.is-same-object FD1={self:?} FD2={other:?}",);
@@ -1129,7 +1101,7 @@ impl GuestOutputStream for OutputStream {
                 .map_err(stream_err_map),
         }
     }
-    fn splice(&self, from: Resource<InputStream>, len: u64) -> Result<u64, StreamError> {
+    fn splice(&self, from: &InputStream, len: u64) -> Result<u64, StreamError> {
         debug!("CALL wasi:io/streams#output-stream.splice TO_SID={self:?} FROM_SID={from:?}",);
         let to_sid = match self {
             Self::Null => {
@@ -1140,7 +1112,7 @@ impl GuestOutputStream for OutputStream {
             }
             Self::Host(sid) => sid,
         };
-        let from_sid = match Resource::take(from) {
+        let from_sid = match from {
             InputStream::Null => {
                 return Ok(len);
             }
@@ -1150,9 +1122,9 @@ impl GuestOutputStream for OutputStream {
             InputStream::StaticFile { .. } => todo!(),
             InputStream::Host(sid) => sid,
         };
-        to_sid.splice(from_sid, len).map_err(stream_err_map)
+        to_sid.splice(&from_sid, len).map_err(stream_err_map)
     }
-    fn blocking_splice(&self, from: Resource<InputStream>, len: u64) -> Result<u64, StreamError> {
+    fn blocking_splice(&self, from: &IoInputStream, len: u64) -> Result<u64, StreamError> {
         debug!(
             "CALL wasi:io/streams#output-stream.blocking-splice TO_SID={self:?} FROM_SID={from:?}",
         );
@@ -1165,7 +1137,7 @@ impl GuestOutputStream for OutputStream {
             }
             Self::Host(sid) => sid,
         };
-        let from_sid = match Resource::take(from) {
+        let from_sid = match from {
             InputStream::Null => {
                 return Ok(len);
             }
@@ -1176,31 +1148,8 @@ impl GuestOutputStream for OutputStream {
             InputStream::Host(sid) => sid,
         };
         to_sid
-            .blocking_splice(from_sid, len)
+            .blocking_splice(&from_sid, len)
             .map_err(stream_err_map)
-    }
-    fn forward(&self, from: Resource<InputStream>) -> Result<u64, StreamError> {
-        debug!("CALL wasi:io/streams#output-stream.forward TO_SID={self:?} FROM_SID={from:?}",);
-        let to_sid = match self {
-            Self::Null => {
-                return Ok(0);
-            }
-            Self::Err => {
-                return Err(StreamError::Closed);
-            }
-            Self::Host(sid) => sid,
-        };
-        let from_sid = match Resource::take(from) {
-            InputStream::Null => {
-                return Ok(0);
-            }
-            InputStream::Err => {
-                return Err(StreamError::Closed);
-            }
-            InputStream::StaticFile { .. } => todo!(),
-            InputStream::Host(sid) => sid,
-        };
-        to_sid.forward(from_sid).map_err(stream_err_map)
     }
     fn subscribe(&self) -> Resource<Pollable> {
         debug!("CALL wasi:io/streams#output-stream.subscribe SID={self:?}");

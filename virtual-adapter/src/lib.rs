@@ -12,7 +12,7 @@ wit_bindgen::generate!({
     exports: {
         "wasi:io/poll": VirtAdapter,
         "wasi:io/poll/pollable": io::IoPollable,
-        "wasi:io/streams/error": io::IoError,
+        "wasi:io/error/error": io::IoError,
         "wasi:io/streams/input-stream": io::IoInputStream,
         "wasi:io/streams/output-stream": io::IoOutputStream,
         "wasi:filesystem/preopens": VirtAdapter,

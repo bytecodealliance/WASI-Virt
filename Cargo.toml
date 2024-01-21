@@ -49,8 +49,8 @@ anyhow = "1"
 cap-std = "1.0.12"
 heck = { version = "0.4" }
 tokio = { version = "1.30.0", features = ["macros"] }
-wasmtime = { version = "14.0.4", features = ["component-model"] }
-wasmtime-wasi = "14.0.4"
+wasmtime = { version = "16.0.0", features = ["component-model"] }
+wasmtime-wasi = "16.0.0"
 wasmparser = "0.119.0"
 
 [workspace.dependencies]
