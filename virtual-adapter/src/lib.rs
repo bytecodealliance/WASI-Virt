@@ -44,5 +44,7 @@ wit_bindgen::generate!({
         "wasi:sockets/ip-name-lookup/resolve-address-stream": io::SocketsResolveAddressStream,
         "wasi:sockets/tcp/tcp-socket": io::SocketsTcpSocket,
         "wasi:sockets/udp/udp-socket": io::SocketsUdpSocket,
+        "wasi:sockets/udp/incoming-datagram-stream": io::SocketsIncomingDatagramStream,
+        "wasi:sockets/udp/outgoing-datagram-stream": io::SocketsOutgoingDatagramStream,
     }
 });

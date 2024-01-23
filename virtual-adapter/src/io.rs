@@ -28,13 +28,16 @@ use crate::exports::wasi::io::streams::{
     StreamError,
 };
 use crate::exports::wasi::sockets::ip_name_lookup::{
-    Guest as IpNameLookup, GuestResolveAddressStream, IpAddress, IpAddressFamily, Network,
-    ResolveAddressStream,
+    Guest as IpNameLookup, GuestResolveAddressStream, IpAddress, Network, ResolveAddressStream,
 };
 use crate::exports::wasi::sockets::tcp::{
-    ErrorCode as NetworkErrorCode, GuestTcpSocket, IpSocketAddress, ShutdownType, TcpSocket,
+    Duration, ErrorCode as NetworkErrorCode, GuestTcpSocket, IpSocketAddress, ShutdownType,
+    TcpSocket,
 };
-use crate::exports::wasi::sockets::udp::{Datagram, GuestUdpSocket, UdpSocket};
+use crate::exports::wasi::sockets::udp::{
+    GuestIncomingDatagramStream, GuestOutgoingDatagramStream, GuestUdpSocket, IncomingDatagram,
+    OutgoingDatagram, UdpSocket,
+};
 
 use crate::wasi::cli::stderr;
 use crate::wasi::cli::stdin;
@@ -42,6 +45,7 @@ use crate::wasi::cli::stdout;
 use crate::wasi::filesystem::preopens;
 use crate::wasi::filesystem::types as filesystem_types;
 use crate::wasi::io::streams;
+use crate::wasi::sockets::network::IpAddressFamily;
 
 // these are all the subsystems which touch streams + poll
 use crate::wasi::clocks::monotonic_clock;
@@ -422,6 +426,8 @@ pub struct HttpResponseOutparam(http_types::ResponseOutparam);
 pub struct SocketsResolveAddressStream(ip_name_lookup::ResolveAddressStream);
 pub struct SocketsTcpSocket(tcp::TcpSocket);
 pub struct SocketsUdpSocket(udp::UdpSocket);
+pub struct SocketsIncomingDatagramStream(udp::IncomingDatagramStream);
+pub struct SocketsOutgoingDatagramStream(udp::OutgoingDatagramStream);
 
 pub struct IoState {
     initialized: bool,
@@ -684,12 +690,10 @@ impl IpNameLookup for VirtAdapter {
     fn resolve_addresses(
         network: &Network,
         name: String,
-        address_family: Option<IpAddressFamily>,
-        include_unavailable: bool,
     ) -> Result<Resource<ResolveAddressStream>, NetworkErrorCode> {
         debug!("CALL wasi:sockets/ip-name-lookup#resolve-addresses");
         Ok(Resource::new(SocketsResolveAddressStream(
-            ip_name_lookup::resolve_addresses(network, &name, address_family, include_unavailable)?,
+            ip_name_lookup::resolve_addresses(network, &name)?,
         )))
     }
 }
@@ -1453,45 +1457,57 @@ impl GuestTcpSocket for TcpSocket {
         debug!("CALL wasi:sockets/tcp#tcp-socket.remote-address");
         self.0.remote_address()
     }
+    fn is_listening(&self) -> bool {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.is-listening");
+        self.0.is_listening()
+    }
     fn address_family(&self) -> IpAddressFamily {
         debug!("CALL wasi:sockets/tcp#tcp-socket.address-family");
         self.0.address_family()
-    }
-    fn ipv6_only(&self) -> Result<bool, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.ipv6-only");
-        self.0.ipv6_only()
-    }
-    fn set_ipv6_only(&self, value: bool) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.set-ipv6-only");
-        self.0.set_ipv6_only(value)
     }
     fn set_listen_backlog_size(&self, value: u64) -> Result<(), NetworkErrorCode> {
         debug!("CALL wasi:sockets/tcp#tcp-socket.set-listen-backlog-size");
         self.0.set_listen_backlog_size(value)
     }
-    fn keep_alive(&self) -> Result<bool, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.keep-alive");
-        self.0.keep_alive()
+    fn keep_alive_enabled(&self) -> Result<bool, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.keep-alive-enabled");
+        self.0.keep_alive_enabled()
     }
-    fn set_keep_alive(&self, value: bool) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.set-keep-alive");
-        self.0.set_keep_alive(value)
+    fn set_keep_alive_enabled(&self, value: bool) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.set-keep-alive-enabled");
+        self.0.set_keep_alive_enabled(value)
     }
-    fn no_delay(&self) -> Result<bool, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.no-delay");
-        self.0.no_delay()
+    fn keep_alive_idle_time(&self) -> Result<Duration, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.keep-alive-idle-time");
+        self.0.keep_alive_idle_time()
     }
-    fn set_no_delay(&self, value: bool) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.set-no-delay");
-        self.0.set_no_delay(value)
+    fn set_keep_alive_idle_time(&self, value: Duration) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.set-keep-alive-idle-time");
+        self.0.set_keep_alive_idle_time(value)
     }
-    fn unicast_hop_limit(&self) -> Result<u8, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.unicast-hop-limit");
-        self.0.unicast_hop_limit()
+    fn keep_alive_interval(&self) -> Result<Duration, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.keep-alive-interval-time");
+        self.0.keep_alive_interval()
     }
-    fn set_unicast_hop_limit(&self, value: u8) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.set-unicast-hop-limit");
-        self.0.set_unicast_hop_limit(value)
+    fn set_keep_alive_interval(&self, value: Duration) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.set-keep-alive-interval-time");
+        self.0.set_keep_alive_interval(value)
+    }
+    fn keep_alive_count(&self) -> Result<u32, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.keep-alive-count-time");
+        self.0.keep_alive_count()
+    }
+    fn set_keep_alive_count(&self, value: u32) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.set-keep-alive-count-time");
+        self.0.set_keep_alive_count(value)
+    }
+    fn hop_limit(&self) -> Result<u8, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.hop-limit");
+        self.0.hop_limit()
+    }
+    fn set_hop_limit(&self, value: u8) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.set-hop-limit");
+        self.0.set_hop_limit(value)
     }
     fn receive_buffer_size(&self) -> Result<u64, NetworkErrorCode> {
         debug!("CALL wasi:sockets/tcp#tcp-socket.receive-buffer-size");
@@ -1536,44 +1552,6 @@ impl GuestUdpSocket for UdpSocket {
         debug!("CALL wasi:sockets/udp#udp-socket.finish-bind");
         self.0.finish_bind()
     }
-    fn start_connect(
-        &self,
-        network: &Network,
-        remote_address: IpSocketAddress,
-    ) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/udp#udp-socket.start-connect");
-        self.0.start_connect(network, remote_address)
-    }
-    fn finish_connect(&self) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/udp#udp-socket.finish-connect");
-        self.0.finish_connect()
-    }
-    fn receive(&self, max_results: u64) -> Result<Vec<Datagram>, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/udp#udp-socket.receive");
-        match self.0.receive(max_results) {
-            Ok(mut datagrams) => Ok(datagrams
-                .drain(..)
-                .map(|d| Datagram {
-                    data: d.data,
-                    remote_address: d.remote_address,
-                })
-                .collect::<Vec<Datagram>>()),
-            Err(err) => Err(err),
-        }
-    }
-    fn send(&self, mut datagrams: Vec<Datagram>) -> Result<u64, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/udp#udp-socket.send");
-        self.0.send(
-            datagrams
-                .drain(..)
-                .map(|d| udp::Datagram {
-                    data: d.data,
-                    remote_address: d.remote_address,
-                })
-                .collect::<Vec<udp::Datagram>>()
-                .as_slice(),
-        )
-    }
     fn local_address(&self) -> Result<IpSocketAddress, NetworkErrorCode> {
         debug!("CALL wasi:sockets/udp#udp-socket.local-address");
         self.0.local_address()
@@ -1585,14 +1563,6 @@ impl GuestUdpSocket for UdpSocket {
     fn address_family(&self) -> IpAddressFamily {
         debug!("CALL wasi:sockets/udp#udp-socket.address-family");
         self.0.address_family()
-    }
-    fn ipv6_only(&self) -> Result<bool, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/udp#udp-socket.ipv6-only");
-        self.0.ipv6_only()
-    }
-    fn set_ipv6_only(&self, value: bool) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/udp#udp-socket.set-ipv6-only");
-        self.0.set_ipv6_only(value)
     }
     fn unicast_hop_limit(&self) -> Result<u8, NetworkErrorCode> {
         debug!("CALL wasi:sockets/udp#udp-socket.unicast-hop-limit");
@@ -1620,6 +1590,70 @@ impl GuestUdpSocket for UdpSocket {
     }
     fn subscribe(&self) -> Resource<Pollable> {
         debug!("CALL wasi:sockets/udp#udp-socket.subscribe");
+        Resource::new(Pollable::Host(self.0.subscribe()))
+    }
+    fn stream(
+        &self,
+        remote_addr: Option<IpSocketAddress>,
+    ) -> Result<
+        (
+            Resource<SocketsIncomingDatagramStream>,
+            Resource<SocketsOutgoingDatagramStream>,
+        ),
+        NetworkErrorCode,
+    > {
+        debug!("CALL wasi:sockets/udp#udp-socket.stream");
+        let (in_, out) = self.0.stream(remote_addr)?;
+        Ok((
+            Resource::new(SocketsIncomingDatagramStream(in_)),
+            Resource::new(SocketsOutgoingDatagramStream(out)),
+        ))
+    }
+}
+
+impl GuestIncomingDatagramStream for SocketsIncomingDatagramStream {
+    fn receive(&self, max_results: u64) -> Result<Vec<IncomingDatagram>, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#incoming-datagram-stream.receive");
+        match self.0.receive(max_results) {
+            Ok(mut datagrams) => Ok(datagrams
+                .drain(..)
+                .map(|d| IncomingDatagram {
+                    data: d.data,
+                    remote_address: d.remote_address,
+                })
+                .collect::<Vec<IncomingDatagram>>()),
+            Err(err) => Err(err),
+        }
+    }
+
+    fn subscribe(&self) -> Resource<IoPollable> {
+        debug!("CALL wasi:sockets/udp#incoming-datagram-stream.subscribe");
+        Resource::new(Pollable::Host(self.0.subscribe()))
+    }
+}
+
+impl GuestOutgoingDatagramStream for SocketsOutgoingDatagramStream {
+    fn check_send(&self) -> Result<u64, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#outgoing-datagram-stream.check-send");
+        self.0.check_send()
+    }
+
+    fn send(&self, mut datagrams: Vec<OutgoingDatagram>) -> Result<u64, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#outgoing-datagram-stream.send");
+        self.0.send(
+            datagrams
+                .drain(..)
+                .map(|d| udp::OutgoingDatagram {
+                    data: d.data,
+                    remote_address: d.remote_address,
+                })
+                .collect::<Vec<udp::OutgoingDatagram>>()
+                .as_slice(),
+        )
+    }
+
+    fn subscribe(&self) -> Resource<IoPollable> {
+        debug!("CALL wasi:sockets/udp#outgoing-datagram-stream.subscribe");
         Resource::new(Pollable::Host(self.0.subscribe()))
     }
 }

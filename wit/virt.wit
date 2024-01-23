@@ -37,12 +37,12 @@ world virtual-adapter {
   export wasi:http/types@0.2.0-rc-2023-10-18;
   import wasi:http/outgoing-handler@0.2.0-rc-2023-10-18;
   export wasi:http/outgoing-handler@0.2.0-rc-2023-10-18;
-  import wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
-  export wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
-  import wasi:sockets/tcp@0.2.0-rc-2023-10-18;
-  export wasi:sockets/tcp@0.2.0-rc-2023-10-18;
-  import wasi:sockets/udp@0.2.0-rc-2023-10-18;
-  export wasi:sockets/udp@0.2.0-rc-2023-10-18;
+  import wasi:sockets/ip-name-lookup@0.2.0-rc-2024-01-16;
+  export wasi:sockets/ip-name-lookup@0.2.0-rc-2024-01-16;
+  import wasi:sockets/tcp@0.2.0-rc-2024-01-16;
+  export wasi:sockets/tcp@0.2.0-rc-2024-01-16;
+  import wasi:sockets/udp@0.2.0-rc-2024-01-16;
+  export wasi:sockets/udp@0.2.0-rc-2024-01-16;
 }
 
 world virtual-base {
@@ -61,12 +61,12 @@ world virtual-io {
 // where there is an intersection of
 // streams + poll
 world virtual-io-sockets {
-  import wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
-  export wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
-  import wasi:sockets/tcp@0.2.0-rc-2023-10-18;
-  export wasi:sockets/tcp@0.2.0-rc-2023-10-18;
-  import wasi:sockets/udp@0.2.0-rc-2023-10-18;
-  export wasi:sockets/udp@0.2.0-rc-2023-10-18;
+  import wasi:sockets/ip-name-lookup@0.2.0-rc-2024-01-16;
+  export wasi:sockets/ip-name-lookup@0.2.0-rc-2024-01-16;
+  import wasi:sockets/tcp@0.2.0-rc-2024-01-16;
+  export wasi:sockets/tcp@0.2.0-rc-2024-01-16;
+  import wasi:sockets/udp@0.2.0-rc-2024-01-16;
+  export wasi:sockets/udp@0.2.0-rc-2024-01-16;
 }
 
 world virtual-io-clocks {
@@ -130,20 +130,20 @@ world virtual-random {
 }
 
 world virtual-sockets {
-  import wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
-  export wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
-  import wasi:sockets/tcp@0.2.0-rc-2023-10-18;
-  export wasi:sockets/tcp@0.2.0-rc-2023-10-18;
-  import wasi:sockets/udp@0.2.0-rc-2023-10-18;
-  export wasi:sockets/udp@0.2.0-rc-2023-10-18;
-  import wasi:sockets/instance-network@0.2.0-rc-2023-10-18;
-  import wasi:sockets/tcp-create-socket@0.2.0-rc-2023-10-18;
-  import wasi:sockets/udp-create-socket@0.2.0-rc-2023-10-18;
-  export wasi:sockets/instance-network@0.2.0-rc-2023-10-18;
-  export wasi:sockets/tcp-create-socket@0.2.0-rc-2023-10-18;
-  export wasi:sockets/udp-create-socket@0.2.0-rc-2023-10-18;
-  import wasi:sockets/network@0.2.0-rc-2023-10-18;
-  export wasi:sockets/network@0.2.0-rc-2023-10-18;
+  import wasi:sockets/ip-name-lookup@0.2.0-rc-2024-01-16;
+  export wasi:sockets/ip-name-lookup@0.2.0-rc-2024-01-16;
+  import wasi:sockets/tcp@0.2.0-rc-2024-01-16;
+  export wasi:sockets/tcp@0.2.0-rc-2024-01-16;
+  import wasi:sockets/udp@0.2.0-rc-2024-01-16;
+  export wasi:sockets/udp@0.2.0-rc-2024-01-16;
+  import wasi:sockets/instance-network@0.2.0-rc-2024-01-16;
+  import wasi:sockets/tcp-create-socket@0.2.0-rc-2024-01-16;
+  import wasi:sockets/udp-create-socket@0.2.0-rc-2024-01-16;
+  export wasi:sockets/instance-network@0.2.0-rc-2024-01-16;
+  export wasi:sockets/tcp-create-socket@0.2.0-rc-2024-01-16;
+  export wasi:sockets/udp-create-socket@0.2.0-rc-2024-01-16;
+  import wasi:sockets/network@0.2.0-rc-2024-01-16;
+  export wasi:sockets/network@0.2.0-rc-2024-01-16;
 }
 
 world virtual-http {
@@ -164,13 +164,13 @@ world virt-test {
   import wasi:clocks/wall-clock@0.2.0-rc-2023-11-10;
   import wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10;
   import wasi:filesystem/types@0.2.0-rc-2023-11-10;
-  import wasi:sockets/instance-network@0.2.0-rc-2023-10-18;
-  import wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
-  import wasi:sockets/network@0.2.0-rc-2023-10-18;
-  import wasi:sockets/tcp-create-socket@0.2.0-rc-2023-10-18;
-  import wasi:sockets/tcp@0.2.0-rc-2023-10-18;
-  import wasi:sockets/udp-create-socket@0.2.0-rc-2023-10-18;
-  import wasi:sockets/udp@0.2.0-rc-2023-10-18;
+  import wasi:sockets/instance-network@0.2.0-rc-2024-01-16;
+  import wasi:sockets/ip-name-lookup@0.2.0-rc-2024-01-16;
+  import wasi:sockets/network@0.2.0-rc-2024-01-16;
+  import wasi:sockets/tcp-create-socket@0.2.0-rc-2024-01-16;
+  import wasi:sockets/tcp@0.2.0-rc-2024-01-16;
+  import wasi:sockets/udp-create-socket@0.2.0-rc-2024-01-16;
+  import wasi:sockets/udp@0.2.0-rc-2024-01-16;
   import wasi:random/random@0.2.0-rc-2023-11-10;
   import wasi:random/insecure@0.2.0-rc-2023-11-10;
   import wasi:random/insecure-seed@0.2.0-rc-2023-11-10;
