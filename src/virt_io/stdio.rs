@@ -6,42 +6,42 @@ use super::StubRequirement;
 /// Imports exposed by WASI for STDIO functionality which are allowed to be missing
 const WASI_STDIO_IMPORTS: &[(&str, &str, &StubRequirement)] = &[
     (
-        "wasi:cli/stdin@0.2.0-rc-2024-01-16",
+        "wasi:cli/stdin@0.2.0",
         "get-stdin",
         &StubRequirement::Optional,
     ),
     (
-        "wasi:cli/stdout@0.2.0-rc-2024-01-16",
+        "wasi:cli/stdout@0.2.0",
         "get-stdout",
         &StubRequirement::Optional,
     ),
     (
-        "wasi:cli/stderr@0.2.0-rc-2024-01-16",
+        "wasi:cli/stderr@0.2.0",
         "get-stderr",
         &StubRequirement::Optional,
     ),
     (
-        "wasi:cli/terminal-stdin@0.2.0-rc-2024-01-16",
+        "wasi:cli/terminal-stdin@0.2.0",
         "get-terminal-stdin",
         &StubRequirement::Optional,
     ),
     (
-        "wasi:cli/terminal-stdout@0.2.0-rc-2024-01-16",
+        "wasi:cli/terminal-stdout@0.2.0",
         "get-terminal-stdout",
         &StubRequirement::Optional,
     ),
     (
-        "wasi:cli/terminal-stderr@0.2.0-rc-2024-01-16",
+        "wasi:cli/terminal-stderr@0.2.0",
         "get-terminal-stderr",
         &StubRequirement::Optional,
     ),
     (
-        "wasi:cli/terminal-input@0.2.0-rc-2024-01-16",
+        "wasi:cli/terminal-input@0.2.0",
         "drop-terminal-input",
         &StubRequirement::Optional,
     ),
     (
-        "wasi:cli/terminal-output@0.2.0-rc-2024-01-16",
+        "wasi:cli/terminal-output@0.2.0",
         "drop-terminal-output",
         &StubRequirement::Optional,
     ),
@@ -72,14 +72,14 @@ pub(crate) fn stub_stdio_virt(module: &mut Module) -> Result<()> {
 
 /// Exported functions related to STDIO
 const WASI_STDIO_EXPORTS: [&str; 8] = [
-    "wasi:cli/stdin@0.2.0-rc-2024-01-16#get-stdin",
-    "wasi:cli/stdout@0.2.0-rc-2024-01-16#get-stdout",
-    "wasi:cli/stderr@0.2.0-rc-2024-01-16#get-stderr",
-    "wasi:cli/terminal-stdin@0.2.0-rc-2024-01-16#get-terminal-stdin",
-    "wasi:cli/terminal-stdout@0.2.0-rc-2024-01-16#get-terminal-stdout",
-    "wasi:cli/terminal-stderr@0.2.0-rc-2024-01-16#get-terminal-stderr",
-    "wasi:cli/terminal-input@0.2.0-rc-2024-01-16#[dtor]terminal-input",
-    "wasi:cli/terminal-output@0.2.0-rc-2024-01-16#[dtor]terminal-output",
+    "wasi:cli/stdin@0.2.0#get-stdin",
+    "wasi:cli/stdout@0.2.0#get-stdout",
+    "wasi:cli/stderr@0.2.0#get-stderr",
+    "wasi:cli/terminal-stdin@0.2.0#get-terminal-stdin",
+    "wasi:cli/terminal-stdout@0.2.0#get-terminal-stdout",
+    "wasi:cli/terminal-stderr@0.2.0#get-terminal-stderr",
+    "wasi:cli/terminal-input@0.2.0#[dtor]terminal-input",
+    "wasi:cli/terminal-output@0.2.0#[dtor]terminal-output",
 ];
 
 /// Strip exported WASI functions that implement standard I/O (stdin, stdout, etc) access
