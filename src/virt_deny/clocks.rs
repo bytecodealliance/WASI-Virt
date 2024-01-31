@@ -15,32 +15,32 @@ fn get_wasi_clock_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)>
     WASI_CLOCK_FNS.get_or_init(|| {
         Vec::from([
             (
-                "wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10#now",
+                "wasi:clocks/monotonic-clock@0.2.0#now",
                 vec![],
                 vec![ValType::I64],
             ),
             (
-                "wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10#resolution",
+                "wasi:clocks/monotonic-clock@0.2.0#resolution",
                 vec![],
                 vec![ValType::I64],
             ),
             (
-                "wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10#subscribe-instant",
+                "wasi:clocks/monotonic-clock@0.2.0#subscribe-instant",
                 vec![ValType::I64],
                 vec![ValType::I32],
             ),
             (
-                "wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10#subscribe-duration",
+                "wasi:clocks/monotonic-clock@0.2.0#subscribe-duration",
                 vec![ValType::I64],
                 vec![ValType::I32],
             ),
             (
-                "wasi:clocks/wall-clock@0.2.0-rc-2023-11-10#now",
+                "wasi:clocks/wall-clock@0.2.0#now",
                 vec![],
                 vec![ValType::I32],
             ),
             (
-                "wasi:clocks/wall-clock@0.2.0-rc-2023-11-10#resolution",
+                "wasi:clocks/wall-clock@0.2.0#resolution",
                 vec![],
                 vec![ValType::I32],
             ),

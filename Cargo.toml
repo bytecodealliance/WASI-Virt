@@ -37,7 +37,7 @@ walrus = "0.20.3"
 wasm-compose = "0.5.0"
 wasm-metadata = "0.10.15"
 wasm-opt = "0.114.1"
-wit-component = "0.19.1"
+wit-component = "0.19.0"
 
 [build-dependencies]
 anyhow = "1"
@@ -53,4 +53,4 @@ wasmparser = "0.119.0"
 
 [workspace.dependencies]
 anyhow = "1"
-wit-bindgen = "0.16.0"
+wit-bindgen = { git = "https://github.com/guybedford/wit-bindgen", rev = "9d72cad91230c456c12286d0f49476caa1b5659c" }

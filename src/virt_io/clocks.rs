@@ -6,22 +6,22 @@ use super::StubRequirement;
 /// Imports exposed by WASI for clocks functionality which are allowed to be
 const WASI_CLOCKS_IMPORTS: [(&str, &str, &StubRequirement); 4] = [
     (
-        "wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10",
+        "wasi:clocks/monotonic-clock@0.2.0",
         "now",
         &StubRequirement::Required,
     ),
     (
-        "wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10",
+        "wasi:clocks/monotonic-clock@0.2.0",
         "resolution",
         &StubRequirement::Required,
     ),
     (
-        "wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10",
+        "wasi:clocks/monotonic-clock@0.2.0",
         "subscribe-instant",
         &StubRequirement::Required,
     ),
     (
-        "wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10",
+        "wasi:clocks/monotonic-clock@0.2.0",
         "subscribe-duration",
         &StubRequirement::Required,
     ),
@@ -56,10 +56,10 @@ pub(crate) fn stub_clocks_virt(module: &mut Module) -> Result<()> {
 
 /// Exported functions related to WASI clocks
 const WASI_CLOCK_EXPORTS: [&str; 4] = [
-    "wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10#now",
-    "wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10#resolution",
-    "wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10#subscribe-instant",
-    "wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10#subscribe-duration",
+    "wasi:clocks/monotonic-clock@0.2.0#now",
+    "wasi:clocks/monotonic-clock@0.2.0#resolution",
+    "wasi:clocks/monotonic-clock@0.2.0#subscribe-instant",
+    "wasi:clocks/monotonic-clock@0.2.0#subscribe-duration",
 ];
 
 /// Strip exported WASI functions that implement clock access

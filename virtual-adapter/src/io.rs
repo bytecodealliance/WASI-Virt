@@ -15,11 +15,13 @@ use crate::exports::wasi::filesystem::types::{
 };
 use crate::exports::wasi::http::outgoing_handler::Guest as OutgoingHandler;
 use crate::exports::wasi::http::types::{
-    Error as HttpError, Fields, FutureIncomingResponse, FutureTrailers, GuestFields,
-    GuestFutureIncomingResponse, GuestFutureTrailers, GuestIncomingBody, GuestIncomingRequest,
-    GuestIncomingResponse, GuestOutgoingBody, GuestOutgoingRequest, GuestOutgoingResponse,
-    GuestResponseOutparam, IncomingBody, IncomingRequest, IncomingResponse, Method, OutgoingBody,
-    OutgoingRequest, OutgoingResponse, RequestOptions, ResponseOutparam, Scheme, StatusCode,
+    DnsErrorPayload, ErrorCode as HttpErrorCode, FieldSizePayload, Fields, FutureIncomingResponse,
+    FutureTrailers, Guest as GuestHttpTypes, GuestFields, GuestFutureIncomingResponse,
+    GuestFutureTrailers, GuestIncomingBody, GuestIncomingRequest, GuestIncomingResponse,
+    GuestOutgoingBody, GuestOutgoingRequest, GuestOutgoingResponse, GuestRequestOptions,
+    GuestResponseOutparam, HeaderError, Headers, IncomingBody, IncomingRequest, IncomingResponse,
+    Method, OutgoingBody, OutgoingRequest, OutgoingResponse, RequestOptions, ResponseOutparam,
+    Scheme, StatusCode, TlsAlertReceivedPayload,
 };
 use crate::exports::wasi::io::error::GuestError as GuestStreamsError;
 use crate::exports::wasi::io::poll::{Guest as Poll, GuestPollable, Pollable};
@@ -109,7 +111,7 @@ fn log(msg: &str) {
 
 #[derive(Debug)]
 pub enum IoError {
-    Code(ErrorCode),
+    FsCode(ErrorCode),
     Host(streams::Error),
 }
 
@@ -303,7 +305,7 @@ impl StaticIndexEntry {
                 }
                 if offset.get() as usize > unsafe { self.data.active.1 } {
                     return Err(StreamError::LastOperationFailed(Resource::new(
-                        StreamsError::Code(ErrorCode::InvalidSeek),
+                        StreamsError::FsCode(ErrorCode::InvalidSeek),
                     )));
                 }
                 let read_ptr = unsafe { self.data.active.0.add(offset.get() as usize) };
@@ -321,7 +323,7 @@ impl StaticIndexEntry {
                 }
                 if offset.get() as usize > unsafe { self.data.passive.1 } {
                     return Err(StreamError::LastOperationFailed(Resource::new(
-                        StreamsError::Code(ErrorCode::InvalidSeek),
+                        StreamsError::FsCode(ErrorCode::InvalidSeek),
                     )));
                 }
                 let read_len = cmp::min(
@@ -341,7 +343,7 @@ impl StaticIndexEntry {
             }
             StaticIndexType::RuntimeDir | StaticIndexType::Dir => {
                 Err(StreamError::LastOperationFailed(Resource::new(
-                    StreamsError::Code(ErrorCode::IsDirectory),
+                    StreamsError::FsCode(ErrorCode::IsDirectory),
                 )))
             }
             StaticIndexType::RuntimeFile => {
@@ -413,6 +415,8 @@ pub enum FilesystemDirectoryEntryStream {
 pub struct CliTerminalInput;
 pub struct CliTerminalOutput;
 
+pub struct HttpTypes;
+
 pub struct HttpFields(http_types::Fields);
 pub struct HttpFutureIncomingResponse(http_types::FutureIncomingResponse);
 pub struct HttpFutureTrailers(http_types::FutureTrailers);
@@ -423,6 +427,8 @@ pub struct HttpOutgoingBody(http_types::OutgoingBody);
 pub struct HttpOutgoingRequest(http_types::OutgoingRequest);
 pub struct HttpOutgoingResponse(http_types::OutgoingResponse);
 pub struct HttpResponseOutparam(http_types::ResponseOutparam);
+
+pub struct HttpRequestOptions(http_types::RequestOptions);
 pub struct SocketsResolveAddressStream(ip_name_lookup::ResolveAddressStream);
 pub struct SocketsTcpSocket(tcp::TcpSocket);
 pub struct SocketsUdpSocket(udp::UdpSocket);
@@ -593,7 +599,7 @@ impl MonotonicClock for VirtAdapter {
 
 impl FilesystemTypes for VirtAdapter {
     fn filesystem_error_code(err: &StreamsError) -> Option<ErrorCode> {
-        if let StreamsError::Code(code) = err {
+        if let StreamsError::FsCode(code) = err {
             Some(*code)
         } else {
             None
@@ -614,14 +620,45 @@ impl Preopens for VirtAdapter {
 impl OutgoingHandler for VirtAdapter {
     fn handle(
         request: Resource<OutgoingRequest>,
-        options: Option<RequestOptions>,
-    ) -> Result<Resource<FutureIncomingResponse>, HttpError> {
+        options: Option<Resource<RequestOptions>>,
+    ) -> Result<Resource<FutureIncomingResponse>, HttpErrorCode> {
         outgoing_handler::handle(
             Resource::into_inner(request).0,
-            options.map(request_options_map),
+            options.map(|o| Resource::into_inner(o).0),
         )
         .map(|response| Resource::new(HttpFutureIncomingResponse(response)))
         .map_err(http_err_map_rev)
+    }
+}
+
+impl GuestRequestOptions for RequestOptions {
+    fn new() -> Self {
+        debug!("CALL wasi:http/types#request-options.new");
+        Self(http_types::RequestOptions::new())
+    }
+    fn connect_timeout(&self) -> Option<Duration> {
+        debug!("CALL wasi:http/types#request-options.connect-timeout");
+        self.0.connect_timeout()
+    }
+    fn set_connect_timeout(&self, duration: Option<Duration>) -> Result<(), ()> {
+        debug!("CALL wasi:http/types#request-options.set-connect-timeout");
+        self.0.set_connect_timeout(duration)
+    }
+    fn first_byte_timeout(&self) -> Option<Duration> {
+        debug!("CALL wasi:http/types#request-options.first-byte-timeout");
+        self.0.first_byte_timeout()
+    }
+    fn set_first_byte_timeout(&self, duration: Option<Duration>) -> Result<(), ()> {
+        debug!("CALL wasi:http/types#request-options.set-first-byte-timeout");
+        self.0.set_first_byte_timeout(duration)
+    }
+    fn between_bytes_timeout(&self) -> Option<Duration> {
+        debug!("CALL wasi:http/types#request-options.between-bytes-timeout");
+        self.0.between_bytes_timeout()
+    }
+    fn set_between_bytes_timeout(&self, duration: Option<Duration>) -> Result<(), ()> {
+        debug!("CALL wasi:http/types#request-options.set-between-bytes-timeout");
+        self.0.set_between_bytes_timeout(duration)
     }
 }
 
@@ -1024,7 +1061,7 @@ impl GuestInputStream for InputStream {
             Self::Null => Ok(0),
             Self::Err => Err(StreamError::Closed),
             Self::StaticFile { .. } => Err(StreamError::LastOperationFailed(Resource::new(
-                StreamsError::Code(ErrorCode::Io),
+                StreamsError::FsCode(ErrorCode::Io),
             ))),
             Self::Host(descriptor) => descriptor.skip(offset).map_err(stream_err_map),
         }
@@ -1035,7 +1072,7 @@ impl GuestInputStream for InputStream {
             Self::Null => Ok(0),
             Self::Err => Err(StreamError::Closed),
             Self::StaticFile { .. } => Err(StreamError::LastOperationFailed(Resource::new(
-                StreamsError::Code(ErrorCode::Io),
+                StreamsError::FsCode(ErrorCode::Io),
             ))),
             Self::Host(descriptor) => descriptor.blocking_skip(offset).map_err(stream_err_map),
         }
@@ -1169,6 +1206,7 @@ impl GuestOutputStream for OutputStream {
 
 impl GuestStreamsError for StreamsError {
     fn to_debug_string(&self) -> String {
+        debug!("CALL wasi:io/error#to-debug-string");
         format!("{self:?}")
     }
 }
@@ -1186,30 +1224,40 @@ impl GuestDirectoryEntryStream for DirectoryEntryStream {
     }
 }
 
+impl GuestHttpTypes for HttpTypes {
+    fn http_error_code(err: &IoError) -> Option<HttpErrorCode> {
+        debug!("CALL wasi:http/types#http-error-code");
+        match err {
+            IoError::FsCode(_) => None,
+            IoError::Host(h) => http_types::http_error_code(h).map(|e| http_err_map_rev(e)),
+        }
+    }
+}
+
 impl GuestFields for Fields {
-    fn new(entries: Vec<(String, Vec<u8>)>) -> Self {
+    fn new() -> Self {
         debug!("CALL wasi:http/types#fields.constructor");
-        Self(http_types::Fields::new(&entries))
+        Self(http_types::Fields::new())
     }
 
     fn get(&self, name: String) -> Vec<Vec<u8>> {
-        debug!("CALL wasi:http/types#fields.get");
+        debug!("CALL wasi:http/types#fields.get NAME={name}");
         self.0.get(&name)
     }
 
-    fn set(&self, name: String, values: Vec<Vec<u8>>) {
-        debug!("CALL wasi:http/types#fields.set");
-        self.0.set(&name, &values)
+    fn set(&self, name: String, values: Vec<Vec<u8>>) -> Result<(), HeaderError> {
+        debug!("CALL wasi:http/types#fields.set NAME={name}");
+        self.0.set(&name, &values).map_err(header_err_map_rev)
     }
 
-    fn delete(&self, name: String) {
-        debug!("CALL wasi:http/types#fields.delete");
-        self.0.delete(&name)
+    fn delete(&self, name: String) -> Result<(), HeaderError> {
+        debug!("CALL wasi:http/types#fields.delete NAME={name}");
+        self.0.delete(&name).map_err(header_err_map_rev)
     }
 
-    fn append(&self, name: String, value: Vec<u8>) {
-        debug!("CALL wasi:http/types#fields.append");
-        self.0.append(&name, &value)
+    fn append(&self, name: String, value: Vec<u8>) -> Result<(), HeaderError> {
+        debug!("CALL wasi:http/types#fields.append NAME={name}");
+        self.0.append(&name, &value).map_err(header_err_map_rev)
     }
 
     fn entries(&self) -> Vec<(String, Vec<u8>)> {
@@ -1218,7 +1266,20 @@ impl GuestFields for Fields {
     }
 
     fn clone(&self) -> Resource<Self> {
+        debug!("CALL wasi:http/types#fields.clone");
         Resource::new(Self(self.0.clone()))
+    }
+
+    fn from_list(list: Vec<(String, Vec<u8>)>) -> Result<Resource<HttpFields>, HeaderError> {
+        debug!("CALL wasi:http/types#fields.from-list");
+        http_types::Fields::from_list(&list)
+            .map(|fields| Resource::new(Self(fields)))
+            .map_err(header_err_map_rev)
+    }
+
+    fn has(&self, name: String) -> bool {
+        debug!("CALL wasi:http/types#fields.has NAME={name}");
+        self.0.has(&name)
     }
 }
 
@@ -1250,31 +1311,57 @@ impl GuestIncomingRequest for IncomingRequest {
 }
 
 impl GuestOutgoingRequest for OutgoingRequest {
-    fn new(
-        method: Method,
-        path_with_query: Option<String>,
-        scheme: Option<Scheme>,
-        authority: Option<String>,
-        headers: &Fields,
-    ) -> Self {
+    fn new(headers: Resource<Headers>) -> Self {
         debug!("CALL wasi:http/types#outgoing-request.new");
         Self(http_types::OutgoingRequest::new(
-            &method_map(method),
-            path_with_query.as_deref(),
-            scheme.map(|s| scheme_map(s)).as_ref(),
-            authority.as_deref(),
-            &headers.0,
+            Resource::into_inner(headers).0,
         ))
     }
 
-    fn write(&self) -> Result<Resource<OutgoingBody>, ()> {
+    fn body(&self) -> Result<Resource<OutgoingBody>, ()> {
         debug!("CALL wasi:http/types#outgoing-request.write");
-        Ok(Resource::new(HttpOutgoingBody(self.0.write()?)))
+        Ok(Resource::new(HttpOutgoingBody(self.0.body()?)))
+    }
+
+    fn method(&self) -> Method {
+        method_map_rev(self.0.method())
+    }
+
+    fn set_method(&self, method: Method) -> Result<(), ()> {
+        self.0.set_method(&method_map(method))
+    }
+
+    fn path_with_query(&self) -> Option<String> {
+        self.0.path_with_query()
+    }
+
+    fn set_path_with_query(&self, path_with_query: Option<String>) -> Result<(), ()> {
+        self.0.set_path_with_query(path_with_query.as_deref())
+    }
+
+    fn scheme(&self) -> Option<Scheme> {
+        self.0.scheme().map(scheme_map_rev)
+    }
+
+    fn set_scheme(&self, scheme: Option<Scheme>) -> Result<(), ()> {
+        self.0.set_scheme(scheme.map(scheme_map).as_ref())
+    }
+
+    fn authority(&self) -> Option<String> {
+        self.0.authority()
+    }
+
+    fn set_authority(&self, authority: Option<String>) -> Result<(), ()> {
+        self.0.set_authority(authority.as_deref())
+    }
+
+    fn headers(&self) -> Resource<Headers> {
+        Resource::new(HttpFields(self.0.headers()))
     }
 }
 
 impl GuestResponseOutparam for ResponseOutparam {
-    fn set(param: Resource<Self>, response: Result<Resource<OutgoingResponse>, HttpError>) {
+    fn set(param: Resource<Self>, response: Result<Resource<OutgoingResponse>, HttpErrorCode>) {
         debug!("CALL wasi:http/types#response-outparam.set");
         let param = Resource::into_inner(param).0;
         match response {
@@ -1319,24 +1406,44 @@ impl GuestFutureTrailers for FutureTrailers {
         Resource::new(Pollable::Host(self.0.subscribe()))
     }
 
-    fn get(&self) -> Option<Result<Resource<Fields>, HttpError>> {
+    fn get(&self) -> Option<Result<Result<Option<Resource<Fields>>, HttpErrorCode>, ()>> {
         debug!("CALL wasi:http/types#future-trailers.get");
         self.0.get().map(|r| {
-            r.map(|fields| Resource::new(HttpFields(fields)))
-                .map_err(|e| http_err_map_rev(e))
+            r.map(|fields| {
+                fields
+                    .map(|fields| fields.map(|fields| Resource::new(HttpFields(fields))))
+                    .map_err(http_err_map_rev)
+            })
         })
     }
 }
 
 impl GuestOutgoingResponse for OutgoingResponse {
-    fn new(status_code: StatusCode, headers: &Fields) -> Self {
+    fn new(headers: Resource<Fields>) -> Self {
         debug!("CALL wasi:http/types#outgoing-response.constructor");
-        Self(http_types::OutgoingResponse::new(status_code, &headers.0))
+        Self(http_types::OutgoingResponse::new(
+            Resource::into_inner(headers).0,
+        ))
     }
 
-    fn write(&self) -> Result<Resource<OutgoingBody>, ()> {
+    fn status_code(&self) -> StatusCode {
+        debug!("CALL wasi:http/types#outgoing-response.status-code");
+        self.0.status_code()
+    }
+
+    fn set_status_code(&self, status_code: StatusCode) -> Result<(), ()> {
+        debug!("CALL wasi:http/types#outgoing-response.set-status-code");
+        self.0.set_status_code(status_code)
+    }
+
+    fn headers(&self) -> Resource<Headers> {
+        debug!("CALL wasi:http/types#outgoing-response.headers");
+        Resource::new(HttpFields(self.0.headers()))
+    }
+
+    fn body(&self) -> Result<Resource<OutgoingBody>, ()> {
         debug!("CALL wasi:http/types#outgoing-response.body");
-        Ok(Resource::new(HttpOutgoingBody(self.0.write()?)))
+        Ok(Resource::new(HttpOutgoingBody(self.0.body()?)))
     }
 }
 
@@ -1353,12 +1460,16 @@ impl GuestOutgoingBody for OutgoingBody {
         Ok(Resource::new(OutputStream::Host(self.0.write()?)))
     }
 
-    fn finish(body: Resource<OutgoingBody>, trailers: Option<Resource<Fields>>) {
+    fn finish(
+        body: Resource<OutgoingBody>,
+        trailers: Option<Resource<Fields>>,
+    ) -> Result<(), HttpErrorCode> {
         debug!("CALL wasi:http/types#outgoing-body.finish");
         http_types::OutgoingBody::finish(
             Resource::into_inner(body).0,
             trailers.map(|fields| Resource::into_inner(fields).0),
         )
+        .map_err(http_err_map_rev)
     }
 }
 
@@ -1368,7 +1479,7 @@ impl GuestFutureIncomingResponse for FutureIncomingResponse {
         Resource::new(Pollable::Host(self.0.subscribe()))
     }
 
-    fn get(&self) -> Option<Result<Result<Resource<IncomingResponse>, HttpError>, ()>> {
+    fn get(&self) -> Option<Result<Result<Resource<IncomingResponse>, HttpErrorCode>, ()>> {
         debug!("CALL wasi:http/types#future-incoming-response.get");
         self.0.get().map(|r| {
             r.map(|r| {
@@ -1756,6 +1867,14 @@ fn scheme_map_rev(scheme: http_types::Scheme) -> Scheme {
     }
 }
 
+fn header_err_map_rev(err: http_types::HeaderError) -> HeaderError {
+    match err {
+        http_types::HeaderError::InvalidSyntax => HeaderError::InvalidSyntax,
+        http_types::HeaderError::Forbidden => HeaderError::Forbidden,
+        http_types::HeaderError::Immutable => HeaderError::Immutable,
+    }
+}
+
 fn method_map_rev(method: http_types::Method) -> Method {
     match method {
         http_types::Method::Get => Method::Get,
@@ -1786,29 +1905,189 @@ fn method_map(method: Method) -> http_types::Method {
     }
 }
 
-fn http_err_map(err: HttpError) -> http_types::Error {
+fn http_err_map(err: HttpErrorCode) -> http_types::ErrorCode {
     match err {
-        HttpError::InvalidUrl(s) => http_types::Error::InvalidUrl(s),
-        HttpError::TimeoutError(s) => http_types::Error::TimeoutError(s),
-        HttpError::ProtocolError(s) => http_types::Error::ProtocolError(s),
-        HttpError::UnexpectedError(s) => http_types::Error::UnexpectedError(s),
+        HttpErrorCode::DnsTimeout => http_types::ErrorCode::DnsTimeout,
+        HttpErrorCode::DnsError(DnsErrorPayload { rcode, info_code }) => {
+            http_types::ErrorCode::DnsError(http_types::DnsErrorPayload { rcode, info_code })
+        }
+        HttpErrorCode::DestinationNotFound => http_types::ErrorCode::DestinationNotFound,
+        HttpErrorCode::DestinationUnavailable => http_types::ErrorCode::DestinationUnavailable,
+        HttpErrorCode::DestinationIpProhibited => http_types::ErrorCode::DestinationIpProhibited,
+        HttpErrorCode::DestinationIpUnroutable => http_types::ErrorCode::DestinationIpUnroutable,
+        HttpErrorCode::ConnectionRefused => http_types::ErrorCode::ConnectionRefused,
+        HttpErrorCode::ConnectionTerminated => http_types::ErrorCode::ConnectionTerminated,
+        HttpErrorCode::ConnectionTimeout => http_types::ErrorCode::ConnectionTimeout,
+        HttpErrorCode::ConnectionReadTimeout => http_types::ErrorCode::ConnectionReadTimeout,
+        HttpErrorCode::ConnectionWriteTimeout => http_types::ErrorCode::ConnectionWriteTimeout,
+        HttpErrorCode::ConnectionLimitReached => http_types::ErrorCode::ConnectionLimitReached,
+        HttpErrorCode::TlsProtocolError => http_types::ErrorCode::TlsProtocolError,
+        HttpErrorCode::TlsCertificateError => http_types::ErrorCode::TlsCertificateError,
+        HttpErrorCode::TlsAlertReceived(TlsAlertReceivedPayload {
+            alert_id,
+            alert_message,
+        }) => http_types::ErrorCode::TlsAlertReceived(http_types::TlsAlertReceivedPayload {
+            alert_id,
+            alert_message,
+        }),
+        HttpErrorCode::HttpRequestDenied => http_types::ErrorCode::HttpRequestDenied,
+        HttpErrorCode::HttpRequestLengthRequired => {
+            http_types::ErrorCode::HttpRequestLengthRequired
+        }
+        HttpErrorCode::HttpRequestBodySize(s) => http_types::ErrorCode::HttpRequestBodySize(s),
+        HttpErrorCode::HttpRequestMethodInvalid => http_types::ErrorCode::HttpRequestMethodInvalid,
+        HttpErrorCode::HttpRequestUriInvalid => http_types::ErrorCode::HttpRequestUriInvalid,
+        HttpErrorCode::HttpRequestUriTooLong => http_types::ErrorCode::HttpRequestUriTooLong,
+        HttpErrorCode::HttpRequestHeaderSectionSize(s) => {
+            http_types::ErrorCode::HttpRequestHeaderSectionSize(s)
+        }
+        HttpErrorCode::HttpRequestHeaderSize(Some(FieldSizePayload {
+            field_name,
+            field_size,
+        })) => http_types::ErrorCode::HttpRequestHeaderSize(Some(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        })),
+        HttpErrorCode::HttpRequestHeaderSize(None) => {
+            http_types::ErrorCode::HttpRequestHeaderSize(None)
+        }
+        HttpErrorCode::HttpRequestTrailerSectionSize(s) => {
+            http_types::ErrorCode::HttpRequestTrailerSectionSize(s)
+        }
+        HttpErrorCode::HttpRequestTrailerSize(FieldSizePayload {
+            field_name,
+            field_size,
+        }) => http_types::ErrorCode::HttpRequestTrailerSize(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        }),
+        HttpErrorCode::HttpResponseIncomplete => http_types::ErrorCode::HttpResponseIncomplete,
+        HttpErrorCode::HttpResponseHeaderSectionSize(s) => {
+            http_types::ErrorCode::HttpResponseHeaderSectionSize(s)
+        }
+        HttpErrorCode::HttpResponseHeaderSize(FieldSizePayload {
+            field_name,
+            field_size,
+        }) => http_types::ErrorCode::HttpResponseHeaderSize(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        }),
+        HttpErrorCode::HttpResponseBodySize(s) => http_types::ErrorCode::HttpResponseBodySize(s),
+        HttpErrorCode::HttpResponseTrailerSectionSize(s) => {
+            http_types::ErrorCode::HttpResponseTrailerSectionSize(s)
+        }
+        HttpErrorCode::HttpResponseTrailerSize(FieldSizePayload {
+            field_name,
+            field_size,
+        }) => http_types::ErrorCode::HttpResponseTrailerSize(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        }),
+        HttpErrorCode::HttpResponseTransferCoding(e) => {
+            http_types::ErrorCode::HttpResponseTransferCoding(e)
+        }
+        HttpErrorCode::HttpResponseContentCoding(e) => {
+            http_types::ErrorCode::HttpResponseContentCoding(e)
+        }
+        HttpErrorCode::HttpResponseTimeout => http_types::ErrorCode::HttpResponseTimeout,
+        HttpErrorCode::HttpUpgradeFailed => http_types::ErrorCode::HttpUpgradeFailed,
+        HttpErrorCode::HttpProtocolError => http_types::ErrorCode::HttpProtocolError,
+        HttpErrorCode::LoopDetected => http_types::ErrorCode::LoopDetected,
+        HttpErrorCode::ConfigurationError => http_types::ErrorCode::ConfigurationError,
+        HttpErrorCode::InternalError(e) => http_types::ErrorCode::InternalError(e),
     }
 }
 
-fn http_err_map_rev(err: http_types::Error) -> HttpError {
+fn http_err_map_rev(err: http_types::ErrorCode) -> HttpErrorCode {
     match err {
-        http_types::Error::InvalidUrl(s) => HttpError::InvalidUrl(s),
-        http_types::Error::TimeoutError(s) => HttpError::TimeoutError(s),
-        http_types::Error::ProtocolError(s) => HttpError::ProtocolError(s),
-        http_types::Error::UnexpectedError(s) => HttpError::UnexpectedError(s),
-    }
-}
-
-fn request_options_map(options: RequestOptions) -> http_types::RequestOptions {
-    http_types::RequestOptions {
-        connect_timeout_ms: options.connect_timeout_ms,
-        first_byte_timeout_ms: options.first_byte_timeout_ms,
-        between_bytes_timeout_ms: options.between_bytes_timeout_ms,
+        http_types::ErrorCode::DnsTimeout => HttpErrorCode::DnsTimeout,
+        http_types::ErrorCode::DnsError(http_types::DnsErrorPayload { rcode, info_code }) => {
+            HttpErrorCode::DnsError(DnsErrorPayload { rcode, info_code })
+        }
+        http_types::ErrorCode::DestinationNotFound => HttpErrorCode::DestinationNotFound,
+        http_types::ErrorCode::DestinationUnavailable => HttpErrorCode::DestinationUnavailable,
+        http_types::ErrorCode::DestinationIpProhibited => HttpErrorCode::DestinationIpProhibited,
+        http_types::ErrorCode::DestinationIpUnroutable => HttpErrorCode::DestinationIpUnroutable,
+        http_types::ErrorCode::ConnectionRefused => HttpErrorCode::ConnectionRefused,
+        http_types::ErrorCode::ConnectionTerminated => HttpErrorCode::ConnectionTerminated,
+        http_types::ErrorCode::ConnectionTimeout => HttpErrorCode::ConnectionTimeout,
+        http_types::ErrorCode::ConnectionReadTimeout => HttpErrorCode::ConnectionReadTimeout,
+        http_types::ErrorCode::ConnectionWriteTimeout => HttpErrorCode::ConnectionWriteTimeout,
+        http_types::ErrorCode::ConnectionLimitReached => HttpErrorCode::ConnectionLimitReached,
+        http_types::ErrorCode::TlsProtocolError => HttpErrorCode::TlsProtocolError,
+        http_types::ErrorCode::TlsCertificateError => HttpErrorCode::TlsCertificateError,
+        http_types::ErrorCode::TlsAlertReceived(http_types::TlsAlertReceivedPayload {
+            alert_id,
+            alert_message,
+        }) => HttpErrorCode::TlsAlertReceived(TlsAlertReceivedPayload {
+            alert_id,
+            alert_message,
+        }),
+        http_types::ErrorCode::HttpRequestDenied => HttpErrorCode::HttpRequestDenied,
+        http_types::ErrorCode::HttpRequestLengthRequired => {
+            HttpErrorCode::HttpRequestLengthRequired
+        }
+        http_types::ErrorCode::HttpRequestBodySize(s) => HttpErrorCode::HttpRequestBodySize(s),
+        http_types::ErrorCode::HttpRequestMethodInvalid => HttpErrorCode::HttpRequestMethodInvalid,
+        http_types::ErrorCode::HttpRequestUriInvalid => HttpErrorCode::HttpRequestUriInvalid,
+        http_types::ErrorCode::HttpRequestUriTooLong => HttpErrorCode::HttpRequestUriTooLong,
+        http_types::ErrorCode::HttpRequestHeaderSectionSize(s) => {
+            HttpErrorCode::HttpRequestHeaderSectionSize(s)
+        }
+        http_types::ErrorCode::HttpRequestHeaderSize(Some(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        })) => HttpErrorCode::HttpRequestHeaderSize(Some(FieldSizePayload {
+            field_name,
+            field_size,
+        })),
+        http_types::ErrorCode::HttpRequestHeaderSize(None) => {
+            HttpErrorCode::HttpRequestHeaderSize(None)
+        }
+        http_types::ErrorCode::HttpRequestTrailerSectionSize(s) => {
+            HttpErrorCode::HttpRequestTrailerSectionSize(s)
+        }
+        http_types::ErrorCode::HttpRequestTrailerSize(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        }) => HttpErrorCode::HttpRequestTrailerSize(FieldSizePayload {
+            field_name,
+            field_size,
+        }),
+        http_types::ErrorCode::HttpResponseIncomplete => HttpErrorCode::HttpResponseIncomplete,
+        http_types::ErrorCode::HttpResponseHeaderSectionSize(s) => {
+            HttpErrorCode::HttpResponseHeaderSectionSize(s)
+        }
+        http_types::ErrorCode::HttpResponseHeaderSize(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        }) => HttpErrorCode::HttpResponseHeaderSize(FieldSizePayload {
+            field_name,
+            field_size,
+        }),
+        http_types::ErrorCode::HttpResponseBodySize(s) => HttpErrorCode::HttpResponseBodySize(s),
+        http_types::ErrorCode::HttpResponseTrailerSectionSize(s) => {
+            HttpErrorCode::HttpResponseTrailerSectionSize(s)
+        }
+        http_types::ErrorCode::HttpResponseTrailerSize(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        }) => HttpErrorCode::HttpResponseTrailerSize(FieldSizePayload {
+            field_name,
+            field_size,
+        }),
+        http_types::ErrorCode::HttpResponseTransferCoding(e) => {
+            HttpErrorCode::HttpResponseTransferCoding(e)
+        }
+        http_types::ErrorCode::HttpResponseContentCoding(e) => {
+            HttpErrorCode::HttpResponseContentCoding(e)
+        }
+        http_types::ErrorCode::HttpResponseTimeout => HttpErrorCode::HttpResponseTimeout,
+        http_types::ErrorCode::HttpUpgradeFailed => HttpErrorCode::HttpUpgradeFailed,
+        http_types::ErrorCode::HttpProtocolError => HttpErrorCode::HttpProtocolError,
+        http_types::ErrorCode::LoopDetected => HttpErrorCode::LoopDetected,
+        http_types::ErrorCode::ConfigurationError => HttpErrorCode::ConfigurationError,
+        http_types::ErrorCode::InternalError(e) => HttpErrorCode::InternalError(e),
     }
 }
 

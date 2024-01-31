@@ -169,6 +169,7 @@ impl WasiVirt {
         } else {
             metadata::decode(VIRT_ADAPTER)
         }?;
+
         let (_, pkg_id) = bindgen
             .resolve
             .package_names
