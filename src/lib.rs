@@ -26,6 +26,7 @@ pub use virt_io::{FsEntry, StdioCfg, VirtFs, VirtualFiles};
 
 const VIRT_ADAPTER: &[u8] = include_bytes!("../lib/virtual_adapter.wasm");
 const VIRT_ADAPTER_DEBUG: &[u8] = include_bytes!("../lib/virtual_adapter.debug.wasm");
+const VIRT_WIT_METADATA: &[u8] = include_bytes!("../lib/package.wasm");
 
 /// Virtualization options
 ///
@@ -164,11 +165,7 @@ impl WasiVirt {
             .remove_raw("component-type:virtual-adapter")
             .context("Unable to find component section")?;
 
-        let (_, mut bindgen) = if self.debug {
-            metadata::decode(VIRT_ADAPTER_DEBUG)
-        } else {
-            metadata::decode(VIRT_ADAPTER)
-        }?;
+        let (_, mut bindgen) = metadata::decode(VIRT_WIT_METADATA)?;
 
         let (_, pkg_id) = bindgen
             .resolve
