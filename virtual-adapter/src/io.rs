@@ -599,6 +599,7 @@ impl MonotonicClock for VirtAdapter {
 
 impl FilesystemTypes for VirtAdapter {
     fn filesystem_error_code(err: &StreamsError) -> Option<ErrorCode> {
+        debug!("CALL wasi:filesystem/types#filesystem-error-code");
         if let StreamsError::FsCode(code) = err {
             Some(*code)
         } else {
@@ -609,10 +610,14 @@ impl FilesystemTypes for VirtAdapter {
 
 impl Preopens for VirtAdapter {
     fn get_directories() -> Vec<(Resource<Descriptor>, String)> {
+        debug!("CALL wasi:filesystem/preopens#get-directories");
         IoState::initialize();
         unsafe { &STATE.preopen_directories }
             .iter()
-            .map(|(fd, name)| (Resource::new(fd.clone()), name.clone()))
+            .map(|(fd, name)| {
+                debug!("PREOPEN {:?} {}", fd, name);
+                (Resource::new(fd.clone()), name.clone())
+            })
             .collect()
     }
 }

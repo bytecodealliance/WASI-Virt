@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 use anyhow::Result;
 use walrus::{FuncParams, FuncResults, Module, ValType};
 
-use crate::virt_io::stub_sockets_virt;
+use crate::walrus_ops::stub_virt;
 
 use super::replace_or_insert_stub_for_exports;
 
@@ -371,6 +371,6 @@ pub fn get_wasi_sockets_fns() -> &'static Vec<(&'static str, FuncParams, FuncRes
 
 /// Replace exports related to sockets in WASI to deny access
 pub(crate) fn deny_sockets_virt(module: &mut Module) -> Result<()> {
-    stub_sockets_virt(module)?;
+    stub_virt(module, &["wasi:sockets/"])?;
     replace_or_insert_stub_for_exports(module, get_wasi_sockets_fns())
 }

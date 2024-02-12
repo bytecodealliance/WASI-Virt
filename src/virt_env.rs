@@ -233,20 +233,19 @@ pub(crate) fn stub_env_virt(module: &mut Module) -> Result<()> {
 }
 
 /// Strip exported functions that implement the WASI CLI environment functionality
-///
-/// This function *does not* throw an error if an export does not exist.
 pub(crate) fn strip_env_virt(module: &mut Module) -> Result<()> {
     stub_env_virt(module)?;
 
     for fn_name in WASI_ENV_FNS {
-        if let Ok(fid) = module
+        let Ok(fid) = module
             .exports
             .get_func(format!("wasi:cli/environment@0.2.0#{fn_name}"))
-        {
-            module.replace_exported_func(fid, |(body, _)| {
-                body.unreachable();
-            })?;
+        else {
+            bail!("Expected CLI function {fn_name}")
         };
+        module.replace_exported_func(fid, |(body, _)| {
+            body.unreachable();
+        })?;
     }
 
     Ok(())

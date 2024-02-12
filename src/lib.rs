@@ -1,14 +1,10 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::{env, fs, time::SystemTime};
-use virt_deny::{
-    deny_clocks_virt, deny_exit_virt, deny_http_virt, deny_random_virt, deny_sockets_virt,
-};
+use virt_deny::{deny_clocks_virt, deny_exit_virt, deny_random_virt};
 use virt_env::{create_env_virt, strip_env_virt};
-use virt_io::{
-    create_io_virt, strip_clocks_virt, strip_fs_virt, strip_http_virt, strip_io_virt,
-    strip_sockets_virt, strip_stdio_virt, VirtStdio,
-};
+use virt_io::{create_io_virt, VirtStdio};
+use walrus_ops::{deny_virt, strip_virt};
 use wasm_metadata::Producers;
 use wasm_opt::{Feature, OptimizationOptions};
 use wit_component::{metadata, ComponentEncoder, DecodedWasm, StringEncoding};
@@ -213,7 +209,7 @@ impl WasiVirt {
         if has_io {
             resolve.merge_worlds(io_world, base_world)?;
         } else {
-            strip_io_virt(&mut module)?;
+            strip_virt(&mut module, &["wasi:io/"])?;
         }
         if let Some(clocks) = self.clocks {
             if !clocks {
@@ -227,28 +223,28 @@ impl WasiVirt {
                 resolve.merge_worlds(io_clocks_world, base_world)?;
             }
         } else {
-            strip_clocks_virt(&mut module)?;
+            strip_virt(&mut module, &["wasi:clocks/"])?;
         }
         // sockets and http are identical to clocks above
         if let Some(sockets) = self.sockets {
             if !sockets {
                 resolve.merge_worlds(sockets_world, base_world)?;
-                deny_sockets_virt(&mut module)?;
+                deny_virt(&mut module, &["wasi:sockets/"])?;
             } else {
                 resolve.merge_worlds(io_sockets_world, base_world)?;
             }
         } else {
-            strip_sockets_virt(&mut module)?;
+            strip_virt(&mut module, &["wasi:sockets/"])?;
         }
         if let Some(http) = self.http {
             if !http {
                 resolve.merge_worlds(http_world, base_world)?;
-                deny_http_virt(&mut module)?;
+                deny_virt(&mut module, &["wasi:http/"])?;
             } else {
                 resolve.merge_worlds(io_http_world, base_world)?;
             }
         } else {
-            strip_http_virt(&mut module)?;
+            strip_virt(&mut module, &["wasi:http/"])?;
         }
 
         // stdio and fs are fully implemented in io world
@@ -256,12 +252,12 @@ impl WasiVirt {
         if self.stdio.is_some() {
             resolve.merge_worlds(stdio_world, base_world)?;
         } else {
-            strip_stdio_virt(&mut module)?;
+            strip_virt(&mut module, &["wasi:cli/std", "wasi/cli/terminal"])?;
         }
         if self.fs.is_some() || self.stdio.is_some() {
             resolve.merge_worlds(fs_world, base_world)?;
         } else {
-            strip_fs_virt(&mut module)?;
+            strip_virt(&mut module, &["wasi:filesystem/"])?;
         }
 
         let mut producers = Producers::default();
