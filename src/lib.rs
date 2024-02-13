@@ -8,7 +8,7 @@ use virt_env::{create_env_virt, strip_env_virt};
 use virt_io::{create_io_virt, VirtStdio};
 use walrus_ops::strip_virt;
 use wasm_metadata::Producers;
-use wasm_opt::{Feature, OptimizationOptions};
+use wasm_opt::{Feature, OptimizationOptions, ShrinkLevel};
 use wit_component::{metadata, ComponentEncoder, DecodedWasm, StringEncoding};
 
 mod data;
@@ -131,7 +131,9 @@ impl WasiVirt {
 
     pub fn finish(&mut self) -> Result<VirtResult> {
         let mut config = walrus::ModuleConfig::new();
-        config.generate_dwarf(true);
+        if self.debug {
+            config.generate_dwarf(true);
+        }
         let mut module = if self.debug {
             config.parse(VIRT_ADAPTER_DEBUG)
         } else {
@@ -282,7 +284,8 @@ impl WasiVirt {
             let tmp_output = dir.join(format!("virt.core.output.{}.wasm", timestamp()));
             fs::write(&tmp_input, bytes)
                 .with_context(|| "Unable to write temporary file for wasm-opt call on adapter")?;
-            OptimizationOptions::new_optimize_for_size_aggressively()
+            OptimizationOptions::new_opt_level_2()
+                .shrink_level(ShrinkLevel::Level1)
                 .enable_feature(Feature::All)
                 .run(&tmp_input, &tmp_output)
                 .with_context(|| "Unable to apply wasm-opt optimization to virt. This can be disabled with wasm_opt: false.")
@@ -290,7 +293,7 @@ impl WasiVirt {
                     fs::remove_file(&tmp_input)?;
                     Err(e)
                 })?;
-            bytes = fs::read(&tmp_input)?;
+            bytes = fs::read(&tmp_output)?;
             fs::remove_file(&tmp_input)?;
             fs::remove_file(&tmp_output)?;
         }
