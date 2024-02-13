@@ -77,9 +77,9 @@ async fn virt_test() -> Result<()> {
         let test_case_name = test_case_file_name.strip_suffix(".toml").unwrap();
 
         // Filtering...
-        if test_case_name == "encapsulate" {
-            continue;
-        }
+        // if !test_case_name.starts_with("fs") {
+        //     continue;
+        // }
 
         println!("> {:?}", test_case_path);
 

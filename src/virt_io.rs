@@ -360,7 +360,7 @@ pub(crate) fn create_io_virt<'a>(
         strip_virt(module, &["wasi:cli/std", "wasi:cli/terminal"])?;
     }
     if disable_stdio {
-        stub_virt(module, &["wasi:cli/std", "wasi:cli/terminal"])?;
+        stub_virt(module, &["wasi:cli/std", "wasi:cli/terminal"], false)?;
     }
 
     // First we iterate the options and fill in all HostDir and HostFile entries
@@ -517,9 +517,9 @@ pub(crate) fn create_io_virt<'a>(
     // replacing it with a stub panic
     if !fs_passthrough {
         if disable_stdio {
-            stub_virt(module, &["wasi:io/"])?;
+            stub_virt(module, &["wasi:io/"], false)?;
         }
-        stub_virt(module, &["wasi:filesystem/"])?;
+        stub_virt(module, &["wasi:filesystem/"], false)?;
     } else {
         flags |= FLAGS_HOST_PASSTHROUGH;
     }

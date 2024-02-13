@@ -342,6 +342,6 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
 
 /// Replace exports related to HTTP in WASI to deny access
 pub(crate) fn deny_http_virt(module: &mut Module) -> Result<()> {
-    stub_virt(module, &["wasi:http/"])?;
+    stub_virt(module, &["wasi:http/"], false)?;
     replace_or_insert_stub_for_exports(module, get_wasi_http_fns())
 }

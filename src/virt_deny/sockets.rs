@@ -371,6 +371,6 @@ pub fn get_wasi_sockets_fns() -> &'static Vec<(&'static str, FuncParams, FuncRes
 
 /// Replace exports related to sockets in WASI to deny access
 pub(crate) fn deny_sockets_virt(module: &mut Module) -> Result<()> {
-    stub_virt(module, &["wasi:sockets/"])?;
+    stub_virt(module, &["wasi:sockets/"], false)?;
     replace_or_insert_stub_for_exports(module, get_wasi_sockets_fns())
 }

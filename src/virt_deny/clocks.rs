@@ -50,6 +50,6 @@ fn get_wasi_clock_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)>
 
 /// Replace exports related to clocks in WASI to deny access
 pub(crate) fn deny_clocks_virt(module: &mut Module) -> Result<()> {
-    stub_virt(module, &["wasi:clocks/"])?;
+    stub_virt(module, &["wasi:clocks/"], false)?;
     replace_or_insert_stub_for_exports(module, get_wasi_clock_fns())
 }

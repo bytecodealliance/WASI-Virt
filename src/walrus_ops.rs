@@ -88,7 +88,7 @@ pub(crate) fn bump_stack_global(module: &mut Module, offset: i32) -> Result<u32>
 }
 
 pub(crate) fn strip_virt(module: &mut Module, subsystems: &[&str]) -> Result<()> {
-    stub_virt(module, subsystems)?;
+    stub_virt(module, subsystems, true)?;
     let mut subsystem_exports = Vec::new();
     for export in module.exports.iter() {
         let export_name = if export.name.starts_with("cabi_post_") {
@@ -113,10 +113,14 @@ pub(crate) fn strip_virt(module: &mut Module, subsystems: &[&str]) -> Result<()>
 }
 
 /// Replace imported WASI functions that implement subsystem access with no-ops
-pub(crate) fn stub_virt(module: &mut Module, subsystems: &[&str]) -> Result<()> {
+pub(crate) fn stub_virt(
+    module: &mut Module,
+    subsystems: &[&str],
+    with_exports: bool,
+) -> Result<()> {
     let mut subsystem_imports = Vec::new();
     for import in module.imports.iter() {
-        let module_name = if import.module.starts_with("[export]") {
+        let module_name = if with_exports && import.module.starts_with("[export]") {
             &import.module[8..]
         } else {
             &import.module
@@ -140,32 +144,6 @@ pub(crate) fn stub_virt(module: &mut Module, subsystems: &[&str]) -> Result<()> 
                     )
                 })?;
         }
-    }
-    Ok(())
-}
-
-/// Replace exports related to subsystem to deny access
-pub(crate) fn deny_virt(module: &mut Module, subsystems: &[&str]) -> Result<()> {
-    stub_virt(module, subsystems)?;
-    let mut subsystem_exports = Vec::new();
-    for export in module.exports.iter() {
-        let export_name = if export.name.starts_with("cabi_post_") {
-            &export.name[10..]
-        } else {
-            &export.name
-        };
-        if subsystems
-            .iter()
-            .any(|subsystem| export_name.starts_with(subsystem))
-        {
-            subsystem_exports.push(export.name.to_string());
-        }
-    }
-    for export_name in &subsystem_exports {
-        let fid = module.exports.get_func(export_name).unwrap();
-        module.replace_exported_func(fid, |(body, _)| {
-            body.unreachable();
-        })?;
     }
     Ok(())
 }

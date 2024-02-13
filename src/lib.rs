@@ -6,7 +6,7 @@ use virt_deny::{
 };
 use virt_env::{create_env_virt, strip_env_virt};
 use virt_io::{create_io_virt, VirtStdio};
-use walrus_ops::{deny_virt, strip_virt};
+use walrus_ops::strip_virt;
 use wasm_metadata::Producers;
 use wasm_opt::{Feature, OptimizationOptions};
 use wit_component::{metadata, ComponentEncoder, DecodedWasm, StringEncoding};
@@ -130,7 +130,8 @@ impl WasiVirt {
     }
 
     pub fn finish(&mut self) -> Result<VirtResult> {
-        let config = walrus::ModuleConfig::new();
+        let mut config = walrus::ModuleConfig::new();
+        config.generate_dwarf(true);
         let mut module = if self.debug {
             config.parse(VIRT_ADAPTER_DEBUG)
         } else {
@@ -265,13 +266,8 @@ impl WasiVirt {
         let mut producers = Producers::default();
         producers.add("processed-by", "wasi-virt", env!("CARGO_PKG_VERSION"));
 
-        component_section.data = metadata::encode(
-            &resolve,
-            base_world,
-            StringEncoding::UTF8,
-            Some(&producers),
-            None,
-        )?;
+        component_section.data =
+            metadata::encode(&resolve, base_world, StringEncoding::UTF8, Some(&producers))?;
 
         module.customs.add(component_section);
 
@@ -287,14 +283,14 @@ impl WasiVirt {
             fs::write(&tmp_input, bytes)
                 .with_context(|| "Unable to write temporary file for wasm-opt call on adapter")?;
             OptimizationOptions::new_optimize_for_size_aggressively()
-                .enable_feature(Feature::ReferenceTypes)
+                .enable_feature(Feature::All)
                 .run(&tmp_input, &tmp_output)
                 .with_context(|| "Unable to apply wasm-opt optimization to virt. This can be disabled with wasm_opt: false.")
                 .or_else(|e| {
                     fs::remove_file(&tmp_input)?;
                     Err(e)
                 })?;
-            bytes = fs::read(&tmp_output)?;
+            bytes = fs::read(&tmp_input)?;
             fs::remove_file(&tmp_input)?;
             fs::remove_file(&tmp_output)?;
         }

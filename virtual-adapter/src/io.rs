@@ -449,6 +449,12 @@ impl IoState {
             return;
         }
 
+        if DEBUG {
+            std::panic::set_hook(Box::new(|invoke| {
+                debug!("{:?}", invoke);
+            }));
+        }
+
         if Io::host_passthrough() || Io::host_preopens() {
             let host_preopen_directories = unsafe { &mut STATE.host_preopen_directories };
             for (fd, name) in preopens::get_directories() {
