@@ -5,13 +5,11 @@ use virt_deny::{
     deny_clocks_virt, deny_exit_virt, deny_http_virt, deny_random_virt, deny_sockets_virt,
 };
 use virt_env::{create_env_virt, strip_env_virt};
-use virt_io::{
-    create_io_virt, strip_clocks_virt, strip_fs_virt, strip_http_virt, strip_io_virt,
-    strip_sockets_virt, strip_stdio_virt, VirtStdio,
-};
+use virt_io::{create_io_virt, VirtStdio};
+use walrus_ops::strip_virt;
 use wasm_metadata::Producers;
-use wasm_opt::{Feature, OptimizationOptions};
-use wit_component::{metadata, ComponentEncoder, StringEncoding};
+use wasm_opt::{Feature, OptimizationOptions, ShrinkLevel};
+use wit_component::{metadata, ComponentEncoder, DecodedWasm, StringEncoding};
 
 mod data;
 mod stub_preview1;
@@ -26,6 +24,7 @@ pub use virt_io::{FsEntry, StdioCfg, VirtFs, VirtualFiles};
 
 const VIRT_ADAPTER: &[u8] = include_bytes!("../lib/virtual_adapter.wasm");
 const VIRT_ADAPTER_DEBUG: &[u8] = include_bytes!("../lib/virtual_adapter.debug.wasm");
+const VIRT_WIT_METADATA: &[u8] = include_bytes!("../lib/package.wasm");
 
 /// Virtualization options
 ///
@@ -131,7 +130,10 @@ impl WasiVirt {
     }
 
     pub fn finish(&mut self) -> Result<VirtResult> {
-        let config = walrus::ModuleConfig::new();
+        let mut config = walrus::ModuleConfig::new();
+        if self.debug {
+            config.generate_dwarf(true);
+        }
         let mut module = if self.debug {
             config.parse(VIRT_ADAPTER_DEBUG)
         } else {
@@ -164,70 +166,45 @@ impl WasiVirt {
             .remove_raw("component-type:virtual-adapter")
             .context("Unable to find component section")?;
 
-        let (_, mut bindgen) = if self.debug {
-            metadata::decode(VIRT_ADAPTER_DEBUG)
-        } else {
-            metadata::decode(VIRT_ADAPTER)
-        }?;
-        let (_, pkg_id) = bindgen
-            .resolve
-            .package_names
-            .iter()
-            .find(|(name, _)| name.namespace == "local")
-            .unwrap();
+        let (mut resolve, pkg_id) = match wit_component::decode(VIRT_WIT_METADATA)? {
+            DecodedWasm::WitPackage(resolve, pkg_id) => (resolve, pkg_id),
+            DecodedWasm::Component(..) => {
+                anyhow::bail!("expected a WIT package, found a component")
+            }
+        };
 
-        let base_world = bindgen
-            .resolve
-            .select_world(*pkg_id, Some("virtual-base"))?;
+        let base_world = resolve.select_world(pkg_id, Some("virtual-base"))?;
 
-        let env_world = bindgen.resolve.select_world(*pkg_id, Some("virtual-env"))?;
+        let env_world = resolve.select_world(pkg_id, Some("virtual-env"))?;
 
-        let io_world = bindgen.resolve.select_world(*pkg_id, Some("virtual-io"))?;
-        let io_clocks_world = bindgen
-            .resolve
-            .select_world(*pkg_id, Some("virtual-io-clocks"))?;
-        let io_http_world = bindgen
-            .resolve
-            .select_world(*pkg_id, Some("virtual-io-http"))?;
-        let io_sockets_world = bindgen
-            .resolve
-            .select_world(*pkg_id, Some("virtual-io-sockets"))?;
+        let io_world = resolve.select_world(pkg_id, Some("virtual-io"))?;
+        let io_clocks_world = resolve.select_world(pkg_id, Some("virtual-io-clocks"))?;
+        let io_http_world = resolve.select_world(pkg_id, Some("virtual-io-http"))?;
+        let io_sockets_world = resolve.select_world(pkg_id, Some("virtual-io-sockets"))?;
 
-        let exit_world = bindgen
-            .resolve
-            .select_world(*pkg_id, Some("virtual-exit"))?;
-        let fs_world = bindgen.resolve.select_world(*pkg_id, Some("virtual-fs"))?;
-        let random_world = bindgen
-            .resolve
-            .select_world(*pkg_id, Some("virtual-random"))?;
-        let stdio_world = bindgen
-            .resolve
-            .select_world(*pkg_id, Some("virtual-stdio"))?;
-        let clocks_world = bindgen
-            .resolve
-            .select_world(*pkg_id, Some("virtual-clocks"))?;
-        let http_world = bindgen
-            .resolve
-            .select_world(*pkg_id, Some("virtual-http"))?;
-        let sockets_world = bindgen
-            .resolve
-            .select_world(*pkg_id, Some("virtual-sockets"))?;
+        let exit_world = resolve.select_world(pkg_id, Some("virtual-exit"))?;
+        let fs_world = resolve.select_world(pkg_id, Some("virtual-fs"))?;
+        let random_world = resolve.select_world(pkg_id, Some("virtual-random"))?;
+        let stdio_world = resolve.select_world(pkg_id, Some("virtual-stdio"))?;
+        let clocks_world = resolve.select_world(pkg_id, Some("virtual-clocks"))?;
+        let http_world = resolve.select_world(pkg_id, Some("virtual-http"))?;
+        let sockets_world = resolve.select_world(pkg_id, Some("virtual-sockets"))?;
 
         // env, exit & random subsystems are fully independent
         if self.env.is_some() {
-            bindgen.resolve.merge_worlds(env_world, base_world)?;
+            resolve.merge_worlds(env_world, base_world)?;
         } else {
             strip_env_virt(&mut module)?;
         }
         if let Some(exit) = self.exit {
             if !exit {
-                bindgen.resolve.merge_worlds(exit_world, base_world)?;
+                resolve.merge_worlds(exit_world, base_world)?;
                 deny_exit_virt(&mut module)?;
             }
         }
         if let Some(random) = self.random {
             if !random {
-                bindgen.resolve.merge_worlds(random_world, base_world)?;
+                resolve.merge_worlds(random_world, base_world)?;
                 deny_random_virt(&mut module)?;
             }
         }
@@ -235,69 +212,64 @@ impl WasiVirt {
         // io subsystems have io dependence due to streams + poll
         // therefore we need to strip just their io dependence portion
         if has_io {
-            bindgen.resolve.merge_worlds(io_world, base_world)?;
+            resolve.merge_worlds(io_world, base_world)?;
         } else {
-            strip_io_virt(&mut module)?;
+            strip_virt(&mut module, &["wasi:io/"])?;
         }
         if let Some(clocks) = self.clocks {
             if !clocks {
                 // deny is effectively virtualization
                 // in future with fine-grained virtualization options, they
                 // also would extend here (ie !clocks is deceiving)
-                bindgen.resolve.merge_worlds(clocks_world, base_world)?;
+                resolve.merge_worlds(clocks_world, base_world)?;
                 deny_clocks_virt(&mut module)?;
             } else {
                 // passthrough can be simplified to just rewrapping io interfaces
-                bindgen.resolve.merge_worlds(io_clocks_world, base_world)?;
+                resolve.merge_worlds(io_clocks_world, base_world)?;
             }
         } else {
-            strip_clocks_virt(&mut module)?;
+            strip_virt(&mut module, &["wasi:clocks/"])?;
         }
         // sockets and http are identical to clocks above
         if let Some(sockets) = self.sockets {
             if !sockets {
-                bindgen.resolve.merge_worlds(sockets_world, base_world)?;
+                resolve.merge_worlds(sockets_world, base_world)?;
                 deny_sockets_virt(&mut module)?;
             } else {
-                bindgen.resolve.merge_worlds(io_sockets_world, base_world)?;
+                resolve.merge_worlds(io_sockets_world, base_world)?;
             }
         } else {
-            strip_sockets_virt(&mut module)?;
+            strip_virt(&mut module, &["wasi:sockets/"])?;
         }
         if let Some(http) = self.http {
             if !http {
-                bindgen.resolve.merge_worlds(http_world, base_world)?;
+                resolve.merge_worlds(http_world, base_world)?;
                 deny_http_virt(&mut module)?;
             } else {
-                bindgen.resolve.merge_worlds(io_http_world, base_world)?;
+                resolve.merge_worlds(io_http_world, base_world)?;
             }
         } else {
-            strip_http_virt(&mut module)?;
+            strip_virt(&mut module, &["wasi:http/"])?;
         }
 
         // stdio and fs are fully implemented in io world
         // (all their interfaces use streams)
         if self.stdio.is_some() {
-            bindgen.resolve.merge_worlds(stdio_world, base_world)?;
+            resolve.merge_worlds(stdio_world, base_world)?;
         } else {
-            strip_stdio_virt(&mut module)?;
+            strip_virt(&mut module, &["wasi:cli/std", "wasi:cli/terminal"])?;
         }
         if self.fs.is_some() || self.stdio.is_some() {
-            bindgen.resolve.merge_worlds(fs_world, base_world)?;
+            resolve.merge_worlds(fs_world, base_world)?;
         } else {
-            strip_fs_virt(&mut module)?;
+            strip_virt(&mut module, &["wasi:filesystem/"])?;
         }
 
         let mut producers = Producers::default();
         producers.add("processed-by", "wasi-virt", env!("CARGO_PKG_VERSION"));
 
-        component_section.data = metadata::encode(
-            &bindgen.resolve,
-            base_world,
-            StringEncoding::UTF8,
-            Some(&producers),
-            None,
-        )?;
+        component_section.data =
+            metadata::encode(&resolve, base_world, StringEncoding::UTF8, Some(&producers))?;
 
         module.customs.add(component_section);
 
@@ -312,8 +284,9 @@ impl WasiVirt {
             let tmp_output = dir.join(format!("virt.core.output.{}.wasm", timestamp()));
             fs::write(&tmp_input, bytes)
                 .with_context(|| "Unable to write temporary file for wasm-opt call on adapter")?;
-            OptimizationOptions::new_optimize_for_size_aggressively()
-                .enable_feature(Feature::ReferenceTypes)
+            OptimizationOptions::new_opt_level_2()
+                .shrink_level(ShrinkLevel::Level1)
+                .enable_feature(Feature::All)
                 .run(&tmp_input, &tmp_output)
                 .with_context(|| "Unable to apply wasm-opt optimization to virt. This can be disabled with wasm_opt: false.")
                 .or_else(|e| {

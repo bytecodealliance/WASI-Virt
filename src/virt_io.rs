@@ -7,40 +7,10 @@ use walrus::{ir::Value, ExportItem, GlobalKind, InitExpr, Module};
 
 use crate::{
     data::{Data, WasmEncode},
-    walrus_ops::{get_active_data_segment, get_stack_global},
+    walrus_ops::{get_active_data_segment, get_stack_global, strip_virt, stub_virt},
 };
 
-mod clocks;
-mod filesystem;
-mod http;
-mod io;
-mod sockets;
-mod stdio;
-
-pub(crate) use clocks::{strip_clocks_virt, stub_clocks_virt};
-pub(crate) use filesystem::{strip_fs_virt, stub_fs_virt};
-pub(crate) use http::{strip_http_virt, stub_http_virt};
-pub(crate) use io::{strip_io_virt, stub_io_virt};
-pub(crate) use sockets::{strip_sockets_virt, stub_sockets_virt};
-pub(crate) use stdio::{strip_stdio_virt, stub_stdio_virt};
-
 pub type VirtualFiles = BTreeMap<String, String>;
-
-/// How to deal with a stubbed/stripped export
-///
-/// This enum is used mostly for nearly-static data, which exists
-/// to make it easy to iterate over stubbing modules & functions that must
-/// be manipulated.
-enum StubRequirement {
-    /// The import/export that is stubbed/stripped must be present *and* must be replaced
-    Required,
-    /// The import/export that is stubbed/stripped is allowed to be missing
-    Optional,
-    /// Whether the import/export must be present and replaced
-    /// depends on external factors (use-case specific), in this case
-    /// whether the filesystem is used or not
-    DependsOnFsUsage,
-}
 
 #[derive(ValueEnum, Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -387,10 +357,10 @@ pub(crate) fn create_io_virt<'a>(
             StdioCfg::Deny => {}
         }
     } else {
-        strip_stdio_virt(module)?;
+        strip_virt(module, &["wasi:cli/std", "wasi:cli/terminal"])?;
     }
     if disable_stdio {
-        stub_stdio_virt(module)?;
+        stub_virt(module, &["wasi:cli/std", "wasi:cli/terminal"], false)?;
     }
 
     // First we iterate the options and fill in all HostDir and HostFile entries
@@ -547,9 +517,9 @@ pub(crate) fn create_io_virt<'a>(
     // replacing it with a stub panic
     if !fs_passthrough {
         if disable_stdio {
-            stub_io_virt(module)?;
+            stub_virt(module, &["wasi:io/"], false)?;
         }
-        stub_fs_virt(module, true)?;
+        stub_virt(module, &["wasi:filesystem/"], false)?;
     } else {
         flags |= FLAGS_HOST_PASSTHROUGH;
     }

@@ -1,2 +1,3 @@
 /target
 /tests/generated
+/lib/package.wasm

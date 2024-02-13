@@ -15,11 +15,13 @@ use crate::exports::wasi::filesystem::types::{
 };
 use crate::exports::wasi::http::outgoing_handler::Guest as OutgoingHandler;
 use crate::exports::wasi::http::types::{
-    Error as HttpError, Fields, FutureIncomingResponse, FutureTrailers, GuestFields,
-    GuestFutureIncomingResponse, GuestFutureTrailers, GuestIncomingBody, GuestIncomingRequest,
-    GuestIncomingResponse, GuestOutgoingBody, GuestOutgoingRequest, GuestOutgoingResponse,
-    GuestResponseOutparam, IncomingBody, IncomingRequest, IncomingResponse, Method, OutgoingBody,
-    OutgoingRequest, OutgoingResponse, RequestOptions, ResponseOutparam, Scheme, StatusCode,
+    DnsErrorPayload, ErrorCode as HttpErrorCode, FieldSizePayload, Fields, FutureIncomingResponse,
+    FutureTrailers, Guest as GuestHttpTypes, GuestFields, GuestFutureIncomingResponse,
+    GuestFutureTrailers, GuestIncomingBody, GuestIncomingRequest, GuestIncomingResponse,
+    GuestOutgoingBody, GuestOutgoingRequest, GuestOutgoingResponse, GuestRequestOptions,
+    GuestResponseOutparam, HeaderError, Headers, IncomingBody, IncomingRequest, IncomingResponse,
+    Method, OutgoingBody, OutgoingRequest, OutgoingResponse, RequestOptions, ResponseOutparam,
+    Scheme, StatusCode, TlsAlertReceivedPayload,
 };
 use crate::exports::wasi::io::error::GuestError as GuestStreamsError;
 use crate::exports::wasi::io::poll::{Guest as Poll, GuestPollable, Pollable};
@@ -28,17 +30,22 @@ use crate::exports::wasi::io::streams::{
     StreamError,
 };
 use crate::exports::wasi::sockets::ip_name_lookup::{
-    Guest as IpNameLookup, GuestResolveAddressStream, IpAddress, IpAddressFamily, Network,
-    ResolveAddressStream,
+    Guest as IpNameLookup, GuestResolveAddressStream, IpAddress, Network, ResolveAddressStream,
 };
 use crate::exports::wasi::sockets::tcp::{
-    ErrorCode as NetworkErrorCode, GuestTcpSocket, IpSocketAddress, ShutdownType, TcpSocket,
+    Duration, ErrorCode as NetworkErrorCode, GuestTcpSocket, IpAddressFamily, IpSocketAddress,
+    ShutdownType, TcpSocket,
 };
-use crate::exports::wasi::sockets::udp::{Datagram, GuestUdpSocket, UdpSocket};
+use crate::exports::wasi::sockets::udp::{
+    GuestIncomingDatagramStream, GuestOutgoingDatagramStream, GuestUdpSocket, IncomingDatagram,
+    OutgoingDatagram, UdpSocket,
+};
 
-use crate::wasi::cli::stderr;
 use crate::wasi::cli::stdin;
 use crate::wasi::cli::stdout;
+use crate::wasi::cli::terminal_input;
+use crate::wasi::cli::terminal_output;
+use crate::wasi::cli::{stderr, terminal_stderr, terminal_stdin, terminal_stdout};
 use crate::wasi::filesystem::preopens;
 use crate::wasi::filesystem::types as filesystem_types;
 use crate::wasi::io::streams;
@@ -105,7 +112,7 @@ fn log(msg: &str) {
 
 #[derive(Debug)]
 pub enum IoError {
-    Code(ErrorCode),
+    FsCode(ErrorCode),
     Host(streams::Error),
 }
 
@@ -299,7 +306,7 @@ impl StaticIndexEntry {
                 }
                 if offset.get() as usize > unsafe { self.data.active.1 } {
                     return Err(StreamError::LastOperationFailed(Resource::new(
-                        StreamsError::Code(ErrorCode::InvalidSeek),
+                        StreamsError::FsCode(ErrorCode::InvalidSeek),
                     )));
                 }
                 let read_ptr = unsafe { self.data.active.0.add(offset.get() as usize) };
@@ -317,7 +324,7 @@ impl StaticIndexEntry {
                 }
                 if offset.get() as usize > unsafe { self.data.passive.1 } {
                     return Err(StreamError::LastOperationFailed(Resource::new(
-                        StreamsError::Code(ErrorCode::InvalidSeek),
+                        StreamsError::FsCode(ErrorCode::InvalidSeek),
                     )));
                 }
                 let read_len = cmp::min(
@@ -337,7 +344,7 @@ impl StaticIndexEntry {
             }
             StaticIndexType::RuntimeDir | StaticIndexType::Dir => {
                 Err(StreamError::LastOperationFailed(Resource::new(
-                    StreamsError::Code(ErrorCode::IsDirectory),
+                    StreamsError::FsCode(ErrorCode::IsDirectory),
                 )))
             }
             StaticIndexType::RuntimeFile => {
@@ -406,8 +413,10 @@ pub enum FilesystemDirectoryEntryStream {
     Host(filesystem_types::DirectoryEntryStream),
 }
 
-pub struct CliTerminalInput;
-pub struct CliTerminalOutput;
+pub struct CliTerminalInput(terminal_input::TerminalInput);
+pub struct CliTerminalOutput(terminal_output::TerminalOutput);
+
+pub struct HttpTypes;
 
 pub struct HttpFields(http_types::Fields);
 pub struct HttpFutureIncomingResponse(http_types::FutureIncomingResponse);
@@ -419,9 +428,13 @@ pub struct HttpOutgoingBody(http_types::OutgoingBody);
 pub struct HttpOutgoingRequest(http_types::OutgoingRequest);
 pub struct HttpOutgoingResponse(http_types::OutgoingResponse);
 pub struct HttpResponseOutparam(http_types::ResponseOutparam);
+
+pub struct HttpRequestOptions(http_types::RequestOptions);
 pub struct SocketsResolveAddressStream(ip_name_lookup::ResolveAddressStream);
 pub struct SocketsTcpSocket(tcp::TcpSocket);
 pub struct SocketsUdpSocket(udp::UdpSocket);
+pub struct SocketsIncomingDatagramStream(udp::IncomingDatagramStream);
+pub struct SocketsOutgoingDatagramStream(udp::OutgoingDatagramStream);
 
 pub struct IoState {
     initialized: bool,
@@ -434,6 +447,12 @@ impl IoState {
     fn initialize() {
         if unsafe { STATE.initialized } {
             return;
+        }
+
+        if DEBUG {
+            std::panic::set_hook(Box::new(|invoke| {
+                debug!("{:?}", invoke);
+            }));
         }
 
         if Io::host_passthrough() || Io::host_preopens() {
@@ -546,21 +565,24 @@ impl Stderr for VirtAdapter {
 impl TerminalStdin for VirtAdapter {
     fn get_terminal_stdin() -> Option<Resource<TerminalInput>> {
         debug!("CALL wasi:cli/terminal-stdin#get-terminal-stdin");
-        Some(Resource::new(TerminalInput))
+        terminal_stdin::get_terminal_stdin()
+            .map(|terminal_input| Resource::new(CliTerminalInput(terminal_input)))
     }
 }
 
 impl TerminalStdout for VirtAdapter {
     fn get_terminal_stdout() -> Option<Resource<TerminalOutput>> {
         debug!("CALL wasi:cli/terminal-stdout#get-terminal-stdout");
-        Some(Resource::new(TerminalOutput))
+        terminal_stdout::get_terminal_stdout()
+            .map(|terminal_output| Resource::new(CliTerminalOutput(terminal_output)))
     }
 }
 
 impl TerminalStderr for VirtAdapter {
     fn get_terminal_stderr() -> Option<Resource<TerminalOutput>> {
         debug!("CALL wasi:cli/terminal-stderr#get-terminal-stderr");
-        Some(Resource::new(TerminalOutput))
+        terminal_stderr::get_terminal_stderr()
+            .map(|terminal_output| Resource::new(CliTerminalOutput(terminal_output)))
     }
 }
 
@@ -587,7 +609,8 @@ impl MonotonicClock for VirtAdapter {
 
 impl FilesystemTypes for VirtAdapter {
     fn filesystem_error_code(err: &StreamsError) -> Option<ErrorCode> {
-        if let StreamsError::Code(code) = err {
+        debug!("CALL wasi:filesystem/types#filesystem-error-code");
+        if let StreamsError::FsCode(code) = err {
             Some(*code)
         } else {
             None
@@ -597,6 +620,7 @@ impl FilesystemTypes for VirtAdapter {
 
 impl Preopens for VirtAdapter {
     fn get_directories() -> Vec<(Resource<Descriptor>, String)> {
+        debug!("CALL wasi:filesystem/preopens#get-directories");
         IoState::initialize();
         unsafe { &STATE.preopen_directories }
             .iter()
@@ -608,14 +632,45 @@ impl Preopens for VirtAdapter {
 impl OutgoingHandler for VirtAdapter {
     fn handle(
         request: Resource<OutgoingRequest>,
-        options: Option<RequestOptions>,
-    ) -> Result<Resource<FutureIncomingResponse>, HttpError> {
+        options: Option<Resource<RequestOptions>>,
+    ) -> Result<Resource<FutureIncomingResponse>, HttpErrorCode> {
         outgoing_handler::handle(
             Resource::into_inner(request).0,
-            options.map(request_options_map),
+            options.map(|o| Resource::into_inner(o).0),
         )
         .map(|response| Resource::new(HttpFutureIncomingResponse(response)))
         .map_err(http_err_map_rev)
+    }
+}
+
+impl GuestRequestOptions for RequestOptions {
+    fn new() -> Self {
+        debug!("CALL wasi:http/types#request-options.new");
+        Self(http_types::RequestOptions::new())
+    }
+    fn connect_timeout(&self) -> Option<Duration> {
+        debug!("CALL wasi:http/types#request-options.connect-timeout");
+        self.0.connect_timeout()
+    }
+    fn set_connect_timeout(&self, duration: Option<Duration>) -> Result<(), ()> {
+        debug!("CALL wasi:http/types#request-options.set-connect-timeout");
+        self.0.set_connect_timeout(duration)
+    }
+    fn first_byte_timeout(&self) -> Option<Duration> {
+        debug!("CALL wasi:http/types#request-options.first-byte-timeout");
+        self.0.first_byte_timeout()
+    }
+    fn set_first_byte_timeout(&self, duration: Option<Duration>) -> Result<(), ()> {
+        debug!("CALL wasi:http/types#request-options.set-first-byte-timeout");
+        self.0.set_first_byte_timeout(duration)
+    }
+    fn between_bytes_timeout(&self) -> Option<Duration> {
+        debug!("CALL wasi:http/types#request-options.between-bytes-timeout");
+        self.0.between_bytes_timeout()
+    }
+    fn set_between_bytes_timeout(&self, duration: Option<Duration>) -> Result<(), ()> {
+        debug!("CALL wasi:http/types#request-options.set-between-bytes-timeout");
+        self.0.set_between_bytes_timeout(duration)
     }
 }
 
@@ -684,12 +739,10 @@ impl IpNameLookup for VirtAdapter {
     fn resolve_addresses(
         network: &Network,
         name: String,
-        address_family: Option<IpAddressFamily>,
-        include_unavailable: bool,
     ) -> Result<Resource<ResolveAddressStream>, NetworkErrorCode> {
         debug!("CALL wasi:sockets/ip-name-lookup#resolve-addresses");
         Ok(Resource::new(SocketsResolveAddressStream(
-            ip_name_lookup::resolve_addresses(network, &name, address_family, include_unavailable)?,
+            ip_name_lookup::resolve_addresses(network, &name)?,
         )))
     }
 }
@@ -1020,7 +1073,7 @@ impl GuestInputStream for InputStream {
             Self::Null => Ok(0),
             Self::Err => Err(StreamError::Closed),
             Self::StaticFile { .. } => Err(StreamError::LastOperationFailed(Resource::new(
-                StreamsError::Code(ErrorCode::Io),
+                StreamsError::FsCode(ErrorCode::Io),
             ))),
             Self::Host(descriptor) => descriptor.skip(offset).map_err(stream_err_map),
         }
@@ -1031,7 +1084,7 @@ impl GuestInputStream for InputStream {
             Self::Null => Ok(0),
             Self::Err => Err(StreamError::Closed),
             Self::StaticFile { .. } => Err(StreamError::LastOperationFailed(Resource::new(
-                StreamsError::Code(ErrorCode::Io),
+                StreamsError::FsCode(ErrorCode::Io),
             ))),
             Self::Host(descriptor) => descriptor.blocking_skip(offset).map_err(stream_err_map),
         }
@@ -1165,6 +1218,7 @@ impl GuestOutputStream for OutputStream {
 
 impl GuestStreamsError for StreamsError {
     fn to_debug_string(&self) -> String {
+        debug!("CALL wasi:io/error#to-debug-string");
         format!("{self:?}")
     }
 }
@@ -1182,30 +1236,40 @@ impl GuestDirectoryEntryStream for DirectoryEntryStream {
     }
 }
 
+impl GuestHttpTypes for HttpTypes {
+    fn http_error_code(err: &IoError) -> Option<HttpErrorCode> {
+        debug!("CALL wasi:http/types#http-error-code");
+        match err {
+            IoError::FsCode(_) => None,
+            IoError::Host(h) => http_types::http_error_code(h).map(|e| http_err_map_rev(e)),
+        }
+    }
+}
+
 impl GuestFields for Fields {
-    fn new(entries: Vec<(String, Vec<u8>)>) -> Self {
+    fn new() -> Self {
         debug!("CALL wasi:http/types#fields.constructor");
-        Self(http_types::Fields::new(&entries))
+        Self(http_types::Fields::new())
     }
 
     fn get(&self, name: String) -> Vec<Vec<u8>> {
-        debug!("CALL wasi:http/types#fields.get");
+        debug!("CALL wasi:http/types#fields.get NAME={name}");
         self.0.get(&name)
     }
 
-    fn set(&self, name: String, values: Vec<Vec<u8>>) {
-        debug!("CALL wasi:http/types#fields.set");
-        self.0.set(&name, &values)
+    fn set(&self, name: String, values: Vec<Vec<u8>>) -> Result<(), HeaderError> {
+        debug!("CALL wasi:http/types#fields.set NAME={name}");
+        self.0.set(&name, &values).map_err(header_err_map_rev)
     }
 
-    fn delete(&self, name: String) {
-        debug!("CALL wasi:http/types#fields.delete");
-        self.0.delete(&name)
+    fn delete(&self, name: String) -> Result<(), HeaderError> {
+        debug!("CALL wasi:http/types#fields.delete NAME={name}");
+        self.0.delete(&name).map_err(header_err_map_rev)
     }
 
-    fn append(&self, name: String, value: Vec<u8>) {
-        debug!("CALL wasi:http/types#fields.append");
-        self.0.append(&name, &value)
+    fn append(&self, name: String, value: Vec<u8>) -> Result<(), HeaderError> {
+        debug!("CALL wasi:http/types#fields.append NAME={name}");
+        self.0.append(&name, &value).map_err(header_err_map_rev)
     }
 
     fn entries(&self) -> Vec<(String, Vec<u8>)> {
@@ -1214,7 +1278,20 @@ impl GuestFields for Fields {
     }
 
     fn clone(&self) -> Resource<Self> {
+        debug!("CALL wasi:http/types#fields.clone");
         Resource::new(Self(self.0.clone()))
+    }
+
+    fn from_list(list: Vec<(String, Vec<u8>)>) -> Result<Resource<HttpFields>, HeaderError> {
+        debug!("CALL wasi:http/types#fields.from-list");
+        http_types::Fields::from_list(&list)
+            .map(|fields| Resource::new(Self(fields)))
+            .map_err(header_err_map_rev)
+    }
+
+    fn has(&self, name: String) -> bool {
+        debug!("CALL wasi:http/types#fields.has NAME={name}");
+        self.0.has(&name)
     }
 }
 
@@ -1246,31 +1323,57 @@ impl GuestIncomingRequest for IncomingRequest {
 }
 
 impl GuestOutgoingRequest for OutgoingRequest {
-    fn new(
-        method: Method,
-        path_with_query: Option<String>,
-        scheme: Option<Scheme>,
-        authority: Option<String>,
-        headers: &Fields,
-    ) -> Self {
+    fn new(headers: Resource<Headers>) -> Self {
         debug!("CALL wasi:http/types#outgoing-request.new");
         Self(http_types::OutgoingRequest::new(
-            &method_map(method),
-            path_with_query.as_deref(),
-            scheme.map(|s| scheme_map(s)).as_ref(),
-            authority.as_deref(),
-            &headers.0,
+            Resource::into_inner(headers).0,
         ))
     }
 
-    fn write(&self) -> Result<Resource<OutgoingBody>, ()> {
+    fn body(&self) -> Result<Resource<OutgoingBody>, ()> {
         debug!("CALL wasi:http/types#outgoing-request.write");
-        Ok(Resource::new(HttpOutgoingBody(self.0.write()?)))
+        Ok(Resource::new(HttpOutgoingBody(self.0.body()?)))
+    }
+
+    fn method(&self) -> Method {
+        method_map_rev(self.0.method())
+    }
+
+    fn set_method(&self, method: Method) -> Result<(), ()> {
+        self.0.set_method(&method_map(method))
+    }
+
+    fn path_with_query(&self) -> Option<String> {
+        self.0.path_with_query()
+    }
+
+    fn set_path_with_query(&self, path_with_query: Option<String>) -> Result<(), ()> {
+        self.0.set_path_with_query(path_with_query.as_deref())
+    }
+
+    fn scheme(&self) -> Option<Scheme> {
+        self.0.scheme().map(scheme_map_rev)
+    }
+
+    fn set_scheme(&self, scheme: Option<Scheme>) -> Result<(), ()> {
+        self.0.set_scheme(scheme.map(scheme_map).as_ref())
+    }
+
+    fn authority(&self) -> Option<String> {
+        self.0.authority()
+    }
+
+    fn set_authority(&self, authority: Option<String>) -> Result<(), ()> {
+        self.0.set_authority(authority.as_deref())
+    }
+
+    fn headers(&self) -> Resource<Headers> {
+        Resource::new(HttpFields(self.0.headers()))
     }
 }
 
 impl GuestResponseOutparam for ResponseOutparam {
-    fn set(param: Resource<Self>, response: Result<Resource<OutgoingResponse>, HttpError>) {
+    fn set(param: Resource<Self>, response: Result<Resource<OutgoingResponse>, HttpErrorCode>) {
         debug!("CALL wasi:http/types#response-outparam.set");
         let param = Resource::into_inner(param).0;
         match response {
@@ -1315,24 +1418,44 @@ impl GuestFutureTrailers for FutureTrailers {
         Resource::new(Pollable::Host(self.0.subscribe()))
     }
 
-    fn get(&self) -> Option<Result<Resource<Fields>, HttpError>> {
+    fn get(&self) -> Option<Result<Result<Option<Resource<Fields>>, HttpErrorCode>, ()>> {
         debug!("CALL wasi:http/types#future-trailers.get");
         self.0.get().map(|r| {
-            r.map(|fields| Resource::new(HttpFields(fields)))
-                .map_err(|e| http_err_map_rev(e))
+            r.map(|fields| {
+                fields
+                    .map(|fields| fields.map(|fields| Resource::new(HttpFields(fields))))
+                    .map_err(http_err_map_rev)
+            })
         })
     }
 }
 
 impl GuestOutgoingResponse for OutgoingResponse {
-    fn new(status_code: StatusCode, headers: &Fields) -> Self {
+    fn new(headers: Resource<Fields>) -> Self {
         debug!("CALL wasi:http/types#outgoing-response.constructor");
-        Self(http_types::OutgoingResponse::new(status_code, &headers.0))
+        Self(http_types::OutgoingResponse::new(
+            Resource::into_inner(headers).0,
+        ))
     }
 
-    fn write(&self) -> Result<Resource<OutgoingBody>, ()> {
+    fn status_code(&self) -> StatusCode {
+        debug!("CALL wasi:http/types#outgoing-response.status-code");
+        self.0.status_code()
+    }
+
+    fn set_status_code(&self, status_code: StatusCode) -> Result<(), ()> {
+        debug!("CALL wasi:http/types#outgoing-response.set-status-code");
+        self.0.set_status_code(status_code)
+    }
+
+    fn headers(&self) -> Resource<Headers> {
+        debug!("CALL wasi:http/types#outgoing-response.headers");
+        Resource::new(HttpFields(self.0.headers()))
+    }
+
+    fn body(&self) -> Result<Resource<OutgoingBody>, ()> {
         debug!("CALL wasi:http/types#outgoing-response.body");
-        Ok(Resource::new(HttpOutgoingBody(self.0.write()?)))
+        Ok(Resource::new(HttpOutgoingBody(self.0.body()?)))
     }
 }
 
@@ -1349,12 +1472,16 @@ impl GuestOutgoingBody for OutgoingBody {
         Ok(Resource::new(OutputStream::Host(self.0.write()?)))
     }
 
-    fn finish(body: Resource<OutgoingBody>, trailers: Option<Resource<Fields>>) {
+    fn finish(
+        body: Resource<OutgoingBody>,
+        trailers: Option<Resource<Fields>>,
+    ) -> Result<(), HttpErrorCode> {
         debug!("CALL wasi:http/types#outgoing-body.finish");
         http_types::OutgoingBody::finish(
             Resource::into_inner(body).0,
             trailers.map(|fields| Resource::into_inner(fields).0),
         )
+        .map_err(http_err_map_rev)
     }
 }
 
@@ -1364,7 +1491,7 @@ impl GuestFutureIncomingResponse for FutureIncomingResponse {
         Resource::new(Pollable::Host(self.0.subscribe()))
     }
 
-    fn get(&self) -> Option<Result<Result<Resource<IncomingResponse>, HttpError>, ()>> {
+    fn get(&self) -> Option<Result<Result<Resource<IncomingResponse>, HttpErrorCode>, ()>> {
         debug!("CALL wasi:http/types#future-incoming-response.get");
         self.0.get().map(|r| {
             r.map(|r| {
@@ -1453,45 +1580,57 @@ impl GuestTcpSocket for TcpSocket {
         debug!("CALL wasi:sockets/tcp#tcp-socket.remote-address");
         self.0.remote_address()
     }
+    fn is_listening(&self) -> bool {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.is-listening");
+        self.0.is_listening()
+    }
     fn address_family(&self) -> IpAddressFamily {
         debug!("CALL wasi:sockets/tcp#tcp-socket.address-family");
         self.0.address_family()
-    }
-    fn ipv6_only(&self) -> Result<bool, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.ipv6-only");
-        self.0.ipv6_only()
-    }
-    fn set_ipv6_only(&self, value: bool) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.set-ipv6-only");
-        self.0.set_ipv6_only(value)
     }
     fn set_listen_backlog_size(&self, value: u64) -> Result<(), NetworkErrorCode> {
         debug!("CALL wasi:sockets/tcp#tcp-socket.set-listen-backlog-size");
         self.0.set_listen_backlog_size(value)
     }
-    fn keep_alive(&self) -> Result<bool, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.keep-alive");
-        self.0.keep_alive()
+    fn keep_alive_enabled(&self) -> Result<bool, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.keep-alive-enabled");
+        self.0.keep_alive_enabled()
     }
-    fn set_keep_alive(&self, value: bool) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.set-keep-alive");
-        self.0.set_keep_alive(value)
+    fn set_keep_alive_enabled(&self, value: bool) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.set-keep-alive-enabled");
+        self.0.set_keep_alive_enabled(value)
     }
-    fn no_delay(&self) -> Result<bool, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.no-delay");
-        self.0.no_delay()
+    fn keep_alive_idle_time(&self) -> Result<Duration, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.keep-alive-idle-time");
+        self.0.keep_alive_idle_time()
     }
-    fn set_no_delay(&self, value: bool) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.set-no-delay");
-        self.0.set_no_delay(value)
+    fn set_keep_alive_idle_time(&self, value: Duration) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.set-keep-alive-idle-time");
+        self.0.set_keep_alive_idle_time(value)
     }
-    fn unicast_hop_limit(&self) -> Result<u8, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.unicast-hop-limit");
-        self.0.unicast_hop_limit()
+    fn keep_alive_interval(&self) -> Result<Duration, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.keep-alive-interval-time");
+        self.0.keep_alive_interval()
     }
-    fn set_unicast_hop_limit(&self, value: u8) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/tcp#tcp-socket.set-unicast-hop-limit");
-        self.0.set_unicast_hop_limit(value)
+    fn set_keep_alive_interval(&self, value: Duration) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.set-keep-alive-interval-time");
+        self.0.set_keep_alive_interval(value)
+    }
+    fn keep_alive_count(&self) -> Result<u32, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.keep-alive-count-time");
+        self.0.keep_alive_count()
+    }
+    fn set_keep_alive_count(&self, value: u32) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.set-keep-alive-count-time");
+        self.0.set_keep_alive_count(value)
+    }
+    fn hop_limit(&self) -> Result<u8, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.hop-limit");
+        self.0.hop_limit()
+    }
+    fn set_hop_limit(&self, value: u8) -> Result<(), NetworkErrorCode> {
+        debug!("CALL wasi:sockets/tcp#tcp-socket.set-hop-limit");
+        self.0.set_hop_limit(value)
     }
     fn receive_buffer_size(&self) -> Result<u64, NetworkErrorCode> {
         debug!("CALL wasi:sockets/tcp#tcp-socket.receive-buffer-size");
@@ -1536,44 +1675,6 @@ impl GuestUdpSocket for UdpSocket {
         debug!("CALL wasi:sockets/udp#udp-socket.finish-bind");
         self.0.finish_bind()
     }
-    fn start_connect(
-        &self,
-        network: &Network,
-        remote_address: IpSocketAddress,
-    ) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/udp#udp-socket.start-connect");
-        self.0.start_connect(network, remote_address)
-    }
-    fn finish_connect(&self) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/udp#udp-socket.finish-connect");
-        self.0.finish_connect()
-    }
-    fn receive(&self, max_results: u64) -> Result<Vec<Datagram>, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/udp#udp-socket.receive");
-        match self.0.receive(max_results) {
-            Ok(mut datagrams) => Ok(datagrams
-                .drain(..)
-                .map(|d| Datagram {
-                    data: d.data,
-                    remote_address: d.remote_address,
-                })
-                .collect::<Vec<Datagram>>()),
-            Err(err) => Err(err),
-        }
-    }
-    fn send(&self, mut datagrams: Vec<Datagram>) -> Result<u64, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/udp#udp-socket.send");
-        self.0.send(
-            datagrams
-                .drain(..)
-                .map(|d| udp::Datagram {
-                    data: d.data,
-                    remote_address: d.remote_address,
-                })
-                .collect::<Vec<udp::Datagram>>()
-                .as_slice(),
-        )
-    }
     fn local_address(&self) -> Result<IpSocketAddress, NetworkErrorCode> {
         debug!("CALL wasi:sockets/udp#udp-socket.local-address");
         self.0.local_address()
@@ -1585,14 +1686,6 @@ impl GuestUdpSocket for UdpSocket {
     fn address_family(&self) -> IpAddressFamily {
         debug!("CALL wasi:sockets/udp#udp-socket.address-family");
         self.0.address_family()
-    }
-    fn ipv6_only(&self) -> Result<bool, NetworkErrorCode> {
-        debug!("CALL wasi:sockets/udp#udp-socket.ipv6-only");
-        self.0.ipv6_only()
-    }
-    fn set_ipv6_only(&self, value: bool) -> Result<(), NetworkErrorCode> {
-        debug!("CALL wasi:sockets/udp#udp-socket.set-ipv6-only");
-        self.0.set_ipv6_only(value)
     }
     fn unicast_hop_limit(&self) -> Result<u8, NetworkErrorCode> {
         debug!("CALL wasi:sockets/udp#udp-socket.unicast-hop-limit");
@@ -1620,6 +1713,70 @@ impl GuestUdpSocket for UdpSocket {
     }
     fn subscribe(&self) -> Resource<Pollable> {
         debug!("CALL wasi:sockets/udp#udp-socket.subscribe");
+        Resource::new(Pollable::Host(self.0.subscribe()))
+    }
+    fn stream(
+        &self,
+        remote_addr: Option<IpSocketAddress>,
+    ) -> Result<
+        (
+            Resource<SocketsIncomingDatagramStream>,
+            Resource<SocketsOutgoingDatagramStream>,
+        ),
+        NetworkErrorCode,
+    > {
+        debug!("CALL wasi:sockets/udp#udp-socket.stream");
+        let (in_, out) = self.0.stream(remote_addr)?;
+        Ok((
+            Resource::new(SocketsIncomingDatagramStream(in_)),
+            Resource::new(SocketsOutgoingDatagramStream(out)),
+        ))
+    }
+}
+
+impl GuestIncomingDatagramStream for SocketsIncomingDatagramStream {
+    fn receive(&self, max_results: u64) -> Result<Vec<IncomingDatagram>, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#incoming-datagram-stream.receive");
+        match self.0.receive(max_results) {
+            Ok(mut datagrams) => Ok(datagrams
+                .drain(..)
+                .map(|d| IncomingDatagram {
+                    data: d.data,
+                    remote_address: d.remote_address,
+                })
+                .collect::<Vec<IncomingDatagram>>()),
+            Err(err) => Err(err),
+        }
+    }
+
+    fn subscribe(&self) -> Resource<IoPollable> {
+        debug!("CALL wasi:sockets/udp#incoming-datagram-stream.subscribe");
+        Resource::new(Pollable::Host(self.0.subscribe()))
+    }
+}
+
+impl GuestOutgoingDatagramStream for SocketsOutgoingDatagramStream {
+    fn check_send(&self) -> Result<u64, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#outgoing-datagram-stream.check-send");
+        self.0.check_send()
+    }
+
+    fn send(&self, mut datagrams: Vec<OutgoingDatagram>) -> Result<u64, NetworkErrorCode> {
+        debug!("CALL wasi:sockets/udp#outgoing-datagram-stream.send");
+        self.0.send(
+            datagrams
+                .drain(..)
+                .map(|d| udp::OutgoingDatagram {
+                    data: d.data,
+                    remote_address: d.remote_address,
+                })
+                .collect::<Vec<udp::OutgoingDatagram>>()
+                .as_slice(),
+        )
+    }
+
+    fn subscribe(&self) -> Resource<IoPollable> {
+        debug!("CALL wasi:sockets/udp#outgoing-datagram-stream.subscribe");
         Resource::new(Pollable::Host(self.0.subscribe()))
     }
 }
@@ -1722,6 +1879,14 @@ fn scheme_map_rev(scheme: http_types::Scheme) -> Scheme {
     }
 }
 
+fn header_err_map_rev(err: http_types::HeaderError) -> HeaderError {
+    match err {
+        http_types::HeaderError::InvalidSyntax => HeaderError::InvalidSyntax,
+        http_types::HeaderError::Forbidden => HeaderError::Forbidden,
+        http_types::HeaderError::Immutable => HeaderError::Immutable,
+    }
+}
+
 fn method_map_rev(method: http_types::Method) -> Method {
     match method {
         http_types::Method::Get => Method::Get,
@@ -1752,29 +1917,189 @@ fn method_map(method: Method) -> http_types::Method {
     }
 }
 
-fn http_err_map(err: HttpError) -> http_types::Error {
+fn http_err_map(err: HttpErrorCode) -> http_types::ErrorCode {
     match err {
-        HttpError::InvalidUrl(s) => http_types::Error::InvalidUrl(s),
-        HttpError::TimeoutError(s) => http_types::Error::TimeoutError(s),
-        HttpError::ProtocolError(s) => http_types::Error::ProtocolError(s),
-        HttpError::UnexpectedError(s) => http_types::Error::UnexpectedError(s),
+        HttpErrorCode::DnsTimeout => http_types::ErrorCode::DnsTimeout,
+        HttpErrorCode::DnsError(DnsErrorPayload { rcode, info_code }) => {
+            http_types::ErrorCode::DnsError(http_types::DnsErrorPayload { rcode, info_code })
+        }
+        HttpErrorCode::DestinationNotFound => http_types::ErrorCode::DestinationNotFound,
+        HttpErrorCode::DestinationUnavailable => http_types::ErrorCode::DestinationUnavailable,
+        HttpErrorCode::DestinationIpProhibited => http_types::ErrorCode::DestinationIpProhibited,
+        HttpErrorCode::DestinationIpUnroutable => http_types::ErrorCode::DestinationIpUnroutable,
+        HttpErrorCode::ConnectionRefused => http_types::ErrorCode::ConnectionRefused,
+        HttpErrorCode::ConnectionTerminated => http_types::ErrorCode::ConnectionTerminated,
+        HttpErrorCode::ConnectionTimeout => http_types::ErrorCode::ConnectionTimeout,
+        HttpErrorCode::ConnectionReadTimeout => http_types::ErrorCode::ConnectionReadTimeout,
+        HttpErrorCode::ConnectionWriteTimeout => http_types::ErrorCode::ConnectionWriteTimeout,
+        HttpErrorCode::ConnectionLimitReached => http_types::ErrorCode::ConnectionLimitReached,
+        HttpErrorCode::TlsProtocolError => http_types::ErrorCode::TlsProtocolError,
+        HttpErrorCode::TlsCertificateError => http_types::ErrorCode::TlsCertificateError,
+        HttpErrorCode::TlsAlertReceived(TlsAlertReceivedPayload {
+            alert_id,
+            alert_message,
+        }) => http_types::ErrorCode::TlsAlertReceived(http_types::TlsAlertReceivedPayload {
+            alert_id,
+            alert_message,
+        }),
+        HttpErrorCode::HttpRequestDenied => http_types::ErrorCode::HttpRequestDenied,
+        HttpErrorCode::HttpRequestLengthRequired => {
+            http_types::ErrorCode::HttpRequestLengthRequired
+        }
+        HttpErrorCode::HttpRequestBodySize(s) => http_types::ErrorCode::HttpRequestBodySize(s),
+        HttpErrorCode::HttpRequestMethodInvalid => http_types::ErrorCode::HttpRequestMethodInvalid,
+        HttpErrorCode::HttpRequestUriInvalid => http_types::ErrorCode::HttpRequestUriInvalid,
+        HttpErrorCode::HttpRequestUriTooLong => http_types::ErrorCode::HttpRequestUriTooLong,
+        HttpErrorCode::HttpRequestHeaderSectionSize(s) => {
+            http_types::ErrorCode::HttpRequestHeaderSectionSize(s)
+        }
+        HttpErrorCode::HttpRequestHeaderSize(Some(FieldSizePayload {
+            field_name,
+            field_size,
+        })) => http_types::ErrorCode::HttpRequestHeaderSize(Some(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        })),
+        HttpErrorCode::HttpRequestHeaderSize(None) => {
+            http_types::ErrorCode::HttpRequestHeaderSize(None)
+        }
+        HttpErrorCode::HttpRequestTrailerSectionSize(s) => {
+            http_types::ErrorCode::HttpRequestTrailerSectionSize(s)
+        }
+        HttpErrorCode::HttpRequestTrailerSize(FieldSizePayload {
+            field_name,
+            field_size,
+        }) => http_types::ErrorCode::HttpRequestTrailerSize(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        }),
+        HttpErrorCode::HttpResponseIncomplete => http_types::ErrorCode::HttpResponseIncomplete,
+        HttpErrorCode::HttpResponseHeaderSectionSize(s) => {
+            http_types::ErrorCode::HttpResponseHeaderSectionSize(s)
+        }
+        HttpErrorCode::HttpResponseHeaderSize(FieldSizePayload {
+            field_name,
+            field_size,
+        }) => http_types::ErrorCode::HttpResponseHeaderSize(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        }),
+        HttpErrorCode::HttpResponseBodySize(s) => http_types::ErrorCode::HttpResponseBodySize(s),
+        HttpErrorCode::HttpResponseTrailerSectionSize(s) => {
+            http_types::ErrorCode::HttpResponseTrailerSectionSize(s)
+        }
+        HttpErrorCode::HttpResponseTrailerSize(FieldSizePayload {
+            field_name,
+            field_size,
+        }) => http_types::ErrorCode::HttpResponseTrailerSize(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        }),
+        HttpErrorCode::HttpResponseTransferCoding(e) => {
+            http_types::ErrorCode::HttpResponseTransferCoding(e)
+        }
+        HttpErrorCode::HttpResponseContentCoding(e) => {
+            http_types::ErrorCode::HttpResponseContentCoding(e)
+        }
+        HttpErrorCode::HttpResponseTimeout => http_types::ErrorCode::HttpResponseTimeout,
+        HttpErrorCode::HttpUpgradeFailed => http_types::ErrorCode::HttpUpgradeFailed,
+        HttpErrorCode::HttpProtocolError => http_types::ErrorCode::HttpProtocolError,
+        HttpErrorCode::LoopDetected => http_types::ErrorCode::LoopDetected,
+        HttpErrorCode::ConfigurationError => http_types::ErrorCode::ConfigurationError,
+        HttpErrorCode::InternalError(e) => http_types::ErrorCode::InternalError(e),
     }
 }
 
-fn http_err_map_rev(err: http_types::Error) -> HttpError {
+fn http_err_map_rev(err: http_types::ErrorCode) -> HttpErrorCode {
     match err {
-        http_types::Error::InvalidUrl(s) => HttpError::InvalidUrl(s),
-        http_types::Error::TimeoutError(s) => HttpError::TimeoutError(s),
-        http_types::Error::ProtocolError(s) => HttpError::ProtocolError(s),
-        http_types::Error::UnexpectedError(s) => HttpError::UnexpectedError(s),
-    }
-}
-
-fn request_options_map(options: RequestOptions) -> http_types::RequestOptions {
-    http_types::RequestOptions {
-        connect_timeout_ms: options.connect_timeout_ms,
-        first_byte_timeout_ms: options.first_byte_timeout_ms,
-        between_bytes_timeout_ms: options.between_bytes_timeout_ms,
+        http_types::ErrorCode::DnsTimeout => HttpErrorCode::DnsTimeout,
+        http_types::ErrorCode::DnsError(http_types::DnsErrorPayload { rcode, info_code }) => {
+            HttpErrorCode::DnsError(DnsErrorPayload { rcode, info_code })
+        }
+        http_types::ErrorCode::DestinationNotFound => HttpErrorCode::DestinationNotFound,
+        http_types::ErrorCode::DestinationUnavailable => HttpErrorCode::DestinationUnavailable,
+        http_types::ErrorCode::DestinationIpProhibited => HttpErrorCode::DestinationIpProhibited,
+        http_types::ErrorCode::DestinationIpUnroutable => HttpErrorCode::DestinationIpUnroutable,
+        http_types::ErrorCode::ConnectionRefused => HttpErrorCode::ConnectionRefused,
+        http_types::ErrorCode::ConnectionTerminated => HttpErrorCode::ConnectionTerminated,
+        http_types::ErrorCode::ConnectionTimeout => HttpErrorCode::ConnectionTimeout,
+        http_types::ErrorCode::ConnectionReadTimeout => HttpErrorCode::ConnectionReadTimeout,
+        http_types::ErrorCode::ConnectionWriteTimeout => HttpErrorCode::ConnectionWriteTimeout,
+        http_types::ErrorCode::ConnectionLimitReached => HttpErrorCode::ConnectionLimitReached,
+        http_types::ErrorCode::TlsProtocolError => HttpErrorCode::TlsProtocolError,
+        http_types::ErrorCode::TlsCertificateError => HttpErrorCode::TlsCertificateError,
+        http_types::ErrorCode::TlsAlertReceived(http_types::TlsAlertReceivedPayload {
+            alert_id,
+            alert_message,
+        }) => HttpErrorCode::TlsAlertReceived(TlsAlertReceivedPayload {
+            alert_id,
+            alert_message,
+        }),
+        http_types::ErrorCode::HttpRequestDenied => HttpErrorCode::HttpRequestDenied,
+        http_types::ErrorCode::HttpRequestLengthRequired => {
+            HttpErrorCode::HttpRequestLengthRequired
+        }
+        http_types::ErrorCode::HttpRequestBodySize(s) => HttpErrorCode::HttpRequestBodySize(s),
+        http_types::ErrorCode::HttpRequestMethodInvalid => HttpErrorCode::HttpRequestMethodInvalid,
+        http_types::ErrorCode::HttpRequestUriInvalid => HttpErrorCode::HttpRequestUriInvalid,
+        http_types::ErrorCode::HttpRequestUriTooLong => HttpErrorCode::HttpRequestUriTooLong,
+        http_types::ErrorCode::HttpRequestHeaderSectionSize(s) => {
+            HttpErrorCode::HttpRequestHeaderSectionSize(s)
+        }
+        http_types::ErrorCode::HttpRequestHeaderSize(Some(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        })) => HttpErrorCode::HttpRequestHeaderSize(Some(FieldSizePayload {
+            field_name,
+            field_size,
+        })),
+        http_types::ErrorCode::HttpRequestHeaderSize(None) => {
+            HttpErrorCode::HttpRequestHeaderSize(None)
+        }
+        http_types::ErrorCode::HttpRequestTrailerSectionSize(s) => {
+            HttpErrorCode::HttpRequestTrailerSectionSize(s)
+        }
+        http_types::ErrorCode::HttpRequestTrailerSize(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        }) => HttpErrorCode::HttpRequestTrailerSize(FieldSizePayload {
+            field_name,
+            field_size,
+        }),
+        http_types::ErrorCode::HttpResponseIncomplete => HttpErrorCode::HttpResponseIncomplete,
+        http_types::ErrorCode::HttpResponseHeaderSectionSize(s) => {
+            HttpErrorCode::HttpResponseHeaderSectionSize(s)
+        }
+        http_types::ErrorCode::HttpResponseHeaderSize(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        }) => HttpErrorCode::HttpResponseHeaderSize(FieldSizePayload {
+            field_name,
+            field_size,
+        }),
+        http_types::ErrorCode::HttpResponseBodySize(s) => HttpErrorCode::HttpResponseBodySize(s),
+        http_types::ErrorCode::HttpResponseTrailerSectionSize(s) => {
+            HttpErrorCode::HttpResponseTrailerSectionSize(s)
+        }
+        http_types::ErrorCode::HttpResponseTrailerSize(http_types::FieldSizePayload {
+            field_name,
+            field_size,
+        }) => HttpErrorCode::HttpResponseTrailerSize(FieldSizePayload {
+            field_name,
+            field_size,
+        }),
+        http_types::ErrorCode::HttpResponseTransferCoding(e) => {
+            HttpErrorCode::HttpResponseTransferCoding(e)
+        }
+        http_types::ErrorCode::HttpResponseContentCoding(e) => {
+            HttpErrorCode::HttpResponseContentCoding(e)
+        }
+        http_types::ErrorCode::HttpResponseTimeout => HttpErrorCode::HttpResponseTimeout,
+        http_types::ErrorCode::HttpUpgradeFailed => HttpErrorCode::HttpUpgradeFailed,
+        http_types::ErrorCode::HttpProtocolError => HttpErrorCode::HttpProtocolError,
+        http_types::ErrorCode::LoopDetected => HttpErrorCode::LoopDetected,
+        http_types::ErrorCode::ConfigurationError => HttpErrorCode::ConfigurationError,
+        http_types::ErrorCode::InternalError(e) => HttpErrorCode::InternalError(e),
     }
 }
 

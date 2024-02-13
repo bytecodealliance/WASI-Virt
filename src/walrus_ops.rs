@@ -86,3 +86,64 @@ pub(crate) fn bump_stack_global(module: &mut Module, offset: i32) -> Result<u32>
     *stack_value = new_stack_value;
     Ok(new_stack_value as u32)
 }
+
+pub(crate) fn strip_virt(module: &mut Module, subsystems: &[&str]) -> Result<()> {
+    stub_virt(module, subsystems, true)?;
+    let mut subsystem_exports = Vec::new();
+    for export in module.exports.iter() {
+        let export_name = if export.name.starts_with("cabi_post_") {
+            &export.name[10..]
+        } else {
+            &export.name
+        };
+        if subsystems
+            .iter()
+            .any(|subsystem| export_name.starts_with(subsystem))
+        {
+            subsystem_exports.push(export.name.to_string());
+        }
+    }
+    for export_name in subsystem_exports {
+        module
+            .exports
+            .remove(&export_name)
+            .with_context(|| format!("failed to strip function [{export_name}]"))?;
+    }
+    Ok(())
+}
+
+/// Replace imported WASI functions that implement subsystem access with no-ops
+pub(crate) fn stub_virt(
+    module: &mut Module,
+    subsystems: &[&str],
+    with_exports: bool,
+) -> Result<()> {
+    let mut subsystem_imports = Vec::new();
+    for import in module.imports.iter() {
+        let module_name = if with_exports && import.module.starts_with("[export]") {
+            &import.module[8..]
+        } else {
+            &import.module
+        };
+        if subsystems
+            .iter()
+            .any(|subsystem| module_name.starts_with(subsystem))
+        {
+            subsystem_imports.push((import.module.to_string(), import.name.to_string()));
+        }
+    }
+    for (module_name, func_name) in &subsystem_imports {
+        if let Ok(fid) = module.imports.get_func(module_name, func_name) {
+            module
+                .replace_imported_func(fid, |(body, _)| {
+                    body.unreachable();
+                })
+                .with_context(|| {
+                    format!(
+                        "failed to stub WASI functionality [{func_name}] in module [{module_name}]"
+                    )
+                })?;
+        }
+    }
+    Ok(())
+}
