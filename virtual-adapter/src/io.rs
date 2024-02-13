@@ -33,21 +33,22 @@ use crate::exports::wasi::sockets::ip_name_lookup::{
     Guest as IpNameLookup, GuestResolveAddressStream, IpAddress, Network, ResolveAddressStream,
 };
 use crate::exports::wasi::sockets::tcp::{
-    Duration, ErrorCode as NetworkErrorCode, GuestTcpSocket, IpSocketAddress, ShutdownType,
-    TcpSocket,
+    Duration, ErrorCode as NetworkErrorCode, GuestTcpSocket, IpAddressFamily, IpSocketAddress,
+    ShutdownType, TcpSocket,
 };
 use crate::exports::wasi::sockets::udp::{
     GuestIncomingDatagramStream, GuestOutgoingDatagramStream, GuestUdpSocket, IncomingDatagram,
     OutgoingDatagram, UdpSocket,
 };
 
-use crate::wasi::cli::stderr;
 use crate::wasi::cli::stdin;
 use crate::wasi::cli::stdout;
+use crate::wasi::cli::terminal_input;
+use crate::wasi::cli::terminal_output;
+use crate::wasi::cli::{stderr, terminal_stderr, terminal_stdin, terminal_stdout};
 use crate::wasi::filesystem::preopens;
 use crate::wasi::filesystem::types as filesystem_types;
 use crate::wasi::io::streams;
-use crate::wasi::sockets::network::IpAddressFamily;
 
 // these are all the subsystems which touch streams + poll
 use crate::wasi::clocks::monotonic_clock;
@@ -412,8 +413,8 @@ pub enum FilesystemDirectoryEntryStream {
     Host(filesystem_types::DirectoryEntryStream),
 }
 
-pub struct CliTerminalInput;
-pub struct CliTerminalOutput;
+pub struct CliTerminalInput(terminal_input::TerminalInput);
+pub struct CliTerminalOutput(terminal_output::TerminalOutput);
 
 pub struct HttpTypes;
 
@@ -558,21 +559,24 @@ impl Stderr for VirtAdapter {
 impl TerminalStdin for VirtAdapter {
     fn get_terminal_stdin() -> Option<Resource<TerminalInput>> {
         debug!("CALL wasi:cli/terminal-stdin#get-terminal-stdin");
-        Some(Resource::new(TerminalInput))
+        terminal_stdin::get_terminal_stdin()
+            .map(|terminal_input| Resource::new(CliTerminalInput(terminal_input)))
     }
 }
 
 impl TerminalStdout for VirtAdapter {
     fn get_terminal_stdout() -> Option<Resource<TerminalOutput>> {
         debug!("CALL wasi:cli/terminal-stdout#get-terminal-stdout");
-        Some(Resource::new(TerminalOutput))
+        terminal_stdout::get_terminal_stdout()
+            .map(|terminal_output| Resource::new(CliTerminalOutput(terminal_output)))
     }
 }
 
 impl TerminalStderr for VirtAdapter {
     fn get_terminal_stderr() -> Option<Resource<TerminalOutput>> {
         debug!("CALL wasi:cli/terminal-stderr#get-terminal-stderr");
-        Some(Resource::new(TerminalOutput))
+        terminal_stderr::get_terminal_stderr()
+            .map(|terminal_output| Resource::new(CliTerminalOutput(terminal_output)))
     }
 }
 
@@ -614,10 +618,7 @@ impl Preopens for VirtAdapter {
         IoState::initialize();
         unsafe { &STATE.preopen_directories }
             .iter()
-            .map(|(fd, name)| {
-                debug!("PREOPEN {:?} {}", fd, name);
-                (Resource::new(fd.clone()), name.clone())
-            })
+            .map(|(fd, name)| (Resource::new(fd.clone()), name.clone()))
             .collect()
     }
 }

@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::{env, fs, time::SystemTime};
-use virt_deny::{deny_clocks_virt, deny_exit_virt, deny_random_virt};
+use virt_deny::{
+    deny_clocks_virt, deny_exit_virt, deny_http_virt, deny_random_virt, deny_sockets_virt,
+};
 use virt_env::{create_env_virt, strip_env_virt};
 use virt_io::{create_io_virt, VirtStdio};
 use walrus_ops::{deny_virt, strip_virt};
@@ -229,7 +231,7 @@ impl WasiVirt {
         if let Some(sockets) = self.sockets {
             if !sockets {
                 resolve.merge_worlds(sockets_world, base_world)?;
-                deny_virt(&mut module, &["wasi:sockets/"])?;
+                deny_sockets_virt(&mut module)?;
             } else {
                 resolve.merge_worlds(io_sockets_world, base_world)?;
             }
@@ -239,7 +241,7 @@ impl WasiVirt {
         if let Some(http) = self.http {
             if !http {
                 resolve.merge_worlds(http_world, base_world)?;
-                deny_virt(&mut module, &["wasi:http/"])?;
+                deny_http_virt(&mut module)?;
             } else {
                 resolve.merge_worlds(io_http_world, base_world)?;
             }
@@ -252,7 +254,7 @@ impl WasiVirt {
         if self.stdio.is_some() {
             resolve.merge_worlds(stdio_world, base_world)?;
         } else {
-            strip_virt(&mut module, &["wasi:cli/std", "wasi/cli/terminal"])?;
+            strip_virt(&mut module, &["wasi:cli/std", "wasi:cli/terminal"])?;
         }
         if self.fs.is_some() || self.stdio.is_some() {
             resolve.merge_worlds(fs_world, base_world)?;

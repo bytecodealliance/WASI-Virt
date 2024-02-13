@@ -341,27 +341,7 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
 }
 
 /// Replace exports related to HTTP in WASI to deny access
-pub(crate) fn deny_virt(module: &mut Module, subsystems: &[&str]) -> Result<()> {
-    stub_virt(module, subsystems)?;
-    let mut subsystem_exports = Vec::new();
-    for export in module.exports.iter() {
-        let export_name = if export.name.starts_with("cabi_post_") {
-            &export.name[10..]
-        } else {
-            &export.name
-        };
-        if subsystems
-            .iter()
-            .any(|subsystem| export_name.starts_with(subsystem))
-        {
-            subsystem_exports.push(export.name.to_string());
-        }
-    }
-    for export_name in &subsystem_exports {
-        let fid = module.exports.get_func(export_name).unwrap();
-        module.replace_exported_func(fid, |(body, _)| {
-            body.unreachable();
-        })?;
-    }
-    Ok(())
+pub(crate) fn deny_http_virt(module: &mut Module) -> Result<()> {
+    stub_virt(module, &["wasi:http/"])?;
+    replace_or_insert_stub_for_exports(module, get_wasi_http_fns())
 }

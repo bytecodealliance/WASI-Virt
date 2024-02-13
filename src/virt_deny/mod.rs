@@ -8,7 +8,9 @@ mod random;
 mod sockets;
 pub(crate) use clocks::deny_clocks_virt;
 pub(crate) use exit::deny_exit_virt;
+pub(crate) use http::deny_http_virt;
 pub(crate) use random::deny_random_virt;
+pub(crate) use sockets::deny_sockets_virt;
 
 /// Helper function for replacing or inserting exports with stub functions
 fn replace_or_insert_stub_for_exports<'a>(

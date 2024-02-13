@@ -64,7 +64,7 @@ struct TestCase {
     expect: TestExpectation,
 }
 
-const DEBUG: bool = true;
+const DEBUG: bool = false;
 
 #[tokio::test]
 async fn virt_test() -> Result<()> {
@@ -77,7 +77,7 @@ async fn virt_test() -> Result<()> {
         let test_case_name = test_case_file_name.strip_suffix(".toml").unwrap();
 
         // Filtering...
-        if test_case_name == "env-allow" || test_case_name == "encapsulate" {
+        if test_case_name == "encapsulate" {
             continue;
         }
 
