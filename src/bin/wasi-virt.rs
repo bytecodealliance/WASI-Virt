@@ -152,7 +152,7 @@ fn main() -> Result<()> {
     virt_opts.stdio().stderr(stderr);
 
     // exit
-    virt_opts.exit(args.allow_exit.unwrap_or_default());
+    virt_opts.exit(args.allow_exit.unwrap_or(allow_all));
 
     // env options
     let env = virt_opts.env();
