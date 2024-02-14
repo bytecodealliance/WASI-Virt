@@ -151,63 +151,63 @@ pub fn get_wasi_sockets_fns() -> &'static Vec<(&'static str, FuncParams, FuncRes
             ),
             (
                 "wasi:sockets/tcp@0.2.0#keep-alive-idle-time",
-                vec![ValType::I32], // fixme
-                vec![ValType::I32],
+                vec![ValType::I32, ValType::I32],
+                vec![],
             ),
             (
                 "wasi:sockets/tcp@0.2.0#set-keep-alive-idle-time",
-                vec![ValType::I32, ValType::I32], // fixme
-                vec![ValType::I32],
+                vec![ValType::I32, ValType::I64, ValType::I32],
+                vec![],
             ),
             (
                 "wasi:sockets/tcp@0.2.0#keep-alive-interval",
-                vec![ValType::I32], // fixme
-                vec![ValType::I32],
+                vec![ValType::I32, ValType::I32],
+                vec![],
             ),
             (
                 "wasi:sockets/tcp@0.2.0#set-keep-alive-interval",
-                vec![ValType::I32, ValType::I32], // fixme
-                vec![ValType::I32],
+                vec![ValType::I32, ValType::I64, ValType::I32],
+                vec![],
             ),
             (
                 "wasi:sockets/tcp@0.2.0#keep-alive-count",
-                vec![ValType::I32], // fixme
-                vec![ValType::I32],
+                vec![ValType::I32, ValType::I32],
+                vec![],
             ),
             (
                 "wasi:sockets/tcp@0.2.0#set-keep-alive-count",
-                vec![ValType::I32, ValType::I32], // fixme
-                vec![ValType::I32],
+                vec![ValType::I32, ValType::I32, ValType::I32],
+                vec![],
             ),
             (
                 "wasi:sockets/tcp@0.2.0#hop-limit",
-                vec![ValType::I32],
-                vec![ValType::I32],
+                vec![ValType::I32, ValType::I32],
+                vec![],
             ),
             (
                 "wasi:sockets/tcp@0.2.0#set-hop-limit",
-                vec![ValType::I32, ValType::I32],
-                vec![ValType::I32],
+                vec![ValType::I32, ValType::I32, ValType::I32],
+                vec![],
             ),
             (
                 "wasi:sockets/tcp@0.2.0#receive-buffer-size",
-                vec![ValType::I32],
-                vec![ValType::I32],
+                vec![ValType::I32, ValType::I32],
+                vec![],
             ),
             (
                 "wasi:sockets/tcp@0.2.0#set-receive-buffer-size",
-                vec![ValType::I32, ValType::I64],
-                vec![ValType::I32],
+                vec![ValType::I32, ValType::I64, ValType::I32],
+                vec![],
             ),
             (
                 "wasi:sockets/tcp@0.2.0#send-buffer-size",
-                vec![ValType::I32],
-                vec![ValType::I32],
+                vec![ValType::I32, ValType::I32],
+                vec![],
             ),
             (
                 "wasi:sockets/tcp@0.2.0#set-send-buffer-size",
-                vec![ValType::I32, ValType::I64],
-                vec![ValType::I32],
+                vec![ValType::I32, ValType::I64, ValType::I32],
+                vec![],
             ),
             (
                 "wasi:sockets/tcp@0.2.0#subscribe",
