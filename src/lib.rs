@@ -130,10 +130,7 @@ impl WasiVirt {
     }
 
     pub fn finish(&mut self) -> Result<VirtResult> {
-        let mut config = walrus::ModuleConfig::new();
-        if self.debug {
-            config.generate_dwarf(true);
-        }
+        let config = walrus::ModuleConfig::new();
         let mut module = if self.debug {
             config.parse(VIRT_ADAPTER_DEBUG)
         } else {
