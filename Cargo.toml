@@ -34,10 +34,10 @@ clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 walrus = "0.20.3"
-wasm-compose = "0.5.5"
-wasm-metadata = "0.10.20"
+wasm-compose = "0.201.0"
+wasm-metadata = "0.201.0"
 wasm-opt = "0.116.0"
-wit-component = "0.21.0"
+wit-component = "0.201.0"
 
 [build-dependencies]
 anyhow = "1"
@@ -49,8 +49,8 @@ heck = { version = "0.4" }
 tokio = { version = "1.30.0", features = ["macros"] }
 wasmtime = { version = "17.0.1", features = ["component-model"] }
 wasmtime-wasi = "17.0.1"
-wasmparser = "0.121.2"
+wasmparser = "0.200.0"
 
 [workspace.dependencies]
 anyhow = "1"
-wit-bindgen = "0.17.1"
+wit-bindgen = "0.19.1"
