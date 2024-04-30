@@ -338,7 +338,7 @@ impl StaticIndexEntry {
                 );
                 let bytes = unsafe { slice::from_raw_parts(data, read_len) };
                 let vec = bytes.to_vec();
-                unsafe { std::alloc::dealloc(data, Layout::from_size_align(1, 4).unwrap()) };
+                unsafe { std::alloc::dealloc(data, Layout::from_size_align(read_len, 4).unwrap()) };
                 offset.set(offset.get() + read_len as u64);
                 Ok(vec)
             }
