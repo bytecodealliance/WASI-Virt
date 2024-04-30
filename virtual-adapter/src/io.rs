@@ -280,11 +280,17 @@ impl StaticIndexEntry {
         let static_index = Io::static_index();
         Ok(&static_index[self.idx() + child_offset..self.idx() + child_offset + child_list_len])
     }
-    fn dir_lookup(&self, path: &str) -> Result<&'static StaticIndexEntry, ErrorCode> {
+    fn dir_lookup(&self, path: &str) -> Result<&StaticIndexEntry, ErrorCode> {
         assert!(path.len() > 0);
         let (first_part, rem) = match path.find('/') {
             Some(idx) => (&path[0..idx], &path[idx + 1..]),
-            None => (path, ""),
+            None => {
+                if path == "." {
+                    return Ok(self);
+                } else {
+                    (path, "")
+                }
+            }
         };
         let child_list = self.child_list()?;
         if let Ok(child_idx) = child_list.binary_search_by(|entry| entry.name().cmp(first_part)) {
