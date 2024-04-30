@@ -284,6 +284,7 @@ impl WasiVirt {
             OptimizationOptions::new_opt_level_2()
                 .shrink_level(ShrinkLevel::Level1)
                 .enable_feature(Feature::All)
+                .debug_info(self.debug)
                 .run(&tmp_input, &tmp_output)
                 .with_context(|| "Unable to apply wasm-opt optimization to virt. This can be disabled with wasm_opt: false.")
                 .or_else(|e| {
