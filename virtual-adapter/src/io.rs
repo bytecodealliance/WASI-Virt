@@ -1,17 +1,18 @@
 use crate::exports::wasi::cli::stderr::Guest as Stderr;
 use crate::exports::wasi::cli::stdin::Guest as Stdin;
 use crate::exports::wasi::cli::stdout::Guest as Stdout;
-use crate::exports::wasi::cli::terminal_input::TerminalInput;
-use crate::exports::wasi::cli::terminal_output::TerminalOutput;
+use crate::exports::wasi::cli::terminal_input::{GuestTerminalInput, TerminalInput};
+use crate::exports::wasi::cli::terminal_output::{GuestTerminalOutput, TerminalOutput};
 use crate::exports::wasi::cli::terminal_stderr::Guest as TerminalStderr;
 use crate::exports::wasi::cli::terminal_stdin::Guest as TerminalStdin;
 use crate::exports::wasi::cli::terminal_stdout::Guest as TerminalStdout;
 use crate::exports::wasi::clocks::monotonic_clock::Guest as MonotonicClock;
 use crate::exports::wasi::filesystem::preopens::Guest as Preopens;
 use crate::exports::wasi::filesystem::types::{
-    Advice, Descriptor, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry,
-    DirectoryEntryStream, ErrorCode, Guest as FilesystemTypes, GuestDescriptor,
-    GuestDirectoryEntryStream, MetadataHashValue, NewTimestamp, OpenFlags, PathFlags,
+    Advice, Descriptor, DescriptorBorrow, DescriptorFlags, DescriptorStat, DescriptorType,
+    DirectoryEntry, DirectoryEntryStream, ErrorBorrow, ErrorCode, Guest as FilesystemTypes,
+    GuestDescriptor, GuestDirectoryEntryStream, InputStreamBorrow, MetadataHashValue, NewTimestamp,
+    OpenFlags, PathFlags,
 };
 use crate::exports::wasi::http::outgoing_handler::Guest as OutgoingHandler;
 use crate::exports::wasi::http::types::{
@@ -19,15 +20,14 @@ use crate::exports::wasi::http::types::{
     FutureTrailers, Guest as GuestHttpTypes, GuestFields, GuestFutureIncomingResponse,
     GuestFutureTrailers, GuestIncomingBody, GuestIncomingRequest, GuestIncomingResponse,
     GuestOutgoingBody, GuestOutgoingRequest, GuestOutgoingResponse, GuestRequestOptions,
-    GuestResponseOutparam, HeaderError, Headers, IncomingBody, IncomingRequest, IncomingResponse,
-    Method, OutgoingBody, OutgoingRequest, OutgoingResponse, RequestOptions, ResponseOutparam,
-    Scheme, StatusCode, TlsAlertReceivedPayload,
+    GuestResponseOutparam, HeaderError, Headers, IncomingBody, IncomingResponse, Method,
+    OutgoingBody, OutgoingRequest, OutgoingResponse, RequestOptions, ResponseOutparam, Scheme,
+    StatusCode, TlsAlertReceivedPayload,
 };
-use crate::exports::wasi::io::error::GuestError as GuestStreamsError;
-use crate::exports::wasi::io::poll::{Guest as Poll, GuestPollable, Pollable};
+use crate::exports::wasi::io::error::{Error, GuestError as GuestStreamsError};
+use crate::exports::wasi::io::poll::{Guest as Poll, GuestPollable, Pollable, PollableBorrow};
 use crate::exports::wasi::io::streams::{
-    Error as StreamsError, GuestInputStream, GuestOutputStream, InputStream, OutputStream,
-    StreamError,
+    GuestInputStream, GuestOutputStream, InputStream, OutputStream, StreamError,
 };
 use crate::exports::wasi::sockets::ip_name_lookup::{
     Guest as IpNameLookup, GuestResolveAddressStream, IpAddress, Network, ResolveAddressStream,
@@ -38,7 +38,7 @@ use crate::exports::wasi::sockets::tcp::{
 };
 use crate::exports::wasi::sockets::udp::{
     GuestIncomingDatagramStream, GuestOutgoingDatagramStream, GuestUdpSocket, IncomingDatagram,
-    OutgoingDatagram, UdpSocket,
+    IncomingDatagramStream, OutgoingDatagram, OutgoingDatagramStream,
 };
 
 use crate::wasi::cli::stdin;
@@ -71,8 +71,6 @@ use std::collections::BTreeMap;
 use std::ffi::CStr;
 use std::rc::Rc;
 use std::slice;
-
-use wit_bindgen::Resource;
 
 // io flags
 const FLAGS_ENABLE_STDIN: u32 = 1 << 0;
@@ -311,8 +309,8 @@ impl StaticIndexEntry {
                     return Err(StreamError::Closed);
                 }
                 if offset.get() as usize > unsafe { self.data.active.1 } {
-                    return Err(StreamError::LastOperationFailed(Resource::new(
-                        StreamsError::FsCode(ErrorCode::InvalidSeek),
+                    return Err(StreamError::LastOperationFailed(Error::new(
+                        IoError::FsCode(ErrorCode::InvalidSeek),
                     )));
                 }
                 let read_ptr = unsafe { self.data.active.0.add(offset.get() as usize) };
@@ -329,8 +327,8 @@ impl StaticIndexEntry {
                     return Err(StreamError::Closed);
                 }
                 if offset.get() as usize > unsafe { self.data.passive.1 } {
-                    return Err(StreamError::LastOperationFailed(Resource::new(
-                        StreamsError::FsCode(ErrorCode::InvalidSeek),
+                    return Err(StreamError::LastOperationFailed(Error::new(
+                        IoError::FsCode(ErrorCode::InvalidSeek),
                     )));
                 }
                 let read_len = cmp::min(
@@ -349,8 +347,8 @@ impl StaticIndexEntry {
                 Ok(vec)
             }
             StaticIndexType::RuntimeDir | StaticIndexType::Dir => {
-                Err(StreamError::LastOperationFailed(Resource::new(
-                    StreamsError::FsCode(ErrorCode::IsDirectory),
+                Err(StreamError::LastOperationFailed(Error::new(
+                    IoError::FsCode(ErrorCode::IsDirectory),
                 )))
             }
             StaticIndexType::RuntimeFile => {
@@ -422,8 +420,6 @@ pub enum FilesystemDirectoryEntryStream {
 pub struct CliTerminalInput(terminal_input::TerminalInput);
 pub struct CliTerminalOutput(terminal_output::TerminalOutput);
 
-pub struct HttpTypes;
-
 pub struct HttpFields(http_types::Fields);
 pub struct HttpFutureIncomingResponse(http_types::FutureIncomingResponse);
 pub struct HttpFutureTrailers(http_types::FutureTrailers);
@@ -444,7 +440,7 @@ pub struct SocketsOutgoingDatagramStream(udp::OutgoingDatagramStream);
 
 pub struct IoState {
     initialized: bool,
-    preopen_directories: Vec<(Descriptor, String)>,
+    preopen_directories: Vec<(FilesystemDescriptor, String)>,
     host_preopen_directories: BTreeMap<String, Rc<filesystem_types::Descriptor>>,
     host_stderr: Option<streams::OutputStream>,
 }
@@ -466,7 +462,7 @@ impl IoState {
             for (fd, name) in preopens::get_directories() {
                 let fd = Rc::new(fd);
                 if Io::host_preopens() {
-                    let fd = Descriptor::Host(fd.clone());
+                    let fd = FilesystemDescriptor::Host(fd.clone());
                     let entry = (fd, name.to_string());
                     unsafe { STATE.preopen_directories.push(entry) }
                 }
@@ -478,7 +474,7 @@ impl IoState {
 
         let preopens = Io::preopens();
         for preopen in preopens {
-            let fd = Descriptor::Static(preopen);
+            let fd = FilesystemDescriptor::Static(preopen);
             let entry = (fd, preopen.name().to_string());
             unsafe { STATE.preopen_directories.push(entry) }
         }
@@ -536,61 +532,64 @@ static mut STATE: IoState = IoState {
 };
 
 impl Stdin for VirtAdapter {
-    fn get_stdin() -> Resource<InputStream> {
+    fn get_stdin() -> InputStream {
         debug!("CALL wasi:cli/stdin#get-stdin");
-        Resource::new(match Io::stdin() {
-            AllowCfg::Allow => InputStream::Host(stdin::get_stdin()),
-            AllowCfg::Ignore => InputStream::Null,
-            AllowCfg::Deny => InputStream::Err,
+        InputStream::new(match Io::stdin() {
+            AllowCfg::Allow => IoInputStream::Host(stdin::get_stdin()),
+            AllowCfg::Ignore => IoInputStream::Null,
+            AllowCfg::Deny => IoInputStream::Err,
         })
     }
 }
 
 impl Stdout for VirtAdapter {
-    fn get_stdout() -> Resource<OutputStream> {
+    fn get_stdout() -> OutputStream {
         debug!("CALL wasi:cli/stdout#get-stdout");
-        Resource::new(match Io::stdout() {
-            AllowCfg::Allow => OutputStream::Host(stdout::get_stdout()),
-            AllowCfg::Ignore => OutputStream::Null,
-            AllowCfg::Deny => OutputStream::Err,
+        OutputStream::new(match Io::stdout() {
+            AllowCfg::Allow => IoOutputStream::Host(stdout::get_stdout()),
+            AllowCfg::Ignore => IoOutputStream::Null,
+            AllowCfg::Deny => IoOutputStream::Err,
         })
     }
 }
 
 impl Stderr for VirtAdapter {
-    fn get_stderr() -> Resource<OutputStream> {
+    fn get_stderr() -> OutputStream {
         debug!("CALL wasi:cli/stderr#get-stderr");
-        Resource::new(match Io::stderr() {
-            AllowCfg::Allow => OutputStream::Host(stderr::get_stderr()),
-            AllowCfg::Ignore => OutputStream::Null,
-            AllowCfg::Deny => OutputStream::Err,
+        OutputStream::new(match Io::stderr() {
+            AllowCfg::Allow => IoOutputStream::Host(stderr::get_stderr()),
+            AllowCfg::Ignore => IoOutputStream::Null,
+            AllowCfg::Deny => IoOutputStream::Err,
         })
     }
 }
 
 impl TerminalStdin for VirtAdapter {
-    fn get_terminal_stdin() -> Option<Resource<TerminalInput>> {
+    fn get_terminal_stdin() -> Option<TerminalInput> {
         debug!("CALL wasi:cli/terminal-stdin#get-terminal-stdin");
         terminal_stdin::get_terminal_stdin()
-            .map(|terminal_input| Resource::new(CliTerminalInput(terminal_input)))
+            .map(|terminal_input| TerminalInput::new(CliTerminalInput(terminal_input)))
     }
 }
 
 impl TerminalStdout for VirtAdapter {
-    fn get_terminal_stdout() -> Option<Resource<TerminalOutput>> {
+    fn get_terminal_stdout() -> Option<TerminalOutput> {
         debug!("CALL wasi:cli/terminal-stdout#get-terminal-stdout");
         terminal_stdout::get_terminal_stdout()
-            .map(|terminal_output| Resource::new(CliTerminalOutput(terminal_output)))
+            .map(|terminal_output| TerminalOutput::new(CliTerminalOutput(terminal_output)))
     }
 }
 
 impl TerminalStderr for VirtAdapter {
-    fn get_terminal_stderr() -> Option<Resource<TerminalOutput>> {
+    fn get_terminal_stderr() -> Option<TerminalOutput> {
         debug!("CALL wasi:cli/terminal-stderr#get-terminal-stderr");
         terminal_stderr::get_terminal_stderr()
-            .map(|terminal_output| Resource::new(CliTerminalOutput(terminal_output)))
+            .map(|terminal_output| TerminalOutput::new(CliTerminalOutput(terminal_output)))
     }
 }
+
+impl GuestTerminalInput for CliTerminalInput {}
+impl GuestTerminalOutput for CliTerminalOutput {}
 
 impl MonotonicClock for VirtAdapter {
     fn now() -> u64 {
@@ -601,22 +600,25 @@ impl MonotonicClock for VirtAdapter {
         debug!("CALL wasi:clocks/monotonic-clock#resolution");
         monotonic_clock::resolution()
     }
-    fn subscribe_instant(when: u64) -> Resource<Pollable> {
+    fn subscribe_instant(when: u64) -> Pollable {
         debug!("CALL wasi:clocks/monotonic-clock#subscribe-instant");
         let host_pollable = monotonic_clock::subscribe_instant(when);
-        Resource::new(Pollable::Host(host_pollable))
+        Pollable::new(IoPollable::Host(host_pollable))
     }
-    fn subscribe_duration(when: u64) -> Resource<Pollable> {
+    fn subscribe_duration(when: u64) -> Pollable {
         debug!("CALL wasi:clocks/monotonic-clock#subscribe-duration");
         let host_pollable = monotonic_clock::subscribe_duration(when);
-        Resource::new(Pollable::Host(host_pollable))
+        Pollable::new(IoPollable::Host(host_pollable))
     }
 }
 
 impl FilesystemTypes for VirtAdapter {
-    fn filesystem_error_code(err: &StreamsError) -> Option<ErrorCode> {
+    type Descriptor = FilesystemDescriptor;
+    type DirectoryEntryStream = FilesystemDirectoryEntryStream;
+    fn filesystem_error_code(err: ErrorBorrow<'_>) -> Option<ErrorCode> {
         debug!("CALL wasi:filesystem/types#filesystem-error-code");
-        if let StreamsError::FsCode(code) = err {
+        let err: &IoError = err.get();
+        if let IoError::FsCode(code) = err {
             Some(*code)
         } else {
             None
@@ -625,31 +627,53 @@ impl FilesystemTypes for VirtAdapter {
 }
 
 impl Preopens for VirtAdapter {
-    fn get_directories() -> Vec<(Resource<Descriptor>, String)> {
+    fn get_directories() -> Vec<(Descriptor, String)> {
         debug!("CALL wasi:filesystem/preopens#get-directories");
         IoState::initialize();
         unsafe { &STATE.preopen_directories }
             .iter()
-            .map(|(fd, name)| (Resource::new(fd.clone()), name.clone()))
+            .map(|(fd, name)| (Descriptor::new(fd.clone()), name.clone()))
             .collect()
     }
 }
 
+impl crate::exports::wasi::io::error::Guest for VirtAdapter {
+    type Error = IoError;
+}
+impl crate::exports::wasi::io::streams::Guest for VirtAdapter {
+    type InputStream = IoInputStream;
+    type OutputStream = IoOutputStream;
+}
+impl crate::exports::wasi::cli::terminal_input::Guest for VirtAdapter {
+    type TerminalInput = CliTerminalInput;
+}
+impl crate::exports::wasi::cli::terminal_output::Guest for VirtAdapter {
+    type TerminalOutput = CliTerminalOutput;
+}
+impl crate::exports::wasi::sockets::tcp::Guest for VirtAdapter {
+    type TcpSocket = SocketsTcpSocket;
+}
+impl crate::exports::wasi::sockets::udp::Guest for VirtAdapter {
+    type UdpSocket = SocketsUdpSocket;
+    type IncomingDatagramStream = SocketsIncomingDatagramStream;
+    type OutgoingDatagramStream = SocketsOutgoingDatagramStream;
+}
+
 impl OutgoingHandler for VirtAdapter {
     fn handle(
-        request: Resource<OutgoingRequest>,
-        options: Option<Resource<RequestOptions>>,
-    ) -> Result<Resource<FutureIncomingResponse>, HttpErrorCode> {
+        request: OutgoingRequest,
+        options: Option<RequestOptions>,
+    ) -> Result<FutureIncomingResponse, HttpErrorCode> {
         outgoing_handler::handle(
-            Resource::into_inner(request).0,
-            options.map(|o| Resource::into_inner(o).0),
+            request.into_inner::<HttpOutgoingRequest>().0,
+            options.map(|options| options.into_inner::<HttpRequestOptions>().0),
         )
-        .map(|response| Resource::new(HttpFutureIncomingResponse(response)))
+        .map(|response| FutureIncomingResponse::new(HttpFutureIncomingResponse(response)))
         .map_err(http_err_map_rev)
     }
 }
 
-impl GuestRequestOptions for RequestOptions {
+impl GuestRequestOptions for HttpRequestOptions {
     fn new() -> Self {
         debug!("CALL wasi:http/types#request-options.new");
         Self(http_types::RequestOptions::new())
@@ -699,16 +723,20 @@ impl GuestPollable for IoPollable {
 }
 
 impl Poll for VirtAdapter {
-    fn poll(list: Vec<&Pollable>) -> Vec<u32> {
+    type Pollable = IoPollable;
+
+    fn poll(list: Vec<PollableBorrow<'_>>) -> Vec<u32> {
         debug!("CALL wasi:io/poll#poll-list PIDS={list:?}",);
-        let has_host_polls = list.iter().any(|&pid| matches!(pid, Pollable::Host(_)));
-        let has_virt_polls = list.iter().any(|&pid| matches!(pid, Pollable::Null));
+        let has_host_polls = list
+            .iter()
+            .any(|pid| matches!(pid.get(), IoPollable::Host(_)));
+        let has_virt_polls = list.iter().any(|pid| matches!(pid.get(), IoPollable::Null));
         if has_host_polls && !has_virt_polls {
             return poll::poll(
                 &list
                     .iter()
-                    .map(|&pid| {
-                        if let Pollable::Host(pid) = pid {
+                    .map(|pid| {
+                        if let IoPollable::Host(pid) = pid.get() {
                             pid
                         } else {
                             unreachable!()
@@ -723,7 +751,7 @@ impl Poll for VirtAdapter {
         let mut host_polls = Vec::new();
         let mut host_map = Vec::new();
         for (index, pid) in list.iter().enumerate() {
-            if let Pollable::Host(host_pid) = pid {
+            if let IoPollable::Host(host_pid) = pid.get() {
                 host_polls.push(host_pid);
                 host_map.push(u32::try_from(index).unwrap());
             }
@@ -733,7 +761,7 @@ impl Poll for VirtAdapter {
             .map(|index| host_map[usize::try_from(index).unwrap()])
             .collect::<Vec<_>>();
         for (index, pid) in list.iter().enumerate() {
-            if let Pollable::Null = pid {
+            if let IoPollable::Null = pid.get() {
                 ready.push(index.try_into().unwrap());
             }
         }
@@ -742,37 +770,38 @@ impl Poll for VirtAdapter {
 }
 
 impl IpNameLookup for VirtAdapter {
+    type ResolveAddressStream = SocketsResolveAddressStream;
     fn resolve_addresses(
         network: &Network,
         name: String,
-    ) -> Result<Resource<ResolveAddressStream>, NetworkErrorCode> {
+    ) -> Result<ResolveAddressStream, NetworkErrorCode> {
         debug!("CALL wasi:sockets/ip-name-lookup#resolve-addresses");
-        Ok(Resource::new(SocketsResolveAddressStream(
+        Ok(ResolveAddressStream::new(SocketsResolveAddressStream(
             ip_name_lookup::resolve_addresses(network, &name)?,
         )))
     }
 }
 
-impl GuestDescriptor for Descriptor {
-    fn read_via_stream(&self, offset: u64) -> Result<Resource<InputStream>, ErrorCode> {
+impl GuestDescriptor for FilesystemDescriptor {
+    fn read_via_stream(&self, offset: u64) -> Result<InputStream, ErrorCode> {
         debug!("CALL wasi:filesystem/types#descriptor.read-via-stream FD={self:?} OFFSET={offset}",);
-        Ok(Resource::new(match self {
-            Self::Static(entry) => InputStream::StaticFile {
+        Ok(InputStream::new(match self {
+            Self::Static(entry) => IoInputStream::StaticFile {
                 entry,
                 offset: Cell::new(offset),
             },
             Self::Host(descriptor) => {
-                InputStream::Host(descriptor.read_via_stream(offset).map_err(err_map)?)
+                IoInputStream::Host(descriptor.read_via_stream(offset).map_err(err_map)?)
             }
         }))
     }
-    fn write_via_stream(&self, offset: u64) -> Result<Resource<OutputStream>, ErrorCode> {
+    fn write_via_stream(&self, offset: u64) -> Result<OutputStream, ErrorCode> {
         debug!(
             "CALL wasi:filesystem/types#descriptor.write-via-stream FD={self:?} OFFSET={offset}",
         );
         Err(ErrorCode::Access)
     }
-    fn append_via_stream(&self) -> Result<Resource<OutputStream>, ErrorCode> {
+    fn append_via_stream(&self) -> Result<OutputStream, ErrorCode> {
         debug!("CALL wasi:filesystem/types#descriptor.append-via-stream FD={self:?}");
         Err(ErrorCode::Access)
     }
@@ -802,7 +831,11 @@ impl GuestDescriptor for Descriptor {
     }
     fn read(&self, len: u64, offset: u64) -> Result<(Vec<u8>, bool), ErrorCode> {
         debug!("CALL wasi:filesystem/types#descriptor.read FD={self:?}");
-        match self.read_via_stream(offset)?.read(len) {
+        match self
+            .read_via_stream(offset)?
+            .get::<IoInputStream>()
+            .read(len)
+        {
             Ok(bytes) => Ok((bytes, false)),
             Err(StreamError::Closed) => Ok((Vec::new(), true)),
             Err(StreamError::LastOperationFailed(_)) => Err(ErrorCode::Io),
@@ -812,18 +845,18 @@ impl GuestDescriptor for Descriptor {
         debug!("CALL wasi:filesystem/types#descriptor.write FD={self:?}");
         Err(ErrorCode::Access)
     }
-    fn read_directory(&self) -> Result<Resource<DirectoryEntryStream>, ErrorCode> {
+    fn read_directory(&self) -> Result<DirectoryEntryStream, ErrorCode> {
         debug!("CALL wasi:filesystem/types#descriptor.read-directory FD={self:?}");
         if self.get_type()? != DescriptorType::Directory {
             return Err(ErrorCode::NotDirectory);
         }
-        Ok(Resource::new(match self {
-            Self::Static(entry) => DirectoryEntryStream::Static {
+        Ok(DirectoryEntryStream::new(match self {
+            Self::Static(entry) => FilesystemDirectoryEntryStream::Static {
                 entry,
                 idx: Cell::new(0),
             },
             Self::Host(descriptor) => {
-                DirectoryEntryStream::Host(descriptor.read_directory().map_err(err_map)?)
+                FilesystemDirectoryEntryStream::Host(descriptor.read_directory().map_err(err_map)?)
             }
         }))
     }
@@ -899,7 +932,13 @@ impl GuestDescriptor for Descriptor {
         debug!("CALL wasi:filesystem/types#descriptor.set-times-at FD={self:?} PATH={path}",);
         Err(ErrorCode::Access)
     }
-    fn link_at(&self, _: PathFlags, path: String, _: &Self, _: String) -> Result<(), ErrorCode> {
+    fn link_at(
+        &self,
+        _: PathFlags,
+        path: String,
+        _: DescriptorBorrow,
+        _: String,
+    ) -> Result<(), ErrorCode> {
         debug!("CALL wasi:filesystem/types#descriptor.link-at FD={self:?} PATH={path}",);
         Err(ErrorCode::Access)
     }
@@ -909,7 +948,7 @@ impl GuestDescriptor for Descriptor {
         path: String,
         open_flags: OpenFlags,
         descriptor_flags: DescriptorFlags,
-    ) -> Result<Resource<Self>, ErrorCode> {
+    ) -> Result<Descriptor, ErrorCode> {
         debug!("CALL wasi:filesystem/types#descriptor.open-at FD={self:?} PATH={path}",);
         match self {
             Self::Static(entry) => {
@@ -931,9 +970,9 @@ impl GuestDescriptor for Descriptor {
                                 .unwrap(),
                         )
                         .map_err(err_map)?;
-                    Ok(Resource::new(Self::Host(Rc::new(child_fd))))
+                    Ok(Descriptor::new(Self::Host(Rc::new(child_fd))))
                 } else {
-                    Ok(Resource::new(Self::Static(child)))
+                    Ok(Descriptor::new(Self::Static(child)))
                 }
             }
             Self::Host(host_fd) => {
@@ -946,7 +985,7 @@ impl GuestDescriptor for Descriptor {
                             .unwrap(),
                     )
                     .map_err(err_map)?;
-                Ok(Resource::new(Self::Host(Rc::new(child_fd))))
+                Ok(Descriptor::new(Self::Host(Rc::new(child_fd))))
             }
         }
     }
@@ -975,7 +1014,7 @@ impl GuestDescriptor for Descriptor {
         debug!("CALL wasi:filesystem/types#descriptor.remove-directory-at FD={self:?} PATH={path}",);
         Err(ErrorCode::Access)
     }
-    fn rename_at(&self, path: String, _: &Self, _: String) -> Result<(), ErrorCode> {
+    fn rename_at(&self, path: String, _: DescriptorBorrow, _: String) -> Result<(), ErrorCode> {
         debug!("CALL wasi:filesystem/types#descriptor.rename-at FD={self:?} PATH={path}",);
         Err(ErrorCode::Access)
     }
@@ -987,7 +1026,8 @@ impl GuestDescriptor for Descriptor {
         debug!("CALL wasi:filesystem/types#descriptor.unlink-file-at FD={self:?} PATH={path}",);
         Err(ErrorCode::Access)
     }
-    fn is_same_object(&self, other: &Self) -> bool {
+    fn is_same_object(&self, other: DescriptorBorrow) -> bool {
+        let other: &Self = other.get();
         debug!("CALL wasi:filesystem/types#descriptor.is-same-object FD1={self:?} FD2={other:?}",);
         // already-opened static index descriptors will never point to a RuntimeFile
         // or RuntimeDir - instead they point to an already-created HostDescriptor
@@ -1054,7 +1094,7 @@ impl GuestDescriptor for Descriptor {
     }
 }
 
-impl GuestInputStream for InputStream {
+impl GuestInputStream for IoInputStream {
     fn read(&self, len: u64) -> Result<Vec<u8>, StreamError> {
         debug!("CALL wasi:io/streams#input-stream.read SID={self:?}");
         match self {
@@ -1078,8 +1118,8 @@ impl GuestInputStream for InputStream {
         match self {
             Self::Null => Ok(0),
             Self::Err => Err(StreamError::Closed),
-            Self::StaticFile { .. } => Err(StreamError::LastOperationFailed(Resource::new(
-                StreamsError::FsCode(ErrorCode::Io),
+            Self::StaticFile { .. } => Err(StreamError::LastOperationFailed(Error::new(
+                IoError::FsCode(ErrorCode::Io),
             ))),
             Self::Host(descriptor) => descriptor.skip(offset).map_err(stream_err_map),
         }
@@ -1089,22 +1129,22 @@ impl GuestInputStream for InputStream {
         match self {
             Self::Null => Ok(0),
             Self::Err => Err(StreamError::Closed),
-            Self::StaticFile { .. } => Err(StreamError::LastOperationFailed(Resource::new(
-                StreamsError::FsCode(ErrorCode::Io),
+            Self::StaticFile { .. } => Err(StreamError::LastOperationFailed(Error::new(
+                IoError::FsCode(ErrorCode::Io),
             ))),
             Self::Host(descriptor) => descriptor.blocking_skip(offset).map_err(stream_err_map),
         }
     }
-    fn subscribe(&self) -> Resource<Pollable> {
+    fn subscribe(&self) -> Pollable {
         debug!("CALL wasi:io/streams#input-stream.subscribe SID={self:?}");
-        Resource::new(match self {
-            Self::Null | Self::Err | Self::StaticFile { .. } => Pollable::Null,
-            Self::Host(descriptor) => Pollable::Host(descriptor.subscribe()),
+        Pollable::new(match self {
+            Self::Null | Self::Err | Self::StaticFile { .. } => IoPollable::Null,
+            Self::Host(descriptor) => IoPollable::Host(descriptor.subscribe()),
         })
     }
 }
 
-impl GuestOutputStream for OutputStream {
+impl GuestOutputStream for IoOutputStream {
     fn check_write(&self) -> Result<u64, StreamError> {
         debug!("CALL wasi:io/streams#output-stream.check_write SID={self:?}");
         match self {
@@ -1163,7 +1203,7 @@ impl GuestOutputStream for OutputStream {
                 .map_err(stream_err_map),
         }
     }
-    fn splice(&self, from: &InputStream, len: u64) -> Result<u64, StreamError> {
+    fn splice(&self, from: InputStreamBorrow, len: u64) -> Result<u64, StreamError> {
         debug!("CALL wasi:io/streams#output-stream.splice TO_SID={self:?} FROM_SID={from:?}",);
         let to_sid = match self {
             Self::Null => {
@@ -1174,19 +1214,19 @@ impl GuestOutputStream for OutputStream {
             }
             Self::Host(sid) => sid,
         };
-        let from_sid = match from {
-            InputStream::Null => {
+        let from_sid = match from.get() {
+            IoInputStream::Null => {
                 return Ok(len);
             }
-            InputStream::Err => {
+            IoInputStream::Err => {
                 return Err(StreamError::Closed);
             }
-            InputStream::StaticFile { .. } => todo!(),
-            InputStream::Host(sid) => sid,
+            IoInputStream::StaticFile { .. } => todo!(),
+            IoInputStream::Host(sid) => sid,
         };
         to_sid.splice(&from_sid, len).map_err(stream_err_map)
     }
-    fn blocking_splice(&self, from: &IoInputStream, len: u64) -> Result<u64, StreamError> {
+    fn blocking_splice(&self, from: InputStreamBorrow, len: u64) -> Result<u64, StreamError> {
         debug!(
             "CALL wasi:io/streams#output-stream.blocking-splice TO_SID={self:?} FROM_SID={from:?}",
         );
@@ -1199,37 +1239,37 @@ impl GuestOutputStream for OutputStream {
             }
             Self::Host(sid) => sid,
         };
-        let from_sid = match from {
-            InputStream::Null => {
+        let from_sid = match from.get() {
+            IoInputStream::Null => {
                 return Ok(len);
             }
-            InputStream::Err => {
+            IoInputStream::Err => {
                 return Err(StreamError::Closed);
             }
-            InputStream::StaticFile { .. } => todo!(),
-            InputStream::Host(sid) => sid,
+            IoInputStream::StaticFile { .. } => todo!(),
+            IoInputStream::Host(sid) => sid,
         };
         to_sid
             .blocking_splice(&from_sid, len)
             .map_err(stream_err_map)
     }
-    fn subscribe(&self) -> Resource<Pollable> {
+    fn subscribe(&self) -> Pollable {
         debug!("CALL wasi:io/streams#output-stream.subscribe SID={self:?}");
-        Resource::new(match self {
-            Self::Null | Self::Err => Pollable::Null,
-            Self::Host(descriptor) => Pollable::Host(descriptor.subscribe()),
+        Pollable::new(match self {
+            Self::Null | Self::Err => IoPollable::Null,
+            Self::Host(descriptor) => IoPollable::Host(descriptor.subscribe()),
         })
     }
 }
 
-impl GuestStreamsError for StreamsError {
+impl GuestStreamsError for IoError {
     fn to_debug_string(&self) -> String {
         debug!("CALL wasi:io/error#to-debug-string");
         format!("{self:?}")
     }
 }
 
-impl GuestDirectoryEntryStream for DirectoryEntryStream {
+impl GuestDirectoryEntryStream for FilesystemDirectoryEntryStream {
     fn read_directory_entry(&self) -> Result<Option<DirectoryEntry>, ErrorCode> {
         debug!("CALL wasi:filesystem/types#read-directory-entry SID={self:?}");
         match self {
@@ -1242,17 +1282,29 @@ impl GuestDirectoryEntryStream for DirectoryEntryStream {
     }
 }
 
-impl GuestHttpTypes for HttpTypes {
-    fn http_error_code(err: &IoError) -> Option<HttpErrorCode> {
+impl GuestHttpTypes for VirtAdapter {
+    type Fields = HttpFields;
+    type IncomingRequest = HttpIncomingRequest;
+    type OutgoingRequest = HttpOutgoingRequest;
+    type RequestOptions = HttpRequestOptions;
+    type ResponseOutparam = HttpResponseOutparam;
+    type IncomingResponse = HttpIncomingResponse;
+    type IncomingBody = HttpIncomingBody;
+    type FutureTrailers = HttpFutureTrailers;
+    type OutgoingResponse = HttpOutgoingResponse;
+    type OutgoingBody = HttpOutgoingBody;
+    type FutureIncomingResponse = HttpFutureIncomingResponse;
+
+    fn http_error_code(err: ErrorBorrow) -> Option<HttpErrorCode> {
         debug!("CALL wasi:http/types#http-error-code");
-        match err {
+        match err.get() {
             IoError::FsCode(_) => None,
             IoError::Host(h) => http_types::http_error_code(h).map(|e| http_err_map_rev(e)),
         }
     }
 }
 
-impl GuestFields for Fields {
+impl GuestFields for HttpFields {
     fn new() -> Self {
         debug!("CALL wasi:http/types#fields.constructor");
         Self(http_types::Fields::new())
@@ -1283,15 +1335,15 @@ impl GuestFields for Fields {
         self.0.entries()
     }
 
-    fn clone(&self) -> Resource<Self> {
+    fn clone(&self) -> Fields {
         debug!("CALL wasi:http/types#fields.clone");
-        Resource::new(Self(self.0.clone()))
+        Fields::new(Self(self.0.clone()))
     }
 
-    fn from_list(list: Vec<(String, Vec<u8>)>) -> Result<Resource<HttpFields>, HeaderError> {
+    fn from_list(list: Vec<(String, Vec<u8>)>) -> Result<Fields, HeaderError> {
         debug!("CALL wasi:http/types#fields.from-list");
         http_types::Fields::from_list(&list)
-            .map(|fields| Resource::new(Self(fields)))
+            .map(|fields| Fields::new(Self(fields)))
             .map_err(header_err_map_rev)
     }
 
@@ -1301,7 +1353,7 @@ impl GuestFields for Fields {
     }
 }
 
-impl GuestIncomingRequest for IncomingRequest {
+impl GuestIncomingRequest for HttpIncomingRequest {
     fn method(&self) -> Method {
         debug!("CALL wasi:http/types#incoming-request.method");
         method_map_rev(self.0.method())
@@ -1318,27 +1370,27 @@ impl GuestIncomingRequest for IncomingRequest {
         debug!("CALL wasi:http/types#incoming-request.authority");
         self.0.authority()
     }
-    fn headers(&self) -> Resource<Fields> {
+    fn headers(&self) -> Fields {
         debug!("CALL wasi:http/types#incoming-request.headers");
-        Resource::new(HttpFields(self.0.headers()))
+        Fields::new(HttpFields(self.0.headers()))
     }
-    fn consume(&self) -> Result<Resource<IncomingBody>, ()> {
+    fn consume(&self) -> Result<IncomingBody, ()> {
         debug!("CALL wasi:http/types#incoming-request.consume");
-        Ok(Resource::new(HttpIncomingBody(self.0.consume()?)))
+        Ok(IncomingBody::new(HttpIncomingBody(self.0.consume()?)))
     }
 }
 
-impl GuestOutgoingRequest for OutgoingRequest {
-    fn new(headers: Resource<Headers>) -> Self {
+impl GuestOutgoingRequest for HttpOutgoingRequest {
+    fn new(headers: Headers) -> Self {
         debug!("CALL wasi:http/types#outgoing-request.new");
         Self(http_types::OutgoingRequest::new(
-            Resource::into_inner(headers).0,
+            headers.into_inner::<HttpFields>().0,
         ))
     }
 
-    fn body(&self) -> Result<Resource<OutgoingBody>, ()> {
+    fn body(&self) -> Result<OutgoingBody, ()> {
         debug!("CALL wasi:http/types#outgoing-request.write");
-        Ok(Resource::new(HttpOutgoingBody(self.0.body()?)))
+        Ok(OutgoingBody::new(HttpOutgoingBody(self.0.body()?)))
     }
 
     fn method(&self) -> Method {
@@ -1373,74 +1425,77 @@ impl GuestOutgoingRequest for OutgoingRequest {
         self.0.set_authority(authority.as_deref())
     }
 
-    fn headers(&self) -> Resource<Headers> {
-        Resource::new(HttpFields(self.0.headers()))
+    fn headers(&self) -> Headers {
+        Headers::new(HttpFields(self.0.headers()))
     }
 }
 
-impl GuestResponseOutparam for ResponseOutparam {
-    fn set(param: Resource<Self>, response: Result<Resource<OutgoingResponse>, HttpErrorCode>) {
+impl GuestResponseOutparam for HttpResponseOutparam {
+    fn set(param: ResponseOutparam, response: Result<OutgoingResponse, HttpErrorCode>) {
         debug!("CALL wasi:http/types#response-outparam.set");
-        let param = Resource::into_inner(param).0;
+        let param = param.into_inner::<HttpResponseOutparam>().0;
         match response {
-            Ok(res) => http_types::ResponseOutparam::set(param, Ok(Resource::into_inner(res).0)),
+            Ok(res) => http_types::ResponseOutparam::set(
+                param,
+                Ok(res.into_inner::<HttpOutgoingResponse>().0),
+            ),
             Err(err) => http_types::ResponseOutparam::set(param, Err(http_err_map(err))),
         }
     }
 }
 
-impl GuestIncomingResponse for IncomingResponse {
+impl GuestIncomingResponse for HttpIncomingResponse {
     fn status(&self) -> StatusCode {
         debug!("CALL wasi:http/types#incoming-response.status");
         self.0.status()
     }
-    fn headers(&self) -> Resource<Fields> {
+    fn headers(&self) -> Fields {
         debug!("CALL wasi:http/types#incoming-response.headers");
-        Resource::new(HttpFields(self.0.headers()))
+        Fields::new(HttpFields(self.0.headers()))
     }
-    fn consume(&self) -> Result<Resource<IncomingBody>, ()> {
+    fn consume(&self) -> Result<IncomingBody, ()> {
         debug!("CALL wasi:http/types#incoming-response.consume");
-        Ok(Resource::new(HttpIncomingBody(self.0.consume()?)))
+        Ok(IncomingBody::new(HttpIncomingBody(self.0.consume()?)))
     }
 }
 
-impl GuestIncomingBody for IncomingBody {
-    fn stream(&self) -> Result<Resource<InputStream>, ()> {
+impl GuestIncomingBody for HttpIncomingBody {
+    fn stream(&self) -> Result<InputStream, ()> {
         debug!("CALL wasi:http/types#incoming-body.stream");
-        Ok(Resource::new(InputStream::Host(self.0.stream()?)))
+        Ok(InputStream::new(IoInputStream::Host(self.0.stream()?)))
     }
 
-    fn finish(body: Resource<IncomingBody>) -> Resource<FutureTrailers> {
+    fn finish(body: IncomingBody) -> FutureTrailers {
         debug!("CALL wasi:http/types#incoming-body.finish");
-        Resource::new(HttpFutureTrailers(http_types::IncomingBody::finish(
-            Resource::into_inner(body).0,
+        FutureTrailers::new(HttpFutureTrailers(http_types::IncomingBody::finish(
+            body.into_inner::<HttpIncomingBody>().0,
         )))
     }
 }
 
-impl GuestFutureTrailers for FutureTrailers {
-    fn subscribe(&self) -> Resource<Pollable> {
+impl GuestFutureTrailers for HttpFutureTrailers {
+    fn subscribe(&self) -> Pollable {
         debug!("CALL wasi:http/types#future-trailers.subscribe");
-        Resource::new(Pollable::Host(self.0.subscribe()))
+        Pollable::new(IoPollable::Host(self.0.subscribe()))
     }
 
-    fn get(&self) -> Option<Result<Result<Option<Resource<Fields>>, HttpErrorCode>, ()>> {
+    fn get(&self) -> Option<Result<Result<Option<Fields>, HttpErrorCode>, ()>> {
         debug!("CALL wasi:http/types#future-trailers.get");
         self.0.get().map(|r| {
             r.map(|fields| {
                 fields
-                    .map(|fields| fields.map(|fields| Resource::new(HttpFields(fields))))
+                    .map(|fields| fields.map(|fields| Fields::new(HttpFields(fields))))
                     .map_err(http_err_map_rev)
             })
         })
     }
 }
 
-impl GuestOutgoingResponse for OutgoingResponse {
-    fn new(headers: Resource<Fields>) -> Self {
+impl GuestOutgoingResponse for HttpOutgoingResponse {
+    fn new(headers: Fields) -> Self {
         debug!("CALL wasi:http/types#outgoing-response.constructor");
         Self(http_types::OutgoingResponse::new(
-            Resource::into_inner(headers).0,
+            headers.into_inner::<HttpFields>().0,
         ))
     }
 
@@ -1454,14 +1509,14 @@ impl GuestOutgoingResponse for OutgoingResponse {
         self.0.set_status_code(status_code)
     }
 
-    fn headers(&self) -> Resource<Headers> {
+    fn headers(&self) -> Headers {
         debug!("CALL wasi:http/types#outgoing-response.headers");
-        Resource::new(HttpFields(self.0.headers()))
+        Headers::new(HttpFields(self.0.headers()))
     }
 
-    fn body(&self) -> Result<Resource<OutgoingBody>, ()> {
+    fn body(&self) -> Result<OutgoingBody, ()> {
         debug!("CALL wasi:http/types#outgoing-response.body");
-        Ok(Resource::new(HttpOutgoingBody(self.0.body()?)))
+        Ok(OutgoingBody::new(HttpOutgoingBody(self.0.body()?)))
     }
 }
 
@@ -1472,54 +1527,51 @@ fn dir_map(d: filesystem_types::DirectoryEntry) -> DirectoryEntry {
     }
 }
 
-impl GuestOutgoingBody for OutgoingBody {
-    fn write(&self) -> Result<Resource<OutputStream>, ()> {
+impl GuestOutgoingBody for HttpOutgoingBody {
+    fn write(&self) -> Result<OutputStream, ()> {
         debug!("CALL wasi:http/types#outgoing-body.write");
-        Ok(Resource::new(OutputStream::Host(self.0.write()?)))
+        Ok(OutputStream::new(IoOutputStream::Host(self.0.write()?)))
     }
 
-    fn finish(
-        body: Resource<OutgoingBody>,
-        trailers: Option<Resource<Fields>>,
-    ) -> Result<(), HttpErrorCode> {
+    fn finish(body: OutgoingBody, trailers: Option<Fields>) -> Result<(), HttpErrorCode> {
         debug!("CALL wasi:http/types#outgoing-body.finish");
         http_types::OutgoingBody::finish(
-            Resource::into_inner(body).0,
-            trailers.map(|fields| Resource::into_inner(fields).0),
+            body.into_inner::<HttpOutgoingBody>().0,
+            trailers.map(|t| t.into_inner::<HttpFields>().0),
         )
         .map_err(http_err_map_rev)
     }
 }
 
-impl GuestFutureIncomingResponse for FutureIncomingResponse {
-    fn subscribe(&self) -> Resource<Pollable> {
+impl GuestFutureIncomingResponse for HttpFutureIncomingResponse {
+    fn subscribe(&self) -> Pollable {
         debug!("CALL wasi:http/types#future-incoming-response.subscribe");
-        Resource::new(Pollable::Host(self.0.subscribe()))
+        Pollable::new(IoPollable::Host(self.0.subscribe()))
     }
 
-    fn get(&self) -> Option<Result<Result<Resource<IncomingResponse>, HttpErrorCode>, ()>> {
+    fn get(&self) -> Option<Result<Result<IncomingResponse, HttpErrorCode>, ()>> {
         debug!("CALL wasi:http/types#future-incoming-response.get");
         self.0.get().map(|r| {
             r.map(|r| {
-                r.map(|response| Resource::new(HttpIncomingResponse(response)))
+                r.map(|response| IncomingResponse::new(HttpIncomingResponse(response)))
                     .map_err(|e| http_err_map_rev(e))
             })
         })
     }
 }
 
-impl GuestResolveAddressStream for ResolveAddressStream {
+impl GuestResolveAddressStream for SocketsResolveAddressStream {
     fn resolve_next_address(&self) -> Result<Option<IpAddress>, NetworkErrorCode> {
         debug!("CALL wasi:sockets/ip-name-lookup#resolve-address-stream.resolve-next-address");
         self.0.resolve_next_address()
     }
-    fn subscribe(&self) -> Resource<Pollable> {
+    fn subscribe(&self) -> Pollable {
         debug!("CALL wasi:sockets/ip-name-lookup#resolve-address-stream.subscribe");
-        Resource::new(Pollable::Host(self.0.subscribe()))
+        Pollable::new(IoPollable::Host(self.0.subscribe()))
     }
 }
 
-impl GuestTcpSocket for TcpSocket {
+impl GuestTcpSocket for SocketsTcpSocket {
     fn start_bind(
         &self,
         network: &Network,
@@ -1540,14 +1592,12 @@ impl GuestTcpSocket for TcpSocket {
         debug!("CALL wasi:sockets/tcp#tcp-socket.start-connect");
         self.0.start_connect(network, remote_address)
     }
-    fn finish_connect(
-        &self,
-    ) -> Result<(Resource<InputStream>, Resource<OutputStream>), NetworkErrorCode> {
+    fn finish_connect(&self) -> Result<(InputStream, OutputStream), NetworkErrorCode> {
         debug!("CALL wasi:sockets/tcp#tcp-socket.finish-connect");
         self.0.finish_connect().map(|(rx, tx)| {
             (
-                Resource::new(InputStream::Host(rx)),
-                Resource::new(OutputStream::Host(tx)),
+                InputStream::new(IoInputStream::Host(rx)),
+                OutputStream::new(IoOutputStream::Host(tx)),
             )
         })
     }
@@ -1559,22 +1609,13 @@ impl GuestTcpSocket for TcpSocket {
         debug!("CALL wasi:sockets/tcp#tcp-socket.finish-listen");
         self.0.finish_listen()
     }
-    fn accept(
-        &self,
-    ) -> Result<
-        (
-            Resource<TcpSocket>,
-            Resource<InputStream>,
-            Resource<OutputStream>,
-        ),
-        NetworkErrorCode,
-    > {
+    fn accept(&self) -> Result<(TcpSocket, InputStream, OutputStream), NetworkErrorCode> {
         debug!("CALL wasi:sockets/tcp#tcp-socket.accept");
         self.0.accept().map(|(s, rx, tx)| {
             (
-                Resource::new(SocketsTcpSocket(s)),
-                Resource::new(InputStream::Host(rx)),
-                Resource::new(OutputStream::Host(tx)),
+                TcpSocket::new(SocketsTcpSocket(s)),
+                InputStream::new(IoInputStream::Host(rx)),
+                OutputStream::new(IoOutputStream::Host(tx)),
             )
         })
     }
@@ -1654,9 +1695,9 @@ impl GuestTcpSocket for TcpSocket {
         debug!("CALL wasi:sockets/tcp#tcp-socket.set-send-buffer-size");
         self.0.set_send_buffer_size(value)
     }
-    fn subscribe(&self) -> Resource<Pollable> {
+    fn subscribe(&self) -> Pollable {
         debug!("CALL wasi:sockets/tcp#tcp-socket.subscribe");
-        Resource::new(Pollable::Host(self.0.subscribe()))
+        Pollable::new(IoPollable::Host(self.0.subscribe()))
     }
     fn shutdown(&self, shutdown_type: ShutdownType) -> Result<(), NetworkErrorCode> {
         debug!("CALL wasi:sockets/tcp#tcp-socket.shutdown");
@@ -1668,7 +1709,7 @@ impl GuestTcpSocket for TcpSocket {
     }
 }
 
-impl GuestUdpSocket for UdpSocket {
+impl GuestUdpSocket for SocketsUdpSocket {
     fn start_bind(
         &self,
         network: &Network,
@@ -1717,25 +1758,19 @@ impl GuestUdpSocket for UdpSocket {
         debug!("CALL wasi:sockets/udp#udp-socket.set-send-buffer-size");
         self.0.set_send_buffer_size(value)
     }
-    fn subscribe(&self) -> Resource<Pollable> {
+    fn subscribe(&self) -> Pollable {
         debug!("CALL wasi:sockets/udp#udp-socket.subscribe");
-        Resource::new(Pollable::Host(self.0.subscribe()))
+        Pollable::new(IoPollable::Host(self.0.subscribe()))
     }
     fn stream(
         &self,
         remote_addr: Option<IpSocketAddress>,
-    ) -> Result<
-        (
-            Resource<SocketsIncomingDatagramStream>,
-            Resource<SocketsOutgoingDatagramStream>,
-        ),
-        NetworkErrorCode,
-    > {
+    ) -> Result<(IncomingDatagramStream, OutgoingDatagramStream), NetworkErrorCode> {
         debug!("CALL wasi:sockets/udp#udp-socket.stream");
         let (in_, out) = self.0.stream(remote_addr)?;
         Ok((
-            Resource::new(SocketsIncomingDatagramStream(in_)),
-            Resource::new(SocketsOutgoingDatagramStream(out)),
+            IncomingDatagramStream::new(SocketsIncomingDatagramStream(in_)),
+            OutgoingDatagramStream::new(SocketsOutgoingDatagramStream(out)),
         ))
     }
 }
@@ -1755,9 +1790,9 @@ impl GuestIncomingDatagramStream for SocketsIncomingDatagramStream {
         }
     }
 
-    fn subscribe(&self) -> Resource<IoPollable> {
+    fn subscribe(&self) -> Pollable {
         debug!("CALL wasi:sockets/udp#incoming-datagram-stream.subscribe");
-        Resource::new(Pollable::Host(self.0.subscribe()))
+        Pollable::new(IoPollable::Host(self.0.subscribe()))
     }
 }
 
@@ -1781,9 +1816,9 @@ impl GuestOutgoingDatagramStream for SocketsOutgoingDatagramStream {
         )
     }
 
-    fn subscribe(&self) -> Resource<IoPollable> {
+    fn subscribe(&self) -> Pollable {
         debug!("CALL wasi:sockets/udp#outgoing-datagram-stream.subscribe");
-        Resource::new(Pollable::Host(self.0.subscribe()))
+        Pollable::new(IoPollable::Host(self.0.subscribe()))
     }
 }
 
@@ -1846,7 +1881,7 @@ fn stream_err_map(e: streams::StreamError) -> StreamError {
     match e {
         streams::StreamError::Closed => StreamError::Closed,
         streams::StreamError::LastOperationFailed(e) => {
-            StreamError::LastOperationFailed(Resource::new(StreamsError::Host(e)))
+            StreamError::LastOperationFailed(Error::new(IoError::Host(e)))
         }
     }
 }
