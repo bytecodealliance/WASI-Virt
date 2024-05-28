@@ -53,4 +53,4 @@ wasmparser = "0.121.2"
 
 [workspace.dependencies]
 anyhow = "1"
-wit-bindgen = "0.17.1"
+wit-bindgen = "0.19.2"

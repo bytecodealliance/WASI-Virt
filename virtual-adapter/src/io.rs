@@ -1384,7 +1384,7 @@ impl GuestResponseOutparam for ResponseOutparam {
         let param = Resource::into_inner(param).0;
         match response {
             Ok(res) => http_types::ResponseOutparam::set(param, Ok(Resource::into_inner(res).0)),
-            Err(err) => http_types::ResponseOutparam::set(param, Err(&http_err_map(err))),
+            Err(err) => http_types::ResponseOutparam::set(param, Err(http_err_map(err))),
         }
     }
 }
