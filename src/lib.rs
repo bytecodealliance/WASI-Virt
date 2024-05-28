@@ -156,12 +156,30 @@ impl WasiVirt {
             Default::default()
         };
 
+        let component_type_section_id = module
+            .customs
+            .iter()
+            .find_map(|(id, section)| {
+                let name = section.name();
+                if name.starts_with("component-type:")
+                    && section.as_any().is::<walrus::RawCustomSection>()
+                {
+                    Some(id)
+                } else {
+                    None
+                }
+            })
+            .context("Unable to find component type section")?;
+
         // decode the component custom section to strip out the unused world exports
         // before reencoding.
-        let mut component_section = module
+        let mut component_section = *module
             .customs
-            .remove_raw("component-type:virtual-adapter")
-            .context("Unable to find component section")?;
+            .delete(component_type_section_id)
+            .context("Unable to find component section")?
+            .into_any()
+            .downcast::<walrus::RawCustomSection>()
+            .unwrap();
 
         let (mut resolve, pkg_id) = match wit_component::decode(VIRT_WIT_METADATA)? {
             DecodedWasm::WitPackage(resolve, pkg_id) => (resolve, pkg_id),
