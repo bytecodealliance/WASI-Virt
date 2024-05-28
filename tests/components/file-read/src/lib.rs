@@ -3,9 +3,6 @@ use std::{fs, io::ErrorKind};
 wit_bindgen::generate!({
   path: "../../../wit",
   world: "virt-test",
-  exports: {
-    world: VirtTestComponent
-},
 });
 
 struct VirtTestComponent;
@@ -67,3 +64,5 @@ impl Guest for VirtTestComponent {
         unimplemented!();
     }
 }
+
+export!(VirtTestComponent);
