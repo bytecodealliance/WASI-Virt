@@ -28,26 +28,26 @@ struct Args {
 
     // CLOCKS
     /// Enable clocks
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, default_missing_value="true", num_args=0..=1)]
     allow_clocks: Option<bool>,
 
     /// Allow the component to exit
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, default_missing_value="true", num_args=0..=1)]
     allow_exit: Option<bool>,
 
     // HTTP
     /// Enable HTTP
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, default_missing_value="true", num_args=0..=1)]
     allow_http: Option<bool>,
 
     // RANDOM
     /// Enable Random
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, default_missing_value="true", num_args=0..=1)]
     allow_random: Option<bool>,
 
     // SOCKETS
     /// Enable Sockets
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, default_missing_value="true", num_args=0..=1)]
     allow_sockets: Option<bool>,
 
     // ENV
@@ -61,7 +61,7 @@ struct Args {
 
     // FS
     /// Allow unrestricted access to host preopens
-    #[arg(long, action = ArgAction::SetTrue, help_heading = "Fs")]
+    #[arg(long, default_missing_value="true", num_args=0..=1, help_heading = "Fs")]
     allow_fs: Option<bool>,
 
     /// Mount a virtual directory globbed from the local filesystem
@@ -74,7 +74,7 @@ struct Args {
 
     // STDIO
     /// Enable all stdio
-    #[arg(long, action = ArgAction::SetTrue, help_heading = "Stdio")]
+    #[arg(long, default_missing_value="true", num_args=0..=1, help_heading = "Stdio")]
     allow_stdio: Option<bool>,
     /// Configure all stdio
     #[arg(long, value_enum, value_name("cfg"), num_args(0..=1), require_equals(true), default_missing_value("allow"), help_heading = "Stdio")]
