@@ -43,10 +43,6 @@ Using WASI Virt, those specific file paths can be mounted and virtualized into t
 
 ## Basic Usage
 
-Note: This project requires [Cargo nightly](./rust-toolchain.toml).
-
-Then:
-
 ```sh
 cargo install --git https://github.com/bytecodealliance/wasi-virt
 ```
