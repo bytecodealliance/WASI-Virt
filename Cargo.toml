@@ -1,5 +1,3 @@
-cargo-features = ["profile-rustflags"]
-
 [package]
 name = "wasi-virt"
 version = "0.1.0"
@@ -26,7 +24,6 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
-rustflags = ["-Zoom=panic"]
 
 [dependencies]
 anyhow = "1"
