@@ -33,7 +33,7 @@ toml = "0.8"
 walrus = "0.20.3"
 wasm-compose = "0.5.5"
 wasm-metadata = "0.10.20"
-wasm-opt = "0.116.0"
+wasm-opt = { version = "0.116.0", optional = true }
 wit-component = "0.21.0"
 
 [build-dependencies]
@@ -51,3 +51,9 @@ wasmparser = "0.121.2"
 [workspace.dependencies]
 anyhow = "1"
 wit-bindgen = "0.25.0"
+
+[features]
+default = ["wasm-opt"]
+# Optimize the generated virtual adapter with wasm-opt to reduce its size.
+# If you allow all WASI subsystems, this feature doesn't make much difference.
+wasm-opt = ["dep:wasm-opt"]

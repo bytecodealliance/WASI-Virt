@@ -46,6 +46,9 @@ jobs:
     - name: Test
       run: cargo test
 
+    - name: Test without default features
+      run: cargo test --no-default-features
+
   rustfmt:
     name: Rustfmt
     runs-on: ubuntu-latest

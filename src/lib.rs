@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::{env, fs, time::SystemTime};
+use std::env;
 use virt_deny::{
     deny_clocks_virt, deny_exit_virt, deny_http_virt, deny_random_virt, deny_sockets_virt,
 };
@@ -8,7 +8,6 @@ use virt_env::{create_env_virt, strip_env_virt};
 use virt_io::{create_io_virt, VirtStdio};
 use walrus_ops::strip_virt;
 use wasm_metadata::Producers;
-use wasm_opt::{Feature, OptimizationOptions, ShrinkLevel};
 use wit_component::{metadata, ComponentEncoder, DecodedWasm, StringEncoding};
 
 mod data;
@@ -130,7 +129,8 @@ impl WasiVirt {
     }
 
     pub fn finish(&mut self) -> Result<VirtResult> {
-        let config = walrus::ModuleConfig::new();
+        let mut config = walrus::ModuleConfig::new();
+        config.generate_name_section(self.debug);
         let mut module = if self.debug {
             config.parse(VIRT_ADAPTER_DEBUG)
         } else {
@@ -294,24 +294,7 @@ impl WasiVirt {
         // we save into a temporary file and run wasm-opt before returning
         // this can be disabled with wasm_opt: false
         if self.wasm_opt.unwrap_or(true) {
-            let dir = env::temp_dir();
-            let tmp_input = dir.join(format!("virt.core.input.{}.wasm", timestamp()));
-            let tmp_output = dir.join(format!("virt.core.output.{}.wasm", timestamp()));
-            fs::write(&tmp_input, bytes)
-                .with_context(|| "Unable to write temporary file for wasm-opt call on adapter")?;
-            OptimizationOptions::new_opt_level_2()
-                .shrink_level(ShrinkLevel::Level1)
-                .enable_feature(Feature::All)
-                .debug_info(self.debug)
-                .run(&tmp_input, &tmp_output)
-                .with_context(|| "Unable to apply wasm-opt optimization to virt. This can be disabled with wasm_opt: false.")
-                .or_else(|e| {
-                    fs::remove_file(&tmp_input)?;
-                    Err(e)
-                })?;
-            bytes = fs::read(&tmp_output)?;
-            fs::remove_file(&tmp_input)?;
-            fs::remove_file(&tmp_output)?;
+            bytes = apply_wasm_opt(bytes, self.debug)?;
         }
 
         // now adapt the virtualized component
@@ -325,9 +308,42 @@ impl WasiVirt {
     }
 }
 
-fn timestamp() -> u64 {
-    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(n) => n.as_secs(),
-        Err(_) => panic!(),
+fn apply_wasm_opt(bytes: Vec<u8>, debug: bool) -> Result<Vec<u8>> {
+    #[cfg(not(feature = "wasm-opt"))]
+    {
+        return Ok(bytes);
+    }
+
+    #[cfg(feature = "wasm-opt")]
+    {
+        use std::{fs, time::SystemTime};
+        use wasm_opt::{Feature, OptimizationOptions, ShrinkLevel};
+
+        fn timestamp() -> u64 {
+            match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                Ok(n) => n.as_secs(),
+                Err(_) => panic!(),
+            }
+        }
+
+        let dir = env::temp_dir();
+        let tmp_input = dir.join(format!("virt.core.input.{}.wasm", timestamp()));
+        let tmp_output = dir.join(format!("virt.core.output.{}.wasm", timestamp()));
+        fs::write(&tmp_input, bytes)
+            .with_context(|| "Unable to write temporary file for wasm-opt call on adapter")?;
+        OptimizationOptions::new_opt_level_2()
+            .shrink_level(ShrinkLevel::Level1)
+            .enable_feature(Feature::All)
+            .debug_info(debug)
+            .run(&tmp_input, &tmp_output)
+            .with_context(|| "Unable to apply wasm-opt optimization to virt. This can be disabled with wasm_opt: false.")
+            .or_else(|e| {
+                fs::remove_file(&tmp_input)?;
+                Err(e)
+            })?;
+        let bytes = fs::read(&tmp_output)?;
+        fs::remove_file(&tmp_input)?;
+        fs::remove_file(&tmp_output)?;
+        Ok(bytes)
     }
 }
