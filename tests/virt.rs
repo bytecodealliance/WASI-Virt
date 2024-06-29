@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Context, Result};
-use cap_std::ambient_authority;
 use heck::ToSnakeCase;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -13,9 +12,7 @@ use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store, WasmBacktraceDetails,
 };
-use wasmtime_wasi::preview2::command::add_to_linker;
-use wasmtime_wasi::preview2::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime_wasi::Dir;
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wit_component::ComponentEncoder;
 
 wasmtime::component::bindgen!({
@@ -183,12 +180,9 @@ async fn virt_test() -> Result<()> {
             println!("- Executing composition");
         }
         let mut builder = WasiCtxBuilder::new();
-        builder.inherit_stdio().preopened_dir(
-            Dir::open_ambient_dir(".", ambient_authority())?,
-            DirPerms::READ,
-            FilePerms::READ,
-            "/",
-        );
+        let _ = builder
+            .inherit_stdio()
+            .preopened_dir(".", "/", DirPerms::READ, FilePerms::READ);
         if let Some(host_env) = &test.host_env {
             for (k, v) in host_env {
                 builder.env(k, v);
@@ -213,21 +207,15 @@ async fn virt_test() -> Result<()> {
             wasi: WasiCtx,
         }
         impl WasiView for CommandCtx {
-            fn table(&self) -> &ResourceTable {
-                &self.table
-            }
-            fn table_mut(&mut self) -> &mut ResourceTable {
+            fn table(&mut self) -> &mut ResourceTable {
                 &mut self.table
             }
-            fn ctx(&self) -> &WasiCtx {
-                &self.wasi
-            }
-            fn ctx_mut(&mut self) -> &mut WasiCtx {
+            fn ctx(&mut self) -> &mut WasiCtx {
                 &mut self.wasi
             }
         }
 
-        add_to_linker(&mut linker)?;
+        wasmtime_wasi::add_to_linker_async(&mut linker)?;
         let mut store = Store::new(&engine, CommandCtx { table, wasi });
 
         let (instance, _instance) =
@@ -296,7 +284,10 @@ fn has_component_import(bytes: &[u8]) -> Result<Option<String>> {
             }
         };
         match payload {
-            Payload::ModuleSection { mut parser, range } => {
+            Payload::ModuleSection {
+                mut parser,
+                unchecked_range: range,
+            } => {
                 let mut ioffset = range.start;
                 loop {
                     let payload = match parser.parse(&bytes[ioffset..], true)? {
