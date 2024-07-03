@@ -8,6 +8,7 @@ extern crate rand;
 wit_bindgen::generate!({
     path: "../../../wit",
     world: "virt-test",
+    generate_all
 });
 
 struct VirtTestComponent;
