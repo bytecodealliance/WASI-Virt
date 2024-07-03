@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use walrus::{
-    ir::Value, ActiveData, ActiveDataLocation, DataKind, ExportItem, GlobalKind, InitExpr, Module,
+    ir::Value, ActiveData, ActiveDataLocation, ConstExpr, DataKind, ExportItem, GlobalKind, Module,
 };
 
 use crate::walrus_ops::{bump_stack_global, get_active_data_segment};
@@ -78,7 +78,7 @@ pub(crate) fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Resu
         let ExportItem::Global(env_ptr_global) = env_ptr_export.item else {
             bail!("Adapter 'env' not a global");
         };
-        let GlobalKind::Local(InitExpr::Value(Value::I32(env_ptr_addr))) =
+        let GlobalKind::Local(ConstExpr::Value(Value::I32(env_ptr_addr))) =
             &module.globals.get(env_ptr_global).kind
         else {
             bail!("Adapter 'env' not a local I32 global value");

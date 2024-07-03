@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use walrus::{
-    ir::Value, ActiveData, ActiveDataLocation, Data, DataKind, GlobalKind, InitExpr, MemoryId,
+    ir::Value, ActiveData, ActiveDataLocation, ConstExpr, Data, DataKind, GlobalKind, MemoryId,
     Module,
 };
 
@@ -56,7 +56,7 @@ pub(crate) fn get_stack_global(module: &Module) -> Result<u32> {
         .context("Unable to find __stack_pointer global name")?
         .id();
     let stack_global = module.globals.get(stack_global_id);
-    let GlobalKind::Local(InitExpr::Value(Value::I32(stack_value))) = &stack_global.kind else {
+    let GlobalKind::Local(ConstExpr::Value(Value::I32(stack_value))) = &stack_global.kind else {
         bail!("Stack global is not a constant I32");
     };
     Ok(*stack_value as u32)
@@ -73,7 +73,8 @@ pub(crate) fn bump_stack_global(module: &mut Module, offset: i32) -> Result<u32>
         .context("Unable to find __stack_pointer global name")?
         .id();
     let stack_global = module.globals.get_mut(stack_global_id);
-    let GlobalKind::Local(InitExpr::Value(Value::I32(stack_value))) = &mut stack_global.kind else {
+    let GlobalKind::Local(ConstExpr::Value(Value::I32(stack_value))) = &mut stack_global.kind
+    else {
         bail!("Stack global is not a constant I32");
     };
     if offset > *stack_value {

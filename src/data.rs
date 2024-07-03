@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
 use std::collections::HashMap;
 use walrus::{
-    ActiveData, ActiveDataLocation, DataKind, ElementKind, FunctionBuilder, FunctionId,
-    FunctionKind, InitExpr, Module, ValType,
+    ActiveData, ActiveDataLocation, ConstExpr, DataKind, ElementItems, ElementKind,
+    FunctionBuilder, FunctionId, FunctionKind, Module, RefType, ValType,
 };
 
 use crate::walrus_ops::bump_stack_global;
@@ -137,7 +137,7 @@ impl Data {
             let len_local = module.locals.add(ValType::I32);
             let ptr_local = module.locals.add(ValType::I32);
 
-            let mut passive_fids: Vec<Option<FunctionId>> = Vec::new();
+            let mut passive_fids: Vec<FunctionId> = Vec::new();
             for passive_segment in self.passive_segments {
                 let passive_id = module.data.add(DataKind::Passive, passive_segment);
 
@@ -166,25 +166,25 @@ impl Data {
                     // return the allocated pointer
                     .local_get(ptr_local);
 
-                passive_fids.push(Some(
+                passive_fids.push(
                     module
                         .funcs
                         .add_local(builder.local_func(vec![offset_local, len_local])),
-                ));
+                );
             }
 
             let passive_tid = module.tables.add_local(
-                passive_fids.len() as u32,
-                Some(passive_fids.len() as u32),
-                ValType::Funcref,
+                false,
+                passive_fids.len() as u64,
+                Some(passive_fids.len() as u64),
+                RefType::Funcref,
             );
             module.elements.add(
                 ElementKind::Active {
                     table: passive_tid,
-                    offset: InitExpr::Value(walrus::ir::Value::I32(0)),
+                    offset: ConstExpr::Value(walrus::ir::Value::I32(0)),
                 },
-                ValType::Funcref,
-                passive_fids,
+                ElementItems::Functions(passive_fids),
             );
 
             // main passive call function
