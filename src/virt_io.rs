@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fmt, fs};
 use anyhow::{bail, Context, Result};
 use clap::ValueEnum;
 use serde::Deserialize;
-use walrus::{ir::Value, ExportItem, GlobalKind, InitExpr, Module};
+use walrus::{ir::Value, ConstExpr, ExportItem, GlobalKind, Module};
 
 use crate::{
     data::{Data, WasmEncode},
@@ -505,7 +505,7 @@ pub(crate) fn create_io_virt<'a>(
         let ExportItem::Global(io_ptr_global) = io_ptr_export.item else {
             bail!("Virt adapter 'io' not a global");
         };
-        let GlobalKind::Local(InitExpr::Value(Value::I32(io_ptr_addr))) =
+        let GlobalKind::Local(ConstExpr::Value(Value::I32(io_ptr_addr))) =
             &module.globals.get(io_ptr_global).kind
         else {
             bail!("Virt adapter 'io' not a local I32 global value");
