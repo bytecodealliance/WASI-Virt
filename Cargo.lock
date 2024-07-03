@@ -196,8 +196,8 @@ version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fc2d2954524be4866aaa720f008fba9995de54784957a1b0e0119992d6d5e52"
 dependencies = [
- "cap-primitives 3.1.0",
- "cap-std 3.1.0",
+ "cap-primitives",
+ "cap-std",
  "io-lifetimes",
  "windows-sys 0.52.0",
 ]
@@ -208,27 +208,10 @@ version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "799c81d79ea9c71a1438efd417c788214bc9e7986046d3710b6bbe60da4d8275"
 dependencies = [
- "cap-primitives 3.1.0",
- "cap-std 3.1.0",
+ "cap-primitives",
+ "cap-std",
  "rustix",
  "smallvec",
-]
-
-[[package]]
-name = "cap-primitives"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe16767ed8eee6d3f1f00d6a7576b81c226ab917eb54b96e5f77a5216ef67abb"
-dependencies = [
- "ambient-authority",
- "fs-set-times",
- "io-extras",
- "io-lifetimes",
- "ipnet",
- "maybe-owned",
- "rustix",
- "windows-sys 0.52.0",
- "winx",
 ]
 
 [[package]]
@@ -260,23 +243,11 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "593db20e4c51f62d3284bae7ee718849c3214f93a3b94ea1899ad85ba119d330"
-dependencies = [
- "cap-primitives 2.0.1",
- "io-extras",
- "io-lifetimes",
- "rustix",
-]
-
-[[package]]
-name = "cap-std"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8cd9187bb3f7478a4c135ea10473a41a5f029d2ac800c1adf64f35ec7d4c8603"
 dependencies = [
- "cap-primitives 3.1.0",
+ "cap-primitives",
  "io-extras",
  "io-lifetimes",
  "rustix",
@@ -289,7 +260,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91666f31e30c85b1d2ee8432c90987f752c45f5821f5638027b41e73e16a395b"
 dependencies = [
  "ambient-authority",
- "cap-primitives 3.1.0",
+ "cap-primitives",
  "iana-time-zone",
  "once_cell",
  "rustix",
@@ -1675,7 +1646,7 @@ checksum = "b858526d22750088a9b3cf2e3c2aacebd5377f13adeec02860c30d09113010a6"
 dependencies = [
  "bitflags 2.4.2",
  "cap-fs-ext",
- "cap-std 3.1.0",
+ "cap-std",
  "fd-lock",
  "io-lifetimes",
  "rustix",
@@ -1965,7 +1936,7 @@ name = "wasi-virt"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cap-std 2.0.1",
+ "cap-std",
  "clap",
  "heck 0.4.1",
  "serde",
@@ -2406,7 +2377,7 @@ dependencies = [
  "cap-fs-ext",
  "cap-net-ext",
  "cap-rand",
- "cap-std 3.1.0",
+ "cap-std",
  "cap-time-ext",
  "fs-set-times",
  "futures",
