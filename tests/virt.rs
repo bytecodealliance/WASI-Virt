@@ -97,7 +97,7 @@ async fn virt_test() -> Result<()> {
         let mut generated_component_path = generated_path.join(component_name);
         generated_component_path.set_extension("component.wasm");
         cmd(&format!(
-            "cargo build -p {component_name} --target wasm32-wasi {}",
+            "cargo build -p {component_name} --target wasm32-wasip1 {}",
             if DEBUG { "" } else { "--release" }
         ))?;
 
@@ -107,7 +107,7 @@ async fn virt_test() -> Result<()> {
 
         // encode the component
         let component_core_path = &format!(
-            "target/wasm32-wasi/{}/{}.wasm",
+            "target/wasm32-wasip1/{}/{}.wasm",
             if DEBUG { "debug" } else { "release" },
             component_name.to_snake_case()
         );

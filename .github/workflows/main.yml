@@ -29,7 +29,7 @@ jobs:
         submodules: recursive
 
     - name: Install Rust
-      run: rustup update nightly --no-self-update && rustup default nightly && rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+      run: rustup update stable --no-self-update && rustup default stable && rustup component add rust-src --toolchain stable
 
     - name: Install wasm32-unknown target
       run: rustup target add wasm32-unknown-unknown
