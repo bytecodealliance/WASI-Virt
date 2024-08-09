@@ -1,20 +1,17 @@
 use anyhow::{bail, Context, Result};
-use walrus::{
-    ir::Value, ActiveData, ActiveDataLocation, ConstExpr, Data, DataKind, GlobalKind, MemoryId,
-    Module,
-};
+use walrus::{ir::Value, ConstExpr, Data, DataKind, GlobalKind, MemoryId, Module};
 
 pub(crate) fn get_active_data_start(data: &Data, mem: MemoryId) -> Result<u32> {
-    let DataKind::Active(active_data) = &data.kind else {
+    let DataKind::Active { memory, offset } = &data.kind else {
         bail!("Adapter data section is not active");
     };
-    if active_data.memory != mem {
+    if *memory != mem {
         bail!("Adapter data memory is not the expected memory id");
     }
-    let ActiveDataLocation::Absolute(loc) = &active_data.location else {
+    let ConstExpr::Value(Value::I32(loc)) = offset else {
         bail!("Adapter data memory is not absolutely offset");
     };
-    Ok(*loc)
+    Ok(*loc as u32)
 }
 
 pub(crate) fn get_active_data_segment(
@@ -36,15 +33,16 @@ pub(crate) fn get_active_data_segment(
         }
     }
     let data = found_data.context("Unable to find data section for ptr")?;
-    let DataKind::Active(ActiveData {
-        location: ActiveDataLocation::Absolute(loc),
+    let DataKind::Active {
+        offset: ConstExpr::Value(Value::I32(loc)),
         ..
-    }) = &data.kind
+    } = &data.kind
     else {
         unreachable!()
     };
+    let loc = *loc as u32;
     let data_id = data.id();
-    let offset = (addr - *loc) as usize;
+    let offset = (addr - loc) as usize;
     Ok((module.data.get_mut(data_id), offset))
 }
 

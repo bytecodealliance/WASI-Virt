@@ -30,7 +30,7 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
-walrus = "0.21.0"
+walrus = "0.21.1"
 wasm-compose = "0.212.0"
 wasm-metadata = "0.212.0"
 wasm-opt = { version = "0.116.1", optional = true }
