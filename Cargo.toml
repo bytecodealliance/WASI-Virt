@@ -42,7 +42,7 @@ anyhow = "1"
 [dev-dependencies]
 anyhow = "1"
 cap-std = "3.1.0"
-heck = { version = "0.4" }
+heck = { version = "0.5" }
 tokio = { version = "1.39.2", features = ["macros"] }
 wasmtime = { version = "22.0.0", features = ["component-model"] }
 wasmtime-wasi = "22.0.0"
