@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
 use std::collections::HashMap;
 use walrus::{
-    ActiveData, ActiveDataLocation, ConstExpr, DataKind, ElementItems, ElementKind,
-    FunctionBuilder, FunctionId, FunctionKind, Module, RefType, ValType,
+    ir::Value, ConstExpr, DataKind, ElementItems, ElementKind, FunctionBuilder, FunctionId,
+    FunctionKind, Module, RefType, ValType,
 };
 
 use crate::walrus_ops::bump_stack_global;
@@ -121,10 +121,10 @@ impl Data {
         }
         bump_stack_global(module, (self.stack_start - self.stack_ptr) as i32)?;
         module.data.add(
-            DataKind::Active(ActiveData {
+            DataKind::Active {
                 memory,
-                location: ActiveDataLocation::Absolute(self.stack_ptr as u32),
-            }),
+                offset: ConstExpr::Value(Value::I32(self.stack_ptr as i32)),
+            },
             self.bytes.as_slice()[self.stack_ptr..self.stack_start].to_vec(),
         );
 

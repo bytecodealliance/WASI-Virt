@@ -1,8 +1,6 @@
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
-use walrus::{
-    ir::Value, ActiveData, ActiveDataLocation, ConstExpr, DataKind, ExportItem, GlobalKind, Module,
-};
+use walrus::{ir::Value, ConstExpr, DataKind, ExportItem, GlobalKind, Module};
 
 use crate::walrus_ops::{bump_stack_global, get_active_data_segment};
 
@@ -146,10 +144,10 @@ pub(crate) fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Resu
 
         // Add a new data segment for this new range created at the top of the stack
         module.data.add(
-            DataKind::Active(ActiveData {
+            DataKind::Active {
                 memory,
-                location: ActiveDataLocation::Absolute(field_data_addr),
-            }),
+                offset: ConstExpr::Value(Value::I32(field_data_addr as i32)),
+            },
             field_data_bytes,
         );
         Some(field_data_addr)
