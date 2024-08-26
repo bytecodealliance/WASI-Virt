@@ -117,6 +117,7 @@ fn main() -> Result<()> {
     let mut virt_opts = WasiVirt::default();
 
     virt_opts.debug = args.debug.unwrap_or_default();
+    virt_opts.compose = args.compose;
 
     // By default, we virtualize all subsystems
     // This ensures full encapsulation in the default (no argument) case
@@ -193,7 +194,7 @@ fn main() -> Result<()> {
 
     let out_path = PathBuf::from(args.out);
 
-    let out_bytes = if let Some(compose_path) = args.compose {
+    let out_bytes = if let Some(compose_path) = virt_opts.compose {
         let compose_path = PathBuf::from(compose_path);
         let dir = env::temp_dir();
         let tmp_virt = dir.join(format!("virt{}.wasm", timestamp()));

@@ -1940,6 +1940,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "wit-component",
+ "wit-parser 0.212.0",
 ]
 
 [[package]]

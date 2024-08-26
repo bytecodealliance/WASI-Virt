@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::Deserialize;
-use std::env;
+use std::{env, fs};
 use virt_deny::{
     deny_clocks_virt, deny_exit_virt, deny_http_virt, deny_random_virt, deny_sockets_virt,
 };
@@ -9,6 +9,7 @@ use virt_io::{create_io_virt, VirtStdio};
 use walrus_ops::strip_virt;
 use wasm_metadata::Producers;
 use wit_component::{metadata, ComponentEncoder, DecodedWasm, StringEncoding};
+use wit_parser::WorldItem;
 
 mod data;
 mod stub_preview1;
@@ -58,6 +59,9 @@ pub struct WasiVirt {
     pub random: Option<bool>,
     /// Disable wasm-opt run if desired
     pub wasm_opt: Option<bool>,
+    /// Path to compose component
+    pub compose: Option<String>,
+    compose_imports: Option<Vec<String>>,
 }
 
 pub struct VirtResult {
@@ -137,6 +141,38 @@ impl WasiVirt {
             config.parse(VIRT_ADAPTER)
         }?;
         module.name = Some("wasi_virt".into());
+
+        // drop capabilities that are not imported by the composed component
+        if self.compose.is_some() {
+            self.collect_compose_imports()?;
+
+            if !self.contains_compose_import("wasi:cli/environment") {
+                self.env = None;
+            }
+            if !self.contains_compose_import("wasi:filesystem/") {
+                self.fs = None;
+            }
+            if !(self.contains_compose_import("wasi:cli/std")
+                || self.contains_compose_import("wasi:cli/terminal"))
+            {
+                self.stdio = None;
+            }
+            if !self.contains_compose_import("wasi:cli/exit") {
+                self.exit = None;
+            }
+            if !self.contains_compose_import("wasi:clocks/") {
+                self.clocks = None;
+            }
+            if !self.contains_compose_import("wasi:http/") {
+                self.http = None;
+            }
+            if !self.contains_compose_import("wasi:sockets/") {
+                self.sockets = None;
+            }
+            if !self.contains_compose_import("wasi:random/") {
+                self.random = None;
+            }
+        }
 
         // only env virtualization is independent of io
         if let Some(env) = &self.env {
@@ -305,6 +341,37 @@ impl WasiVirt {
             adapter: encoded,
             virtual_files,
         })
+    }
+
+    // parse the compose component to collect its imported interfaces
+    fn collect_compose_imports(&mut self) -> Result<()> {
+        let module_bytes = fs::read(self.compose.as_ref().unwrap()).map_err(anyhow::Error::new)?;
+        let (resolve, world_id) = match wit_component::decode(&module_bytes)? {
+            DecodedWasm::WitPackages(..) => {
+                bail!("expected a component, found a WIT package")
+            }
+            DecodedWasm::Component(resolve, world_id) => (resolve, world_id),
+        };
+
+        let mut import_ids: Vec<String> = vec![];
+        for (_, import) in &resolve.worlds[world_id].imports {
+            if let WorldItem::Interface { id, .. } = import {
+                if let Some(id) = resolve.id_of(*id) {
+                    import_ids.push(id);
+                }
+            }
+        }
+
+        self.compose_imports = Some(import_ids);
+
+        Ok(())
+    }
+
+    fn contains_compose_import(&self, prefix: &str) -> bool {
+        match &self.compose_imports {
+            Some(imports) => imports.iter().any(|i| i.starts_with(prefix)),
+            None => false,
+        }
     }
 }
 

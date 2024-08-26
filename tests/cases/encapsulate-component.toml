@@ -1,0 +1,18 @@
+component = "do-everything"
+compose = true
+
+[virt-opts]
+clocks = true
+# http will be filtered out because the "do-everything" component doesn't import it
+http = true
+stdio.stdin = "ignore"
+stdio.stdout = "ignore"
+stdio.stderr = "ignore"
+
+[expect.imports]
+required = [
+   "wasi:clocks/wall-clock",
+]
+disallowed = [
+   "wasi:http/incoming-handler",
+]

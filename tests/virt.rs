@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use heck::ToSnakeCase;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -13,7 +13,8 @@ use wasmtime::{
     Config, Engine, Store, WasmBacktraceDetails,
 };
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
-use wit_component::ComponentEncoder;
+use wit_component::{ComponentEncoder, DecodedWasm};
+use wit_parser::WorldItem;
 
 wasmtime::component::bindgen!({
     world: "virt-test",
@@ -49,12 +50,21 @@ struct TestExpectation {
     file_read: Option<String>,
     encapsulation: Option<bool>,
     stdout: Option<String>,
+    imports: Option<TestExpectationImports>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+struct TestExpectationImports {
+    required: Option<Vec<String>>,
+    disallowed: Option<Vec<String>>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct TestCase {
     component: String,
+    compose: Option<bool>,
     host_env: Option<BTreeMap<String, String>>,
     host_fs_path: Option<String>,
     virt_opts: Option<WasiVirt>,
@@ -134,6 +144,16 @@ async fn virt_test() -> Result<()> {
             virt_opts.debug = true;
             if test_case_name != "encapsulate" {
                 virt_opts.wasm_opt = Some(false);
+            }
+        }
+        if let Some(compose) = test.compose {
+            if compose {
+                let compose_path = generated_component_path
+                    .clone()
+                    .into_os_string()
+                    .into_string()
+                    .unwrap();
+                virt_opts.compose = Some(compose_path);
             }
         }
 
@@ -267,6 +287,37 @@ async fn virt_test() -> Result<()> {
             instance.call_test_stdio(&mut store).await?;
         }
 
+        if let Some(expect_imports) = &test.expect.imports {
+            let component_imports = collect_component_imports(component_bytes)?;
+
+            if let Some(required_imports) = &expect_imports.required {
+                for required_import in required_imports {
+                    if !component_imports
+                        .iter()
+                        .any(|i| i.starts_with(required_import))
+                    {
+                        return Err(anyhow!(
+                            "Required import missing {required_import} {:?}",
+                            test_case_path
+                        ));
+                    }
+                }
+            }
+            if let Some(disallowed_imports) = &expect_imports.disallowed {
+                for disallowed_import in disallowed_imports {
+                    if component_imports
+                        .iter()
+                        .any(|i| i.starts_with(disallowed_import))
+                    {
+                        return Err(anyhow!(
+                            "Disallowed import {disallowed_import} {:?}",
+                            test_case_path
+                        ));
+                    }
+                }
+            }
+        }
+
         println!("\x1b[1;32m√\x1b[0m {:?}", test_case_path);
     }
     Ok(())
@@ -315,4 +366,24 @@ fn has_component_import(bytes: &[u8]) -> Result<Option<String>> {
             _ => {}
         }
     }
+}
+
+fn collect_component_imports(component_bytes: Vec<u8>) -> Result<Vec<String>> {
+    let (resolve, world_id) = match wit_component::decode(&component_bytes)? {
+        DecodedWasm::WitPackages(..) => {
+            bail!("expected a component, found a WIT package")
+        }
+        DecodedWasm::Component(resolve, world_id) => (resolve, world_id),
+    };
+
+    let mut import_ids: Vec<String> = vec![];
+    for (_, import) in &resolve.worlds[world_id].imports {
+        if let WorldItem::Interface { id, .. } = import {
+            if let Some(id) = resolve.id_of(*id) {
+                import_ids.push(id);
+            }
+        }
+    }
+
+    Ok(import_ids)
 }
