@@ -58,13 +58,13 @@ struct Args {
     #[arg(short, long, use_value_delimiter(true), value_name("ENV=VAR"), value_parser = parse_key_val::<String, String>, help_heading = "Env")]
     env: Option<Vec<(String, String)>>,
 
-    // CONFIG
-    /// Allow unrestricted access to host configuration properties, or to a comma-separated list of property names.
-    #[arg(long, num_args(0..), use_value_delimiter(true), require_equals(true), value_name("PROPERTY_NAME"), help_heading = "Config")]
+    // RUNTIME CONFIG
+    /// Allow unrestricted access to host runtime configuration properties, or to a comma-separated list of property names.
+    #[arg(long, num_args(0..), use_value_delimiter(true), require_equals(true), value_name("PROPERTY_NAME"), help_heading = "Runtime Config")]
     allow_config: Option<Vec<String>>,
 
-    /// Set config property overrides
-    #[arg(short, long, use_value_delimiter(true), value_name("NAME=VALUE"), value_parser = parse_key_val::<String, String>, help_heading = "Config")]
+    /// Set runtime config property overrides
+    #[arg(short, long, use_value_delimiter(true), value_name("NAME=VALUE"), value_parser = parse_key_val::<String, String>, help_heading = "Runtime Config")]
     config: Option<Vec<(String, String)>>,
 
     // FS
