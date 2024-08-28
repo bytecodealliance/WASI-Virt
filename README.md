@@ -182,6 +182,11 @@ fn main() {
           ("host.txt", FsEntry::RuntimeFile("/runtime/host/path.txt"))
         ])));
 
+    // compose the virtualization with a component
+    virt.compose("path/to/component.wasm");
+    // filter enabled subsystems by imports on the composed component
+    virt.filter_imports().unwrap();
+
     let virt_component_bytes = virt.finish().unwrap();
     fs::write("virt.component.wasm", virt_component_bytes).unwrap();
 }
@@ -194,6 +199,8 @@ When calling a subsystem for the first time, its virtualization will be enabled.
 By default, when using the `wasi-virt` CLI command, all virtualizations are enabled. This way, not only is encapsulation the default, but composition with arbitrary components will always work out as all interfaces for WASI should always be available.
 
 Selective subsystem virtualization can be performed directly with the WASI Virt library as above (which does not virtualize all subsystems by default). This allows virtualizing just a single subsystem like `env`, where it is possible to virtualize only that subsystem and skip other virtualizations and end up creating a smaller virtualization component.
+
+When directly composing another component, individual subsystems are disabled if the composed component does not import that subsystem. This behavior reduces imports in the output component that are never actually used.
 
 There is an important caveat to this: _as soon as any subsystem uses IO, all subsystems using IO need to be virtualized in order to fully subclass streams and polls in the virtualization layer_. In future this caveat requirement should weaken as these features lower into the core ABI in subsequent WASI versions.
 

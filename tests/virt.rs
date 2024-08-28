@@ -154,6 +154,7 @@ async fn virt_test() -> Result<()> {
                     .into_string()
                     .unwrap();
                 virt_opts.compose = Some(compose_path);
+                virt_opts.filter_imports()?;
             }
         }
 
@@ -176,24 +177,32 @@ async fn virt_test() -> Result<()> {
             }
         }
 
-        // compose the test component with the defined test virtualization
-        if DEBUG {
-            println!("- Composing virtualization");
-        }
-        let component_bytes = ComponentComposer::new(
-            &generated_component_path,
-            &wasm_compose::config::Config {
-                definitions: vec![virt_component_path],
-                ..Default::default()
-            },
-        )
-        .compose()?;
+        let mut composed_path = generated_path.join(test_case_name);
+        composed_path.set_extension("composed.wasm");
+        let component_bytes = match test.compose {
+            Some(true) => {
+                // adapter is already composed
+                virt_component.adapter
+            }
+            _ => {
+                // compose the test component with the defined test virtualization
+                if DEBUG {
+                    println!("- Composing virtualization");
+                }
+                let component_bytes = ComponentComposer::new(
+                    &generated_component_path,
+                    &wasm_compose::config::Config {
+                        definitions: vec![virt_component_path],
+                        ..Default::default()
+                    },
+                )
+                .compose()?;
 
-        if true {
-            let mut composed_path = generated_path.join(test_case_name);
-            composed_path.set_extension("composed.wasm");
-            fs::write(composed_path, &component_bytes)?;
-        }
+                fs::write(&composed_path, &component_bytes)?;
+
+                component_bytes
+            }
+        };
 
         // execute the composed virtualized component test function
         if DEBUG {
