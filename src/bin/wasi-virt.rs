@@ -1,8 +1,7 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use clap::{ArgAction, Parser};
-use std::{env, error::Error, fs, path::PathBuf, time::SystemTime};
+use std::{error::Error, fs, path::PathBuf};
 use wasi_virt::{StdioCfg, WasiVirt};
-use wasm_compose::composer::ComponentComposer;
 
 #[derive(Parser, Debug)]
 #[command(verbatim_doc_comment, author, version, about, long_about = None)]
@@ -104,13 +103,6 @@ where
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
 }
 
-fn timestamp() -> u64 {
-    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(n) => n.as_secs(),
-        Err(_) => panic!(),
-    }
-}
-
 fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -189,37 +181,14 @@ fn main() -> Result<()> {
         fs.allow_host_preopens();
     }
 
+    if let Some(compose) = args.compose {
+        virt_opts.compose(compose);
+        virt_opts.filter_imports()?;
+    }
+
     let virt_component = virt_opts.finish()?;
 
     let out_path = PathBuf::from(args.out);
-
-    let out_bytes = if let Some(compose_path) = args.compose {
-        let compose_path = PathBuf::from(compose_path);
-        let dir = env::temp_dir();
-        let tmp_virt = dir.join(format!("virt{}.wasm", timestamp()));
-        fs::write(&tmp_virt, virt_component.adapter)?;
-
-        let composed_bytes = ComponentComposer::new(
-            &compose_path,
-            &wasm_compose::config::Config {
-                definitions: vec![tmp_virt.clone()],
-                ..Default::default()
-            },
-        )
-        .compose()
-        .with_context(|| "Unable to compose virtualized adapter into component.\nMake sure virtualizations are enabled and being used.")
-        .or_else(|e| {
-            fs::remove_file(&tmp_virt)?;
-            Err(e)
-        })?;
-
-        fs::remove_file(&tmp_virt)?;
-
-        composed_bytes
-    } else {
-        virt_component.adapter
-    };
-
     if virt_component.virtual_files.len() > 0 {
         println!("Virtualized files from local filesystem:\n");
         for (virtual_path, original_path) in virt_component.virtual_files {
@@ -227,7 +196,7 @@ fn main() -> Result<()> {
         }
     }
 
-    fs::write(&out_path, out_bytes)?;
+    fs::write(&out_path, virt_component.adapter)?;
 
     Ok(())
 }

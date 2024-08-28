@@ -1,14 +1,16 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::Deserialize;
-use std::env;
+use std::{env, fs, path::PathBuf, time::SystemTime};
 use virt_deny::{
     deny_clocks_virt, deny_exit_virt, deny_http_virt, deny_random_virt, deny_sockets_virt,
 };
 use virt_env::{create_env_virt, strip_env_virt};
 use virt_io::{create_io_virt, VirtStdio};
 use walrus_ops::strip_virt;
+use wasm_compose::composer::ComponentComposer;
 use wasm_metadata::Producers;
 use wit_component::{metadata, ComponentEncoder, DecodedWasm, StringEncoding};
+use wit_parser::WorldItem;
 
 mod data;
 mod stub_preview1;
@@ -58,6 +60,8 @@ pub struct WasiVirt {
     pub random: Option<bool>,
     /// Disable wasm-opt run if desired
     pub wasm_opt: Option<bool>,
+    /// Path to compose component
+    pub compose: Option<String>,
 }
 
 pub struct VirtResult {
@@ -126,6 +130,67 @@ impl WasiVirt {
 
     pub fn opt(&mut self, opt: bool) {
         self.wasm_opt = Some(opt);
+    }
+
+    pub fn compose(&mut self, compose: String) {
+        self.compose = Some(compose);
+    }
+
+    /// drop capabilities that are not imported by the composed component
+    pub fn filter_imports(&mut self) -> Result<()> {
+        match &self.compose {
+            Some(compose) => {
+                let imports = {
+                    let module_bytes = fs::read(compose).map_err(anyhow::Error::new)?;
+                    let (resolve, world_id) = match wit_component::decode(&module_bytes)? {
+                        DecodedWasm::WitPackages(..) => {
+                            bail!("expected a component, found a WIT package")
+                        }
+                        DecodedWasm::Component(resolve, world_id) => (resolve, world_id),
+                    };
+
+                    let mut import_ids: Vec<String> = vec![];
+                    for (_, import) in &resolve.worlds[world_id].imports {
+                        if let WorldItem::Interface { id, .. } = import {
+                            if let Some(id) = resolve.id_of(*id) {
+                                import_ids.push(id);
+                            }
+                        }
+                    }
+
+                    import_ids
+                };
+                let matches = |prefix: &str| imports.iter().any(|i| i.starts_with(prefix));
+
+                if !matches("wasi:cli/environment") {
+                    self.env = None;
+                }
+                if !matches("wasi:filesystem/") {
+                    self.fs = None;
+                }
+                if !(matches("wasi:cli/std") || matches("wasi:cli/terminal")) {
+                    self.stdio = None;
+                }
+                if !matches("wasi:cli/exit") {
+                    self.exit = None;
+                }
+                if !matches("wasi:clocks/") {
+                    self.clocks = None;
+                }
+                if !matches("wasi:http/") {
+                    self.http = None;
+                }
+                if !matches("wasi:sockets/") {
+                    self.sockets = None;
+                }
+                if !matches("wasi:random/") {
+                    self.random = None;
+                }
+
+                Ok(())
+            }
+            None => bail!("filtering imports can only be applied to composed components"),
+        }
     }
 
     pub fn finish(&mut self) -> Result<VirtResult> {
@@ -299,10 +364,37 @@ impl WasiVirt {
 
         // now adapt the virtualized component
         let encoder = ComponentEncoder::default().validate(true).module(&bytes)?;
-        let encoded = encoder.encode()?;
+        let encoded_bytes = encoder.encode()?;
+
+        let adapter = if let Some(compose_path) = &self.compose {
+            let compose_path = PathBuf::from(compose_path);
+            let dir = env::temp_dir();
+            let tmp_virt = dir.join(format!("virt{}.wasm", timestamp()));
+            fs::write(&tmp_virt, encoded_bytes)?;
+
+            let composed_bytes = ComponentComposer::new(
+                &compose_path,
+                &wasm_compose::config::Config {
+                    definitions: vec![tmp_virt.clone()],
+                    ..Default::default()
+                },
+            )
+            .compose()
+            .with_context(|| "Unable to compose virtualized adapter into component.\nMake sure virtualizations are enabled and being used.")
+            .or_else(|e| {
+                fs::remove_file(&tmp_virt)?;
+                Err(e)
+            })?;
+
+            fs::remove_file(&tmp_virt)?;
+
+            composed_bytes
+        } else {
+            encoded_bytes
+        };
 
         Ok(VirtResult {
-            adapter: encoded,
+            adapter,
             virtual_files,
         })
     }
@@ -345,5 +437,12 @@ fn apply_wasm_opt(bytes: Vec<u8>, debug: bool) -> Result<Vec<u8>> {
         fs::remove_file(&tmp_input)?;
         fs::remove_file(&tmp_output)?;
         Ok(bytes)
+    }
+}
+
+fn timestamp() -> u64 {
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => n.as_secs(),
+        Err(_) => panic!(),
     }
 }
