@@ -58,6 +58,15 @@ struct Args {
     #[arg(short, long, use_value_delimiter(true), value_name("ENV=VAR"), value_parser = parse_key_val::<String, String>, help_heading = "Env")]
     env: Option<Vec<(String, String)>>,
 
+    // CONFIG
+    /// Allow unrestricted access to host configuration properties, or to a comma-separated list of property names.
+    #[arg(long, num_args(0..), use_value_delimiter(true), require_equals(true), value_name("PROPERTY_NAME"), help_heading = "Config")]
+    allow_config: Option<Vec<String>>,
+
+    /// Set config property overrides
+    #[arg(short, long, use_value_delimiter(true), value_name("NAME=VALUE"), value_parser = parse_key_val::<String, String>, help_heading = "Config")]
+    config: Option<Vec<(String, String)>>,
+
     // FS
     /// Allow unrestricted access to host preopens
     #[arg(long, default_missing_value="true", num_args=0..=1, help_heading = "Fs")]
@@ -163,6 +172,25 @@ fn main() -> Result<()> {
     };
     if let Some(env_overrides) = args.env {
         env.overrides = env_overrides;
+    }
+
+    // config options
+    let config = virt_opts.config();
+    match args.allow_config {
+        Some(allow_config) if allow_config.len() == 0 => {
+            config.allow_all();
+        }
+        Some(allow_config) => {
+            config.allow(&allow_config);
+        }
+        None => {
+            if allow_all {
+                config.allow_all();
+            }
+        }
+    };
+    if let Some(config_overrides) = args.config {
+        config.overrides = config_overrides;
     }
 
     // fs options

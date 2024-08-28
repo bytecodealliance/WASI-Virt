@@ -1,0 +1,11 @@
+component = "get-config"
+
+[host-config]
+custom = "test"
+
+[virt-opts.config]
+host = "none"
+overrides = [["prop_override", "Value"]]
+
+[expect]
+config = [["prop_override", "Value"]]

@@ -1,6 +1,7 @@
 #![no_main]
 #![feature(ptr_sub_ptr)]
 
+mod config;
 mod env;
 mod io;
 

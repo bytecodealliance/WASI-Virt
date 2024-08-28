@@ -12,6 +12,9 @@ impl Guest for VirtTestComponent {
     fn test_get_env() -> Vec<(String, String)> {
         env::vars().collect()
     }
+    fn test_get_config() -> Vec<(String, String)> {
+        unimplemented!();
+    }
     fn test_file_read(_path: String) -> String {
         unimplemented!();
     }

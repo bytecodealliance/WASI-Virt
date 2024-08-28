@@ -17,6 +17,9 @@ impl Guest for VirtTestComponent {
     fn test_get_env() -> Vec<(String, String)> {
         unreachable!();
     }
+    fn test_get_config() -> Vec<(String, String)> {
+        unreachable!();
+    }
     fn test_file_read(path: String) -> String {
         let vars: Vec<(String, String)> = env::vars().collect();
         let mut rng = rand::thread_rng();

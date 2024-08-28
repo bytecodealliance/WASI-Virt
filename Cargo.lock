@@ -830,6 +830,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "get-config"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "wit-bindgen",
+]
+
+[[package]]
 name = "get-env"
 version = "0.1.0"
 dependencies = [

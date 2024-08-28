@@ -12,6 +12,9 @@ impl Guest for VirtTestComponent {
     fn test_get_env() -> Vec<(String, String)> {
         Vec::new()
     }
+    fn test_get_config() -> Vec<(String, String)> {
+        Vec::new()
+    }
     fn test_file_read(path: String) -> String {
         let meta = match fs::metadata(&path) {
             Ok(meta) => meta,

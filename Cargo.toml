@@ -15,6 +15,7 @@ members = [
   "virtual-adapter",
   "tests/components/do-everything",
   "tests/components/file-read",
+  "tests/components/get-config",
   "tests/components/get-env",
   "tests/components/stdio",
 ]

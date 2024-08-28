@@ -1,6 +1,7 @@
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use std::{env, fs, path::PathBuf, time::SystemTime};
+use virt_config::{create_config_virt, strip_config_virt};
 use virt_deny::{
     deny_clocks_virt, deny_exit_virt, deny_http_virt, deny_random_virt, deny_sockets_virt,
 };
@@ -14,12 +15,14 @@ use wit_parser::WorldItem;
 
 mod data;
 mod stub_preview1;
+mod virt_config;
 mod virt_deny;
 mod virt_env;
 mod virt_io;
 mod walrus_ops;
 
 pub use stub_preview1::stub_preview1;
+pub use virt_config::{HostConfig, VirtConfig};
 pub use virt_env::{HostEnv, VirtEnv};
 pub use virt_io::{FsEntry, StdioCfg, VirtFs, VirtualFiles};
 
@@ -44,6 +47,8 @@ pub struct WasiVirt {
     pub debug: bool,
     /// Environment virtualization
     pub env: Option<VirtEnv>,
+    /// Configuration virtualization
+    pub config: Option<VirtConfig>,
     /// Filesystem virtualization
     pub fs: Option<VirtFs>,
     /// Stdio virtualization
@@ -81,6 +86,7 @@ impl WasiVirt {
         self.exit(true);
         self.random(true);
         self.env().allow_all();
+        self.config().allow_all();
         self.fs().allow_host_preopens();
         self.stdio().allow();
     }
@@ -92,6 +98,7 @@ impl WasiVirt {
         self.exit(false);
         self.random(false);
         self.env().deny_all();
+        self.config().deny_all();
         self.fs().deny_host_preopens();
         self.stdio().ignore();
     }
@@ -118,6 +125,10 @@ impl WasiVirt {
 
     pub fn env(&mut self) -> &mut VirtEnv {
         self.env.get_or_insert_with(Default::default)
+    }
+
+    pub fn config(&mut self) -> &mut VirtConfig {
+        self.config.get_or_insert_with(Default::default)
     }
 
     pub fn fs(&mut self) -> &mut VirtFs {
@@ -165,6 +176,9 @@ impl WasiVirt {
                 if !matches("wasi:cli/environment") {
                     self.env = None;
                 }
+                if !matches("wasi:config/runtime") {
+                    self.config = None;
+                }
                 if !matches("wasi:filesystem/") {
                     self.fs = None;
                 }
@@ -206,6 +220,9 @@ impl WasiVirt {
         // only env virtualization is independent of io
         if let Some(env) = &self.env {
             create_env_virt(&mut module, env)?;
+        }
+        if let Some(config) = &self.config {
+            create_config_virt(&mut module, config)?;
         }
 
         let has_io = self.fs.is_some()
@@ -256,6 +273,7 @@ impl WasiVirt {
         let base_world = resolve.select_world(&pkg_ids, Some("virtual-base"))?;
 
         let env_world = resolve.select_world(&pkg_ids, Some("virtual-env"))?;
+        let config_world = resolve.select_world(&pkg_ids, Some("virtual-config"))?;
 
         let io_world = resolve.select_world(&pkg_ids, Some("virtual-io"))?;
         let io_clocks_world = resolve.select_world(&pkg_ids, Some("virtual-io-clocks"))?;
@@ -270,11 +288,16 @@ impl WasiVirt {
         let http_world = resolve.select_world(&pkg_ids, Some("virtual-http"))?;
         let sockets_world = resolve.select_world(&pkg_ids, Some("virtual-sockets"))?;
 
-        // env, exit & random subsystems are fully independent
+        // env, config, exit & random subsystems are fully independent
         if self.env.is_some() {
             resolve.merge_worlds(env_world, base_world)?;
         } else {
             strip_env_virt(&mut module)?;
+        }
+        if self.config.is_some() {
+            resolve.merge_worlds(config_world, base_world)?;
+        } else {
+            strip_config_virt(&mut module)?;
         }
         if let Some(exit) = self.exit {
             if !exit {
