@@ -1,0 +1,14 @@
+component = "get-config"
+
+[host-config]
+private_token = "private"
+public_prop = "val"
+
+[virt-opts.config]
+overrides = [["custom", "val"]]
+
+[virt-opts.config.host]
+deny = ["private_token"]
+
+[expect]
+config = [["custom", "val"], ["public_prop", "val"]]

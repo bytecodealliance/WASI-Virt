@@ -2,6 +2,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use heck::ToSnakeCase;
 use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::pin::Pin;
 use std::process::Command;
 use std::{fs, path::PathBuf};
 use wasi_virt::WasiVirt;
@@ -47,6 +48,7 @@ fn cmd(arg: &str) -> Result<()> {
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct TestExpectation {
     env: Option<Vec<(String, String)>>,
+    config: Option<Vec<(String, String)>>,
     file_read: Option<String>,
     encapsulation: Option<bool>,
     stdout: Option<String>,
@@ -66,6 +68,7 @@ struct TestCase {
     component: String,
     compose: Option<bool>,
     host_env: Option<BTreeMap<String, String>>,
+    host_config: Option<BTreeMap<String, String>>,
     host_fs_path: Option<String>,
     virt_opts: Option<WasiVirt>,
     expect: TestExpectation,
@@ -217,6 +220,15 @@ async fn virt_test() -> Result<()> {
                 builder.env(k, v);
             }
         }
+        let props: Vec<(String, String)> = {
+            let mut props = vec![];
+            if let Some(host_config) = &test.host_config {
+                for (k, v) in host_config {
+                    props.push((k.clone(), v.clone()))
+                }
+            }
+            props
+        };
         let table = ResourceTable::new();
         let wasi = builder.build();
 
@@ -234,6 +246,7 @@ async fn virt_test() -> Result<()> {
         struct CommandCtx {
             table: ResourceTable,
             wasi: WasiCtx,
+            props: Vec<(String, String)>,
         }
         impl WasiView for CommandCtx {
             fn table(&mut self) -> &mut ResourceTable {
@@ -243,9 +256,19 @@ async fn virt_test() -> Result<()> {
                 &mut self.wasi
             }
         }
+        impl CommandCtx {
+            fn config(&self) -> Vec<(String, String)> {
+                self.props.clone()
+            }
+        }
 
         wasmtime_wasi::add_to_linker_async(&mut linker)?;
-        let mut store = Store::new(&engine, CommandCtx { table, wasi });
+        wasi::config::runtime::add_to_linker_get_host(&mut linker, |ctx: &mut CommandCtx| {
+            StubConfig {
+                props: ctx.config(),
+            }
+        })?;
+        let mut store = Store::new(&engine, CommandCtx { table, wasi, props });
 
         let (instance, _instance) =
             VirtTest::instantiate_async(&mut store, &component, &linker).await?;
@@ -268,6 +291,25 @@ async fn virt_test() -> Result<()> {
                     test_case_path,
                     expect_env,
                     env_vars,
+                    test
+                ));
+            }
+        }
+
+        // config property expectation check
+        if let Some(expect_config) = &test.expect.config {
+            let config_props = instance.call_test_get_config(&mut store).await?;
+            if !config_props.eq(expect_config) {
+                return Err(anyhow!(
+                    "Unexpected config properties testing {:?}:
+
+    \x1b[1mExpected:\x1b[0m {:?}
+    \x1b[1mActual:\x1b[0m {:?}
+
+    {:?}",
+                    test_case_path,
+                    expect_config,
+                    config_props,
                     test
                 ));
             }
@@ -395,4 +437,66 @@ fn collect_component_imports(component_bytes: Vec<u8>) -> Result<Vec<String>> {
     }
 
     Ok(import_ids)
+}
+
+// TODO remove this stub once wasi:runtime/config is implemented by wasmtime
+struct StubConfig {
+    props: Vec<(String, String)>,
+}
+impl wasi::config::runtime::Host for StubConfig {
+    #[doc = " Gets a single opaque config value set at the given key if it exists"]
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn get<'life0, 'async_trait>(
+        &'life0 mut self,
+        key: String,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<
+                    Output = Result<Option<String>, wasi::config::runtime::ConfigError>,
+                > + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        let mut result = Ok(None);
+        for (k, v) in self.props.iter() {
+            if *k == key {
+                result = Ok(Some(v.clone()));
+            }
+        }
+        let result = std::future::ready(result);
+        let result = Box::new(result);
+        let result = Pin::new(result);
+
+        result
+    }
+
+    #[doc = " Gets a list of all set config data"]
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn get_all<'life0, 'async_trait>(
+        &'life0 mut self,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<
+                    Output = Result<Vec<(String, String)>, wasi::config::runtime::ConfigError>,
+                > + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        let result = Ok(self.props.clone());
+        let result = std::future::ready(result);
+        let result = Box::new(result);
+        let result = Pin::new(result);
+
+        result
+    }
 }

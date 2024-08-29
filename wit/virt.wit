@@ -43,6 +43,8 @@ world virtual-adapter {
   export wasi:sockets/tcp@0.2.0;
   import wasi:sockets/udp@0.2.0;
   export wasi:sockets/udp@0.2.0;
+  import wasi:config/runtime@0.2.0-draft;
+  export wasi:config/runtime@0.2.0-draft;
 }
 
 world virtual-base {
@@ -160,6 +162,11 @@ world virtual-exit {
   export wasi:cli/exit@0.2.0;
 }
 
+world virtual-config {
+  import wasi:config/runtime@0.2.0-draft;
+  export wasi:config/runtime@0.2.0-draft;
+}
+
 world virt-test {
   import wasi:clocks/wall-clock@0.2.0;
   import wasi:clocks/monotonic-clock@0.2.0;
@@ -177,6 +184,7 @@ world virt-test {
   import wasi:io/poll@0.2.0;
   import wasi:io/streams@0.2.0;
   import wasi:cli/environment@0.2.0;
+  import wasi:config/runtime@0.2.0-draft;
   import wasi:filesystem/preopens@0.2.0;
   import wasi:cli/exit@0.2.0;
   import wasi:cli/stdin@0.2.0;
@@ -189,6 +197,7 @@ world virt-test {
   import wasi:cli/terminal-stderr@0.2.0;
 
   export test-get-env: func() -> list<tuple<string, string>>;
+  export test-get-config: func() -> list<tuple<string, string>>;
   export test-file-read: func(path: string) -> string;
   export test-stdio: func() -> ();
 }

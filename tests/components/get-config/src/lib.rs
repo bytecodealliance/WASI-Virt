@@ -13,13 +13,13 @@ impl Guest for VirtTestComponent {
         unimplemented!();
     }
     fn test_get_config() -> Vec<(String, String)> {
-        unimplemented!();
+        wasi::config::runtime::get_all().unwrap()
     }
     fn test_file_read(_path: String) -> String {
         unimplemented!();
     }
     fn test_stdio() -> () {
-        println!("Hello world");
+        unimplemented!();
     }
 }
 

@@ -18,6 +18,7 @@ Supports all of the current WASI subsystems:
 
 - [Clocks](#clocks): Allow / Deny
 - [Environment](#env): Set environment variables, configure host environment variable permissions
+- [Runtime Config](#runtime-config): Set runtime configuration, configure host property permissions
 - [Exit](#exit): Allow / Deny
 - [Filesystem](#filesystem): Mount a read-only filesystem, configure host filesystem preopen remappings or pass-through.
 - [HTTP](#http): Allow / Deny
@@ -80,6 +81,19 @@ wasi-virt component.wasm -e CUSTOM=VAR --allow-env -o virt.wasm
 
 # Setting env vars with restricted host env var access:
 wasi-virt component.wasm -e CUSTOM=VAR --allow-env=SOME,ENV_VARS -o virt.wasm
+```
+
+### Runtime Config
+
+```sh
+# Setting specific config properties (while disallowing all host config property access):
+wasi-virt component.wasm -c custom=prop -o virt.wasm
+
+# Setting config properties with all host config properties allowed:
+wasi-virt component.wasm -c custom=prop --allow-config -o virt.wasm
+
+# Setting config properties with restricted host config property access:
+wasi-virt component.wasm -c custom=prop --allow-config=some,property -o virt.wasm
 ```
 
 ### Exit
