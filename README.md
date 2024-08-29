@@ -85,6 +85,8 @@ wasi-virt component.wasm -e CUSTOM=VAR --allow-env=SOME,ENV_VARS -o virt.wasm
 
 ### Runtime Config
 
+_experimental_
+
 ```sh
 # Setting specific config properties (while disallowing all host config property access):
 wasi-virt component.wasm -c custom=prop -o virt.wasm
