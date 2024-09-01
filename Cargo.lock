@@ -1944,7 +1944,7 @@ dependencies = [
  "wasm-compose",
  "wasm-metadata",
  "wasm-opt",
- "wasmparser 0.212.0",
+ "wasmparser 0.215.0",
  "wasmtime",
  "wasmtime-wasi",
  "wit-component",
@@ -2150,6 +2150,7 @@ dependencies = [
  "hashbrown 0.14.3",
  "indexmap 2.2.3",
  "semver",
+ "serde",
 ]
 
 [[package]]
