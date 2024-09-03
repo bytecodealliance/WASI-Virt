@@ -46,7 +46,7 @@ anyhow = "1"
 cap-std = "3.1.0"
 heck = { version = "0.5" }
 tokio = { version = "1.39.2", features = ["macros"] }
-wasmtime = { version = "22.0.0", features = ["component-model"] }
+wasmtime = { version = "23.0.2", features = ["component-model"] }
 wasmtime-wasi = "22.0.0"
 wasmparser = "0.215.0"
 
