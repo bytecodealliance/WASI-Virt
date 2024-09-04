@@ -2,7 +2,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use heck::ToSnakeCase;
 use serde::Deserialize;
 use std::collections::BTreeMap;
-use std::pin::Pin;
 use std::process::Command;
 use std::{fs, path::PathBuf};
 use wasi_virt::WasiVirt;
@@ -14,6 +13,7 @@ use wasmtime::{
     Config, Engine, Store, WasmBacktraceDetails,
 };
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
 use wit_component::{ComponentEncoder, DecodedWasm};
 use wit_parser::WorldItem;
 
@@ -220,14 +220,14 @@ async fn virt_test() -> Result<()> {
                 builder.env(k, v);
             }
         }
-        let props: Vec<(String, String)> = {
-            let mut props = vec![];
+        let runtime_config = {
+            let mut config = WasiRuntimeConfigVariables::new();
             if let Some(host_config) = &test.host_config {
                 for (k, v) in host_config {
-                    props.push((k.clone(), v.clone()))
+                    config.insert(k, v);
                 }
             }
-            props
+            config
         };
         let table = ResourceTable::new();
         let wasi = builder.build();
@@ -246,7 +246,7 @@ async fn virt_test() -> Result<()> {
         struct CommandCtx {
             table: ResourceTable,
             wasi: WasiCtx,
-            props: Vec<(String, String)>,
+            runtime_config: WasiRuntimeConfigVariables,
         }
         impl WasiView for CommandCtx {
             fn table(&mut self) -> &mut ResourceTable {
@@ -257,21 +257,25 @@ async fn virt_test() -> Result<()> {
             }
         }
         impl CommandCtx {
-            fn config(&self) -> Vec<(String, String)> {
-                self.props.clone()
+            fn runtime_config(&mut self) -> &mut WasiRuntimeConfigVariables {
+                &mut self.runtime_config
             }
         }
 
         wasmtime_wasi::add_to_linker_async(&mut linker)?;
-        wasi::config::runtime::add_to_linker_get_host(&mut linker, |ctx: &mut CommandCtx| {
-            StubConfig {
-                props: ctx.config(),
-            }
+        wasmtime_wasi_runtime_config::add_to_linker(&mut linker, |ctx: &mut CommandCtx| {
+            WasiRuntimeConfig::new(ctx.runtime_config())
         })?;
-        let mut store = Store::new(&engine, CommandCtx { table, wasi, props });
+        let mut store = Store::new(
+            &engine,
+            CommandCtx {
+                table,
+                wasi,
+                runtime_config,
+            },
+        );
 
-        let (instance, _instance) =
-            VirtTest::instantiate_async(&mut store, &component, &linker).await?;
+        let instance = VirtTest::instantiate_async(&mut store, &component, &linker).await?;
 
         if DEBUG {
             println!("- Checking expectations");
@@ -437,66 +441,4 @@ fn collect_component_imports(component_bytes: Vec<u8>) -> Result<Vec<String>> {
     }
 
     Ok(import_ids)
-}
-
-// TODO remove this stub once wasi:runtime/config is implemented by wasmtime
-struct StubConfig {
-    props: Vec<(String, String)>,
-}
-impl wasi::config::runtime::Host for StubConfig {
-    #[doc = " Gets a single opaque config value set at the given key if it exists"]
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn get<'life0, 'async_trait>(
-        &'life0 mut self,
-        key: String,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<
-                    Output = Result<Option<String>, wasi::config::runtime::ConfigError>,
-                > + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        let mut result = Ok(None);
-        for (k, v) in self.props.iter() {
-            if *k == key {
-                result = Ok(Some(v.clone()));
-            }
-        }
-        let result = std::future::ready(result);
-        let result = Box::new(result);
-        let result = Pin::new(result);
-
-        result
-    }
-
-    #[doc = " Gets a list of all set config data"]
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn get_all<'life0, 'async_trait>(
-        &'life0 mut self,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<
-                    Output = Result<Vec<(String, String)>, wasi::config::runtime::ConfigError>,
-                > + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        let result = Ok(self.props.clone());
-        let result = std::future::ready(result);
-        let result = Box::new(result);
-        let result = Pin::new(result);
-
-        result
-    }
 }
