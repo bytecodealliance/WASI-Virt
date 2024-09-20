@@ -216,15 +216,16 @@ impl WasiVirt {
             config.parse(VIRT_ADAPTER_DEBUG)
         } else {
             config.parse(VIRT_ADAPTER)
-        }?;
+        }
+        .context("failed to parse adapter")?;
         module.name = Some("wasi_virt".into());
 
         // only env virtualization is independent of io
         if let Some(env) = &self.env {
-            create_env_virt(&mut module, env)?;
+            create_env_virt(&mut module, env).context("failed to virtualize environment")?;
         }
         if let Some(config) = &self.config {
-            create_config_virt(&mut module, config)?;
+            create_config_virt(&mut module, config).context("failed to virtualize config")?;
         }
 
         let has_io = self.fs.is_some()
@@ -235,7 +236,8 @@ impl WasiVirt {
 
         let virtual_files = if has_io {
             // io virt is managed through a singular io configuration
-            create_io_virt(&mut module, self.fs.as_ref(), self.stdio.as_ref())?
+            create_io_virt(&mut module, self.fs.as_ref(), self.stdio.as_ref())
+                .context("failed to virtualize I/O")?
         } else {
             Default::default()
         };
@@ -265,116 +267,174 @@ impl WasiVirt {
             .downcast::<walrus::RawCustomSection>()
             .unwrap();
 
-        let (mut resolve, pkg_id) = match wit_component::decode(VIRT_WIT_METADATA)? {
+        let (mut resolve, pkg_id) = match wit_component::decode(VIRT_WIT_METADATA)
+            .context("failed to decode WIT package")?
+        {
             DecodedWasm::WitPackage(resolve, pkg_id) => (resolve, pkg_id),
             DecodedWasm::Component(..) => {
-                anyhow::bail!("expected a WIT package, found a component")
+                bail!("expected a WIT package, found a component")
             }
         };
 
-        let base_world = resolve.select_world(pkg_id, Some("virtual-base"))?;
+        let base_world = resolve
+            .select_world(pkg_id, Some("virtual-base"))
+            .context("failed to select `virtual-base` world")?;
 
-        let env_world = resolve.select_world(pkg_id, Some("virtual-env"))?;
-        let config_world = resolve.select_world(pkg_id, Some("virtual-config"))?;
+        let env_world = resolve
+            .select_world(pkg_id, Some("virtual-env"))
+            .context("failed to select `virtual-env` world")?;
+        let config_world = resolve
+            .select_world(pkg_id, Some("virtual-config"))
+            .context("failed to select `virtual-config` world")?;
 
-        let io_world = resolve.select_world(pkg_id, Some("virtual-io"))?;
-        let io_clocks_world = resolve.select_world(pkg_id, Some("virtual-io-clocks"))?;
-        let io_http_world = resolve.select_world(pkg_id, Some("virtual-io-http"))?;
-        let io_sockets_world = resolve.select_world(pkg_id, Some("virtual-io-sockets"))?;
+        let io_world = resolve
+            .select_world(pkg_id, Some("virtual-io"))
+            .context("failed to select `virtual-io` world")?;
+        let io_clocks_world = resolve
+            .select_world(pkg_id, Some("virtual-io-clocks"))
+            .context("failed to select `virtual-io-clocks` world")?;
+        let io_http_world = resolve
+            .select_world(pkg_id, Some("virtual-io-http"))
+            .context("failed to select `virtual-io-http` world")?;
+        let io_sockets_world = resolve
+            .select_world(pkg_id, Some("virtual-io-sockets"))
+            .context("failed to select `virtual-io-sockets` world")?;
 
-        let exit_world = resolve.select_world(pkg_id, Some("virtual-exit"))?;
-        let fs_world = resolve.select_world(pkg_id, Some("virtual-fs"))?;
-        let random_world = resolve.select_world(pkg_id, Some("virtual-random"))?;
-        let stdio_world = resolve.select_world(pkg_id, Some("virtual-stdio"))?;
-        let clocks_world = resolve.select_world(pkg_id, Some("virtual-clocks"))?;
-        let http_world = resolve.select_world(pkg_id, Some("virtual-http"))?;
-        let sockets_world = resolve.select_world(pkg_id, Some("virtual-sockets"))?;
+        let exit_world = resolve
+            .select_world(pkg_id, Some("virtual-exit"))
+            .context("failed to select `virtual-exit` world")?;
+        let fs_world = resolve
+            .select_world(pkg_id, Some("virtual-fs"))
+            .context("failed to select `virtual-fs` world")?;
+        let random_world = resolve
+            .select_world(pkg_id, Some("virtual-random"))
+            .context("failed to select `virtual-random` world")?;
+        let stdio_world = resolve
+            .select_world(pkg_id, Some("virtual-stdio"))
+            .context("failed to select `virtual-stdio` world")?;
+        let clocks_world = resolve
+            .select_world(pkg_id, Some("virtual-clocks"))
+            .context("failed to select `virtual-clocks` world")?;
+        let http_world = resolve
+            .select_world(pkg_id, Some("virtual-http"))
+            .context("failed to select `virtual-http` world")?;
+        let sockets_world = resolve
+            .select_world(pkg_id, Some("virtual-sockets"))
+            .context("failed to select `virtual-sockets` world")?;
 
         // env, config, exit & random subsystems are fully independent
         if self.env.is_some() {
-            resolve.merge_worlds(env_world, base_world)?;
+            resolve
+                .merge_worlds(env_world, base_world)
+                .context("failed to merge with environment world")?;
         } else {
-            strip_env_virt(&mut module)?;
+            strip_env_virt(&mut module).context("failed to strip environment exports")?;
         }
         if self.config.is_some() {
-            resolve.merge_worlds(config_world, base_world)?;
+            resolve
+                .merge_worlds(config_world, base_world)
+                .context("failed to merge with config world")?;
         } else {
-            strip_config_virt(&mut module)?;
+            strip_config_virt(&mut module).context("failed to strip config exports")?;
         }
         if let Some(exit) = self.exit {
             if !exit {
-                resolve.merge_worlds(exit_world, base_world)?;
-                deny_exit_virt(&mut module)?;
+                resolve
+                    .merge_worlds(exit_world, base_world)
+                    .context("failed to merge with exit world")?;
+                deny_exit_virt(&mut module).context("failed to deny exit exports")?;
             }
         }
         if let Some(random) = self.random {
             if !random {
-                resolve.merge_worlds(random_world, base_world)?;
-                deny_random_virt(&mut module)?;
+                resolve
+                    .merge_worlds(random_world, base_world)
+                    .context("failed to merge with random world")?;
+                deny_random_virt(&mut module).context("failed to deny random exports")?;
             }
         }
 
         // io subsystems have io dependence due to streams + poll
         // therefore we need to strip just their io dependence portion
         if has_io {
-            resolve.merge_worlds(io_world, base_world)?;
+            resolve
+                .merge_worlds(io_world, base_world)
+                .context("failed to merge with I/O world")?;
         } else {
-            strip_virt(&mut module, &["wasi:io/"])?;
+            strip_virt(&mut module, &["wasi:io/"]).context("failed to strip I/O exports")?;
         }
         if let Some(clocks) = self.clocks {
             if !clocks {
                 // deny is effectively virtualization
                 // in future with fine-grained virtualization options, they
                 // also would extend here (ie !clocks is deceiving)
-                resolve.merge_worlds(clocks_world, base_world)?;
-                deny_clocks_virt(&mut module)?;
+                resolve
+                    .merge_worlds(clocks_world, base_world)
+                    .context("failed to merge with clock world")?;
+                deny_clocks_virt(&mut module).context("failed to deny clock exports")?;
             } else {
                 // passthrough can be simplified to just rewrapping io interfaces
-                resolve.merge_worlds(io_clocks_world, base_world)?;
+                resolve
+                    .merge_worlds(io_clocks_world, base_world)
+                    .context("failed to merge I/O clocks world")?;
             }
         } else {
-            strip_virt(&mut module, &["wasi:clocks/"])?;
+            strip_virt(&mut module, &["wasi:clocks/"]).context("failed to strip clock exports")?;
         }
         // sockets and http are identical to clocks above
         if let Some(sockets) = self.sockets {
             if !sockets {
-                resolve.merge_worlds(sockets_world, base_world)?;
-                deny_sockets_virt(&mut module)?;
+                resolve
+                    .merge_worlds(sockets_world, base_world)
+                    .context("failed to merge with sockets world")?;
+                deny_sockets_virt(&mut module).context("failed to deny socket exports")?;
             } else {
-                resolve.merge_worlds(io_sockets_world, base_world)?;
+                resolve
+                    .merge_worlds(io_sockets_world, base_world)
+                    .context("failed to merge with socket I/O world")?;
             }
         } else {
-            strip_virt(&mut module, &["wasi:sockets/"])?;
+            strip_virt(&mut module, &["wasi:sockets/"])
+                .context("failed to strip socket exports")?;
         }
         if let Some(http) = self.http {
             if !http {
-                resolve.merge_worlds(http_world, base_world)?;
-                deny_http_virt(&mut module)?;
+                resolve
+                    .merge_worlds(http_world, base_world)
+                    .context("failed to merge with HTTP world")?;
+                deny_http_virt(&mut module).context("failed to deny with HTTP exports")?;
             } else {
-                resolve.merge_worlds(io_http_world, base_world)?;
+                resolve
+                    .merge_worlds(io_http_world, base_world)
+                    .context("failed to merge with HTTP I/O world")?;
             }
         } else {
-            strip_virt(&mut module, &["wasi:http/"])?;
+            strip_virt(&mut module, &["wasi:http/"]).context("failed to strip HTTP exports")?;
         }
 
         // stdio and fs are fully implemented in io world
         // (all their interfaces use streams)
         if self.stdio.is_some() {
-            resolve.merge_worlds(stdio_world, base_world)?;
+            resolve
+                .merge_worlds(stdio_world, base_world)
+                .context("failed to merge with stdio world")?;
         } else {
-            strip_virt(&mut module, &["wasi:cli/std", "wasi:cli/terminal"])?;
+            strip_virt(&mut module, &["wasi:cli/std", "wasi:cli/terminal"])
+                .context("failed to strip CLI exports")?;
         }
         if self.fs.is_some() || self.stdio.is_some() {
             resolve.merge_worlds(fs_world, base_world)?;
         } else {
-            strip_virt(&mut module, &["wasi:filesystem/"])?;
+            strip_virt(&mut module, &["wasi:filesystem/"])
+                .context("failed to strip filesystem exports")?;
         }
 
         let mut producers = Producers::default();
         producers.add("processed-by", "wasi-virt", env!("CARGO_PKG_VERSION"));
 
         component_section.data =
-            metadata::encode(&resolve, base_world, StringEncoding::UTF8, Some(&producers))?;
+            metadata::encode(&resolve, base_world, StringEncoding::UTF8, Some(&producers))
+                .context("failed to encode metadata")?;
 
         module.customs.add(component_section);
 
@@ -384,18 +444,21 @@ impl WasiVirt {
         // we save into a temporary file and run wasm-opt before returning
         // this can be disabled with wasm_opt: false
         if self.wasm_opt.unwrap_or(true) {
-            bytes = apply_wasm_opt(bytes, self.debug)?;
+            bytes = apply_wasm_opt(bytes, self.debug).context("failed to apply `wasm-opt`")?;
         }
 
         // now adapt the virtualized component
-        let encoder = ComponentEncoder::default().validate(true).module(&bytes)?;
-        let encoded_bytes = encoder.encode()?;
+        let encoder = ComponentEncoder::default()
+            .validate(true)
+            .module(&bytes)
+            .context("failed to set core component module")?;
+        let encoded_bytes = encoder.encode().context("failed to encode component")?;
 
         let adapter = if let Some(compose_path) = &self.compose {
             let compose_path = PathBuf::from(compose_path);
             let dir = env::temp_dir();
             let tmp_virt = dir.join(format!("virt{}.wasm", timestamp()));
-            fs::write(&tmp_virt, encoded_bytes)?;
+            fs::write(&tmp_virt, encoded_bytes).context("failed to write temporary component")?;
 
             let composed_bytes = ComponentComposer::new(
                 &compose_path,
@@ -407,11 +470,11 @@ impl WasiVirt {
             .compose()
             .with_context(|| "Unable to compose virtualized adapter into component.\nMake sure virtualizations are enabled and being used.")
             .or_else(|e| {
-                fs::remove_file(&tmp_virt)?;
+                fs::remove_file(&tmp_virt).context("failed to remove temporary component")?;
                 Err(e)
             })?;
 
-            fs::remove_file(&tmp_virt)?;
+            fs::remove_file(&tmp_virt).context("failed to remove temporary component")?;
 
             composed_bytes
         } else {
