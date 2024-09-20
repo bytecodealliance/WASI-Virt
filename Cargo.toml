@@ -31,12 +31,12 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
-walrus = "0.21.1"
-wasm-compose = "0.215.0"
-wasm-metadata = "0.212.0"
+walrus = "0.21.2"
+wasm-compose = "0.217"
+wasm-metadata = "0.217"
 wasm-opt = { version = "0.116.1", optional = true }
-wit-component = "0.212.0"
-wit-parser = "0.212.0"
+wit-component = "0.217"
+wit-parser = "0.217"
 
 [build-dependencies]
 anyhow = "1"
@@ -45,15 +45,15 @@ anyhow = "1"
 anyhow = "1"
 cap-std = "3.1.0"
 heck = { version = "0.5" }
-tokio = { version = "1.39.2", features = ["macros"] }
-wasmtime = { version = "24.0.0", features = ["component-model"] }
-wasmtime-wasi = "24.0.0"
-wasmtime-wasi-runtime-config = "24.0.0"
-wasmparser = "0.215.0"
+tokio = { version = "1.40", features = ["macros"] }
+wasmtime = { version = "24", features = ["component-model"] }
+wasmtime-wasi = "24"
+wasmtime-wasi-runtime-config = "24"
+wasmparser = "0.217"
 
 [workspace.dependencies]
 anyhow = "1"
-wit-bindgen = "0.27.0"
+wit-bindgen = "0.32"
 
 [features]
 default = ["wasm-opt"]

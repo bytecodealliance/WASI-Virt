@@ -425,7 +425,7 @@ fn has_component_import(bytes: &[u8]) -> Result<Option<String>> {
 
 fn collect_component_imports(component_bytes: Vec<u8>) -> Result<Vec<String>> {
     let (resolve, world_id) = match wit_component::decode(&component_bytes)? {
-        DecodedWasm::WitPackages(..) => {
+        DecodedWasm::WitPackage(..) => {
             bail!("expected a component, found a WIT package")
         }
         DecodedWasm::Component(resolve, world_id) => (resolve, world_id),

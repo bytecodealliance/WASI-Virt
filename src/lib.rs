@@ -156,7 +156,7 @@ impl WasiVirt {
                 let imports = {
                     let module_bytes = fs::read(compose).map_err(anyhow::Error::new)?;
                     let (resolve, world_id) = match wit_component::decode(&module_bytes)? {
-                        DecodedWasm::WitPackages(..) => {
+                        DecodedWasm::WitPackage(..) => {
                             bail!("expected a component, found a WIT package")
                         }
                         DecodedWasm::Component(resolve, world_id) => (resolve, world_id),
@@ -265,30 +265,30 @@ impl WasiVirt {
             .downcast::<walrus::RawCustomSection>()
             .unwrap();
 
-        let (mut resolve, pkg_ids) = match wit_component::decode(VIRT_WIT_METADATA)? {
-            DecodedWasm::WitPackages(resolve, pkg_ids) => (resolve, pkg_ids),
+        let (mut resolve, pkg_id) = match wit_component::decode(VIRT_WIT_METADATA)? {
+            DecodedWasm::WitPackage(resolve, pkg_id) => (resolve, pkg_id),
             DecodedWasm::Component(..) => {
                 anyhow::bail!("expected a WIT package, found a component")
             }
         };
 
-        let base_world = resolve.select_world(&pkg_ids, Some("virtual-base"))?;
+        let base_world = resolve.select_world(pkg_id, Some("virtual-base"))?;
 
-        let env_world = resolve.select_world(&pkg_ids, Some("virtual-env"))?;
-        let config_world = resolve.select_world(&pkg_ids, Some("virtual-config"))?;
+        let env_world = resolve.select_world(pkg_id, Some("virtual-env"))?;
+        let config_world = resolve.select_world(pkg_id, Some("virtual-config"))?;
 
-        let io_world = resolve.select_world(&pkg_ids, Some("virtual-io"))?;
-        let io_clocks_world = resolve.select_world(&pkg_ids, Some("virtual-io-clocks"))?;
-        let io_http_world = resolve.select_world(&pkg_ids, Some("virtual-io-http"))?;
-        let io_sockets_world = resolve.select_world(&pkg_ids, Some("virtual-io-sockets"))?;
+        let io_world = resolve.select_world(pkg_id, Some("virtual-io"))?;
+        let io_clocks_world = resolve.select_world(pkg_id, Some("virtual-io-clocks"))?;
+        let io_http_world = resolve.select_world(pkg_id, Some("virtual-io-http"))?;
+        let io_sockets_world = resolve.select_world(pkg_id, Some("virtual-io-sockets"))?;
 
-        let exit_world = resolve.select_world(&pkg_ids, Some("virtual-exit"))?;
-        let fs_world = resolve.select_world(&pkg_ids, Some("virtual-fs"))?;
-        let random_world = resolve.select_world(&pkg_ids, Some("virtual-random"))?;
-        let stdio_world = resolve.select_world(&pkg_ids, Some("virtual-stdio"))?;
-        let clocks_world = resolve.select_world(&pkg_ids, Some("virtual-clocks"))?;
-        let http_world = resolve.select_world(&pkg_ids, Some("virtual-http"))?;
-        let sockets_world = resolve.select_world(&pkg_ids, Some("virtual-sockets"))?;
+        let exit_world = resolve.select_world(pkg_id, Some("virtual-exit"))?;
+        let fs_world = resolve.select_world(pkg_id, Some("virtual-fs"))?;
+        let random_world = resolve.select_world(pkg_id, Some("virtual-random"))?;
+        let stdio_world = resolve.select_world(pkg_id, Some("virtual-stdio"))?;
+        let clocks_world = resolve.select_world(pkg_id, Some("virtual-clocks"))?;
+        let http_world = resolve.select_world(pkg_id, Some("virtual-http"))?;
+        let sockets_world = resolve.select_world(pkg_id, Some("virtual-sockets"))?;
 
         // env, config, exit & random subsystems are fully independent
         if self.env.is_some() {
