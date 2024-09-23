@@ -13,37 +13,37 @@ fn get_wasi_random_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)
     WASI_RANDOM_FNS.get_or_init(|| {
         Vec::from([
             (
-                "wasi:random/random@0.2.0#get-random-bytes",
+                "wasi:random/random@0.2.1#get-random-bytes",
                 vec![ValType::I64],
                 vec![ValType::I32],
             ),
             (
-                "cabi_post_wasi:random/random@0.2.0#get-random-bytes",
+                "cabi_post_wasi:random/random@0.2.1#get-random-bytes",
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:random/random@0.2.0#get-random-u64",
+                "wasi:random/random@0.2.1#get-random-u64",
                 vec![],
                 vec![ValType::I64],
             ),
             (
-                "wasi:random/insecure@0.2.0#get-insecure-random-bytes",
+                "wasi:random/insecure@0.2.1#get-insecure-random-bytes",
                 vec![ValType::I64],
                 vec![ValType::I32],
             ),
             (
-                "cabi_post_wasi:random/insecure@0.2.0#get-insecure-random-bytes",
+                "cabi_post_wasi:random/insecure@0.2.1#get-insecure-random-bytes",
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:random/insecure@0.2.0#get-insecure-random-u64",
+                "wasi:random/insecure@0.2.1#get-insecure-random-u64",
                 vec![],
                 vec![ValType::I64],
             ),
             (
-                "wasi:random/insecure-seed@0.2.0#insecure-seed",
+                "wasi:random/insecure-seed@0.2.1#insecure-seed",
                 vec![],
                 vec![ValType::I32],
             ),
