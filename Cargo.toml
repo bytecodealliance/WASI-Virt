@@ -32,7 +32,7 @@ clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 walrus = "0.21.2"
-wasm-compose = "0.217"
+wasm-compose = "0.218"
 wasm-metadata = "0.217"
 wasm-opt = { version = "0.116.1", optional = true }
 wit-component = "0.217"
