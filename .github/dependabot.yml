@@ -4,3 +4,9 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    groups:
+      # Update wasmtime family crates together
+      wasmtime:
+        applies-to: version-updates
+        patterns:
+          - "^wasmtime(-.+)?$"
