@@ -13,7 +13,7 @@ use wasmtime::{
     Config, Engine, Store, WasmBacktraceDetails,
 };
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
+use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 use wit_component::{ComponentEncoder, DecodedWasm};
 use wit_parser::WorldItem;
 
@@ -220,8 +220,8 @@ async fn virt_test() -> Result<()> {
                 builder.env(k, v);
             }
         }
-        let runtime_config = {
-            let mut config = WasiRuntimeConfigVariables::new();
+        let wasi_config = {
+            let mut config = WasiConfigVariables::new();
             if let Some(host_config) = &test.host_config {
                 for (k, v) in host_config {
                     config.insert(k, v);
@@ -246,7 +246,7 @@ async fn virt_test() -> Result<()> {
         struct CommandCtx {
             table: ResourceTable,
             wasi: WasiCtx,
-            runtime_config: WasiRuntimeConfigVariables,
+            wasi_config: WasiConfigVariables,
         }
         impl WasiView for CommandCtx {
             fn table(&mut self) -> &mut ResourceTable {
@@ -257,21 +257,21 @@ async fn virt_test() -> Result<()> {
             }
         }
         impl CommandCtx {
-            fn runtime_config(&mut self) -> &mut WasiRuntimeConfigVariables {
-                &mut self.runtime_config
+            fn wasi_config(&mut self) -> &mut WasiConfigVariables {
+                &mut self.wasi_config
             }
         }
 
         wasmtime_wasi::add_to_linker_async(&mut linker)?;
-        wasmtime_wasi_runtime_config::add_to_linker(&mut linker, |ctx: &mut CommandCtx| {
-            WasiRuntimeConfig::new(ctx.runtime_config())
+        wasmtime_wasi_config::add_to_linker(&mut linker, |ctx: &mut CommandCtx| {
+            WasiConfig::new(ctx.wasi_config())
         })?;
         let mut store = Store::new(
             &engine,
             CommandCtx {
                 table,
                 wasi,
-                runtime_config,
+                wasi_config,
             },
         );
 
