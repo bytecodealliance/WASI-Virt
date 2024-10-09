@@ -58,13 +58,13 @@ struct Args {
     #[arg(short, long, use_value_delimiter(true), value_name("ENV=VAR"), value_parser = parse_key_val::<String, String>, help_heading = "Env")]
     env: Option<Vec<(String, String)>>,
 
-    // RUNTIME CONFIG
-    /// Allow unrestricted access to host runtime configuration properties, or to a comma-separated list of property names.
-    #[arg(long, num_args(0..), use_value_delimiter(true), require_equals(true), value_name("PROPERTY_NAME"), help_heading = "Runtime Config (experimental)")]
+    // CONFIG
+    /// Allow unrestricted access to host  configuration properties, or to a comma-separated list of property names.
+    #[arg(long, num_args(0..), use_value_delimiter(true), require_equals(true), value_name("PROPERTY_NAME"), help_heading = "Config (experimental)")]
     allow_config: Option<Vec<String>>,
 
-    /// Set runtime config property overrides
-    #[arg(short, long, use_value_delimiter(true), value_name("NAME=VALUE"), value_parser = parse_key_val::<String, String>, help_heading = "Runtime Config (experimental)")]
+    /// Set config property overrides
+    #[arg(short, long, use_value_delimiter(true), value_name("NAME=VALUE"), value_parser = parse_key_val::<String, String>, help_heading = "Config (experimental)")]
     config: Option<Vec<(String, String)>>,
 
     // FS
@@ -185,7 +185,7 @@ fn main() -> Result<()> {
         }
         None => {
             if allow_all {
-                // TODO enable once wasi:config/runtime is stable
+                // TODO enable once wasi:config/store is stable
                 // config.allow_all();
             }
         }
