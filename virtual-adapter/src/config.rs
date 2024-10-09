@@ -1,5 +1,5 @@
-use crate::exports::wasi::config::runtime::{ConfigError, Guest as Runtime};
-use crate::wasi::config::runtime;
+use crate::exports::wasi::config::store::{Error, Guest as Store};
+use crate::wasi::config::store;
 use crate::VirtAdapter;
 
 #[repr(C)]
@@ -47,8 +47,8 @@ fn read_data_str(offset: &mut isize) -> &'static str {
     unsafe { core::str::from_utf8_unchecked(str_data) }
 }
 
-impl Runtime for VirtAdapter {
-    fn get(key: String) -> Result<Option<String>, ConfigError> {
+impl Store for VirtAdapter {
+    fn get(key: String) -> Result<Option<String>, Error> {
         let mut data_offset: isize = 0;
         for _ in 0..unsafe { config.host_field_cnt } {
             let config_key = read_data_str(&mut data_offset);
@@ -69,13 +69,13 @@ impl Runtime for VirtAdapter {
             let is_allow_list = unsafe { config.host_fallback_allow };
             let in_list = allow_or_deny.binary_search(&key.as_ref()).is_ok();
             if is_allow_list && in_list || !is_allow_list && !in_list {
-                return runtime::get(&key).map_err(config_err_map);
+                return store::get(&key).map_err(config_err_map);
             }
         }
         Ok(None)
     }
 
-    fn get_all() -> Result<Vec<(String, String)>, ConfigError> {
+    fn get_all() -> Result<Vec<(String, String)>, Error> {
         let mut configuration = Vec::new();
         let mut data_offset: isize = 0;
         for _ in 0..unsafe { config.host_field_cnt } {
@@ -93,7 +93,7 @@ impl Runtime for VirtAdapter {
             }
 
             let is_allow_list = unsafe { config.host_fallback_allow };
-            for (key, value) in runtime::get_all().map_err(config_err_map)? {
+            for (key, value) in store::get_all().map_err(config_err_map)? {
                 if configuration[0..override_len]
                     .binary_search_by_key(&&key, |(s, _)| s)
                     .is_ok()
@@ -110,9 +110,9 @@ impl Runtime for VirtAdapter {
     }
 }
 
-fn config_err_map(err: runtime::ConfigError) -> ConfigError {
+fn config_err_map(err: store::Error) -> Error {
     match err {
-        runtime::ConfigError::Upstream(msg) => ConfigError::Upstream(msg),
-        runtime::ConfigError::Io(msg) => ConfigError::Io(msg),
+        store::Error::Upstream(msg) => Error::Upstream(msg),
+        store::Error::Io(msg) => Error::Io(msg),
     }
 }

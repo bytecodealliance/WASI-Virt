@@ -212,7 +212,7 @@ pub(crate) fn create_config_virt<'a>(module: &'a mut Module, config: &VirtConfig
 /// Functions that represent the configuration functionality provided by WASI CLI
 const WASI_CONFIG_FNS: [&str; 2] = ["get", "get-all"];
 
-/// Stub imported functions that implement the WASI runtime config functionality
+/// Stub imported functions that implement the WASI config functionality
 ///
 /// This function throws an error if any imported functions do not exist
 pub(crate) fn stub_config_virt(module: &mut Module) -> Result<()> {
@@ -220,7 +220,7 @@ pub(crate) fn stub_config_virt(module: &mut Module) -> Result<()> {
         module.replace_imported_func(
             module
                 .imports
-                .get_func("wasi:config/runtime@0.2.0-draft", fn_name)?,
+                .get_func("wasi:config/store@0.2.0-draft", fn_name)?,
             |(body, _)| {
                 body.unreachable();
             },
@@ -230,16 +230,16 @@ pub(crate) fn stub_config_virt(module: &mut Module) -> Result<()> {
     Ok(())
 }
 
-/// Strip exported functions that implement the WASI runtime config functionality
+/// Strip exported functions that implement the WASI config functionality
 pub(crate) fn strip_config_virt(module: &mut Module) -> Result<()> {
     stub_config_virt(module)?;
 
     for fn_name in WASI_CONFIG_FNS {
         let Ok(fid) = module
             .exports
-            .get_func(format!("wasi:config/runtime@0.2.0-draft#{fn_name}"))
+            .get_func(format!("wasi:config/store@0.2.0-draft#{fn_name}"))
         else {
-            bail!("Expected CLI function {fn_name}")
+            bail!("Expected Config function {fn_name}")
         };
         module.replace_exported_func(fid, |(body, _)| {
             body.unreachable();

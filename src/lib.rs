@@ -86,7 +86,7 @@ impl WasiVirt {
         self.exit(true);
         self.random(true);
         self.env().allow_all();
-        // TODO enable once wasi:config/runtime is stable
+        // TODO enable once wasi:config/store is stable
         // self.config().allow_all();
         self.fs().allow_host_preopens();
         self.stdio().allow();
@@ -99,7 +99,7 @@ impl WasiVirt {
         self.exit(false);
         self.random(false);
         self.env().deny_all();
-        // TODO enable once wasi:config/runtime is stable
+        // TODO enable once wasi:config/store is stable
         // self.config().deny_all();
         self.fs().deny_host_preopens();
         self.stdio().ignore();
@@ -178,7 +178,7 @@ impl WasiVirt {
                 if !matches("wasi:cli/environment") {
                     self.env = None;
                 }
-                if !matches("wasi:config/runtime") {
+                if !matches("wasi:config/store") {
                     self.config = None;
                 }
                 if !matches("wasi:filesystem/") {
