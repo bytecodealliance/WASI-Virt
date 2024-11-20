@@ -13,7 +13,7 @@ impl Guest for VirtTestComponent {
         unimplemented!();
     }
     fn test_get_config() -> Vec<(String, String)> {
-        wasi::config::runtime::get_all().unwrap()
+        wasi::config::store::get_all().unwrap()
     }
     fn test_file_read(_path: String) -> String {
         unimplemented!();
