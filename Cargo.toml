@@ -36,7 +36,7 @@ wasm-compose = "0.219"
 wasm-metadata = "0.217"
 wasm-opt = { version = "0.116.1", optional = true }
 wit-component = "0.217"
-wit-parser = "0.217"
+wit-parser = "0.219"
 
 [build-dependencies]
 anyhow = "1"
