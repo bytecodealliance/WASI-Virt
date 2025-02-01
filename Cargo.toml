@@ -33,7 +33,7 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 walrus = "0.23.3"
 wasm-compose = "0.219"
-wasm-metadata = "0.217"
+wasm-metadata = "0.221"
 wasm-opt = { version = "0.116.1", optional = true }
 wit-component = "0.217"
 wit-parser = "0.217"
