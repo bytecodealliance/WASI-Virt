@@ -48,7 +48,7 @@ heck = { version = "0.5" }
 tokio = { version = "1.42", features = ["macros"] }
 wasmtime = { version = "27", features = ["component-model"] }
 wasmtime-wasi = { version = "27" }
-wasmtime-wasi-config = { version = "27" }
+wasmtime-wasi-config = { version = "28" }
 wasmparser = "0.220.0"
 
 [workspace.dependencies]
