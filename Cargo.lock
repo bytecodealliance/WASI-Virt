@@ -716,6 +716,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
+name = "foldhash"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0d2fde1f7b3d48b8395d5f2de76c18a528bd6a9cdde438df747bfcba3e05d6f"
+
+[[package]]
 name = "form_urlencoded"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -891,6 +897,15 @@ checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 dependencies = [
  "ahash",
  "serde",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
+dependencies = [
+ "foldhash",
 ]
 
 [[package]]
@@ -1927,7 +1942,7 @@ dependencies = [
  "toml",
  "walrus",
  "wasm-compose",
- "wasm-metadata",
+ "wasm-metadata 0.221.3",
  "wasm-opt",
  "wasmparser 0.220.0",
  "wasmtime",
@@ -2024,12 +2039,12 @@ dependencies = [
 
 [[package]]
 name = "wasm-encoder"
-version = "0.217.0"
+version = "0.217.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b88b0814c9a2b323a9b46c687e726996c255ac8b64aa237dd11c81ed4854760"
+checksum = "10961fd76db420582926af70816dd205019d8152d9e51e1b939125dd1639f854"
 dependencies = [
  "leb128",
- "wasmparser 0.217.0",
+ "wasmparser 0.217.1",
 ]
 
 [[package]]
@@ -2053,10 +2068,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm-metadata"
-version = "0.217.0"
+name = "wasm-encoder"
+version = "0.221.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65a146bf9a60e9264f0548a2599aa9656dba9a641eff9ab88299dc2a637e483c"
+checksum = "dc8444fe4920de80a4fe5ab564fff2ae58b6b73166b89751f8c6c93509da32e5"
+dependencies = [
+ "leb128",
+ "wasmparser 0.221.3",
+]
+
+[[package]]
+name = "wasm-metadata"
+version = "0.217.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2d9b20ba29b82e03fa75a5e25e1c408f7464268b79e134c5d61b1b055ce935d"
 dependencies = [
  "anyhow",
  "indexmap 2.5.0",
@@ -2064,8 +2089,24 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "spdx",
- "wasm-encoder 0.217.0",
- "wasmparser 0.217.0",
+ "wasm-encoder 0.217.1",
+ "wasmparser 0.217.1",
+]
+
+[[package]]
+name = "wasm-metadata"
+version = "0.221.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11f4ef50d17e103a88774cd4aa5d06bfb1ae44036a8f3f1325e0e9b3e3417ac4"
+dependencies = [
+ "anyhow",
+ "indexmap 2.5.0",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "spdx",
+ "wasm-encoder 0.221.3",
+ "wasmparser 0.221.3",
 ]
 
 [[package]]
@@ -2124,9 +2165,9 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.217.0"
+version = "0.217.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca917a21307d3adf2b9857b94dd05ebf8496bdcff4437a9b9fb3899d3e6c74e7"
+checksum = "65a5a0689975b9fd93c02f5400cfd9669858b99607e54e7b892c6080cba598bb"
 dependencies = [
  "ahash",
  "bitflags",
@@ -2161,6 +2202,18 @@ dependencies = [
  "indexmap 2.5.0",
  "semver",
  "serde",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.221.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d06bfa36ab3ac2be0dee563380147a5b81ba10dd8885d7fbbc9eb574be67d185"
+dependencies = [
+ "bitflags",
+ "hashbrown 0.15.2",
+ "indexmap 2.5.0",
+ "semver",
 ]
 
 [[package]]
@@ -2729,7 +2782,7 @@ dependencies = [
  "indexmap 2.5.0",
  "prettyplease",
  "syn 2.0.77",
- "wasm-metadata",
+ "wasm-metadata 0.217.1",
  "wit-bindgen-core",
  "wit-component",
 ]
@@ -2762,9 +2815,9 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "wasm-encoder 0.217.0",
- "wasm-metadata",
- "wasmparser 0.217.0",
+ "wasm-encoder 0.217.1",
+ "wasm-metadata 0.217.1",
+ "wasmparser 0.217.1",
  "wit-parser 0.217.0",
 ]
 
@@ -2783,7 +2836,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "unicode-xid",
- "wasmparser 0.217.0",
+ "wasmparser 0.217.1",
 ]
 
 [[package]]
