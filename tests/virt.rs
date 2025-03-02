@@ -12,7 +12,7 @@ use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store, WasmBacktraceDetails,
 };
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{DirPerms, FilePerms, IoView, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 use wit_component::{ComponentEncoder, DecodedWasm};
 use wit_parser::WorldItem;
@@ -248,10 +248,12 @@ async fn virt_test() -> Result<()> {
             wasi: WasiCtx,
             wasi_config: WasiConfigVariables,
         }
-        impl WasiView for CommandCtx {
+        impl IoView for CommandCtx {
             fn table(&mut self) -> &mut ResourceTable {
                 &mut self.table
             }
+        }
+        impl WasiView for CommandCtx {
             fn ctx(&mut self) -> &mut WasiCtx {
                 &mut self.wasi
             }
