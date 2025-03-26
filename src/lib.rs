@@ -448,7 +448,7 @@ impl WasiVirt {
         }
 
         // now adapt the virtualized component
-        let encoder = ComponentEncoder::default()
+        let mut encoder = ComponentEncoder::default()
             .validate(true)
             .module(&bytes)
             .context("failed to set core component module")?;
