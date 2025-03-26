@@ -54,9 +54,10 @@ toml = { workspace = true, features = ["parse"] }
 
 [workspace.dependencies]
 anyhow = { version = "1", default-features = false }
-cap-std = { version = "3.4.2" }
+cap-std = { version = "3.4.2", default-features = false }
 clap = { version = "4", default-features = false }
 heck = { version = "0.5", default-features = false }
+rand = { version = "0.9.0", default-features = false }
 serde = { version = "1", default-features = false }
 tokio = { version = "1.42", default-features = false }
 toml = { version = "0.8", default-features = false }

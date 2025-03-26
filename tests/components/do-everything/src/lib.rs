@@ -1,9 +1,8 @@
-use rand::prelude::*;
 use std::env;
 use std::fs;
 use std::time::SystemTime;
 
-extern crate rand;
+use rand::prelude::*;
 
 wit_bindgen::generate!({
     path: "../../../wit",
@@ -22,12 +21,12 @@ impl Guest for VirtTestComponent {
     }
     fn test_file_read(path: String) -> String {
         let vars: Vec<(String, String)> = env::vars().collect();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         println!("({:?}) TEST STDOUT - {:?}", SystemTime::now(), vars);
         eprintln!(
             "({:?}) TEST STDERR - {}",
             SystemTime::now(),
-            rng.gen::<u32>()
+            rng.random::<u32>()
         );
         fs::read_to_string(&path).unwrap_or_else(|e| format!("ERR: {:?}", e))
     }

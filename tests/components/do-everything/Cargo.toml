@@ -10,5 +10,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = { workspace = true }
-rand = "0.8.5"
-wit-bindgen = { workspace = true }
+rand = { workspace = true, features = ["thread_rng"] }
+wit-bindgen = { workspace = true, features = ["macros"] }
