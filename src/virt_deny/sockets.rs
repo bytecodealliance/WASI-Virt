@@ -419,10 +419,7 @@ pub fn get_wasi_sockets_fns() -> &'static Vec<(WITInterfaceNameParts, FuncParams
 /// * `module` - The module to deny
 /// * `insert_wasi_version` - version of WASI to use when inserting stubs
 ///
-pub(crate) fn deny_sockets_virt(
-    module: &mut Module,
-    insert_wasi_version: &Version,
-) -> Result<()> {
+pub(crate) fn deny_sockets_virt(module: &mut Module, insert_wasi_version: &Version) -> Result<()> {
     stub_virt(module, &["wasi:sockets/"], false)?;
     replace_or_insert_stub_for_exports(module, get_wasi_sockets_fns(), insert_wasi_version)
 }
