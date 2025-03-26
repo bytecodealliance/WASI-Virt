@@ -4,7 +4,9 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 use clap::{ArgAction, Parser};
-use wasi_virt::{StdioCfg, WasiVirt};
+use semver::Version;
+
+use wasi_virt::{StdioCfg, WasiVirt, DEFAULT_INSERT_WASI_VERSION};
 
 #[derive(Parser, Debug)]
 #[command(verbatim_doc_comment, author, version, about, long_about = None)]
@@ -99,6 +101,10 @@ struct Args {
     /// Configure stdout
     #[arg(long, value_enum, value_name("cfg"), num_args(0..=1), require_equals(true), default_missing_value("allow"), help_heading = "Stdio")]
     stdout: Option<StdioCfg>,
+
+    /// WASI version to use when creating performing stubbing (ex. when creating a new stub)
+    #[arg(long)]
+    wasi_version: Option<String>,
 }
 
 // parser for KEY=VAR env vars
@@ -218,7 +224,13 @@ fn main() -> Result<()> {
         virt_opts.filter_imports()?;
     }
 
-    let virt_component = virt_opts.finish()?;
+    let virt_component = virt_opts.finish_with_version(
+        &args
+            .wasi_version
+            .as_ref()
+            .and_then(|s| Version::parse(s).ok())
+            .unwrap_or(DEFAULT_INSERT_WASI_VERSION),
+    )?;
 
     let out_path = PathBuf::from(args.out);
     if virt_component.virtual_files.len() > 0 {

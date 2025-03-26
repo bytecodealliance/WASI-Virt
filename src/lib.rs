@@ -35,7 +35,7 @@ const VIRT_ADAPTER: &[u8] = include_bytes!("../lib/virtual_adapter.wasm");
 const VIRT_ADAPTER_DEBUG: &[u8] = include_bytes!("../lib/virtual_adapter.debug.wasm");
 const VIRT_WIT_METADATA: &[u8] = include_bytes!("../lib/package.wasm");
 
-const DEFAULT_INSERT_WASI_VERSION: Version = Version::new(0, 2, 1);
+pub const DEFAULT_INSERT_WASI_VERSION: Version = Version::new(0, 2, 1);
 
 /// Parts of a WIT interface name
 ///
@@ -228,7 +228,7 @@ impl WasiVirt {
     }
 
     pub fn finish(&mut self) -> Result<VirtResult> {
-        finish_with_version(self, &DEFAULT_INSERT_WASI_VERSION)
+        self.finish_with_version(&DEFAULT_INSERT_WASI_VERSION)
     }
 
     /// Finish the module using a certain intended WASI version

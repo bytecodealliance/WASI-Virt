@@ -16,17 +16,22 @@ pub(crate) use sockets::deny_sockets_virt;
 
 use crate::WITInterfaceNameParts;
 
-/// Version prefix that allows wasi version
-const WASI_VERSION_PREFIX: &str = "0.2";
-
 /// Helper function for replacing or inserting exports with stub functions
 fn replace_or_insert_stub_for_exports<'a>(
     module: &mut Module,
     exports: impl IntoIterator<Item = &'a (WITInterfaceNameParts, FuncParams, FuncResults)>,
     insert_wasi_version: &Version,
 ) -> Result<()> {
+    // Determine the version of WASI we can use to prefix match on any existing interfaces
+    let wasi_version_prefix = if insert_wasi_version.major > 0 {
+        format!("{}.", insert_wasi_version.major)
+    } else {
+        format!("0.{}.", insert_wasi_version.minor)
+    };
+
+    // For every export, check for name & package before attempting to look up
     for ((ns, pkg, iface, export), params, results) in exports {
-        let export_prefix = format!("{ns}:{pkg}/{iface}@{WASI_VERSION_PREFIX}");
+        let export_prefix = format!("{ns}:{pkg}/{iface}@{wasi_version_prefix}");
         let export_suffix = format!("#{export}");
 
         let matching_export_fids = {
