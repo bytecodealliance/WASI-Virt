@@ -5,43 +5,44 @@ use walrus::{FuncParams, FuncResults, Module, ValType};
 
 use crate::walrus_ops::stub_virt;
 
-use super::{replace_or_insert_stub_for_exports, StaticNsPkgIfaceTuple};
+use super::replace_or_insert_stub_for_exports;
+use crate::WITInterfaceNameParts;
 
 /// Functions that represent the environment functionality provided by WASI clocks
-static WASI_CLOCK_FNS: OnceLock<Vec<(StaticNsPkgIfaceTuple, FuncParams, FuncResults)>> =
+static WASI_CLOCK_FNS: OnceLock<Vec<(WITInterfaceNameParts, FuncParams, FuncResults)>> =
     OnceLock::new();
 
 /// Retrieve or initialize the static list of functions related to clocks in WASI
-fn get_wasi_clock_fns() -> &'static Vec<(StaticNsPkgIfaceTuple, FuncParams, FuncResults)> {
+fn get_wasi_clock_fns() -> &'static Vec<(WITInterfaceNameParts, FuncParams, FuncResults)> {
     WASI_CLOCK_FNS.get_or_init(|| {
         Vec::from([
             (
-                ("wasi:clocks", "monotonic-clock", "now"),
+                &("wasi", "clocks", "monotonic-clock", "now"),
                 vec![],
                 vec![ValType::I64],
             ),
             (
-                ("wasi:clocks", "monotonic-clock", "resolution"),
+                &("wasi", "clocks", "monotonic-clock", "resolution"),
                 vec![],
                 vec![ValType::I64],
             ),
             (
-                ("wasi:clocks", "monotonic-clock", "subscribe-instant"),
+                &("wasi", "clocks", "monotonic-clock", "subscribe-instant"),
                 vec![ValType::I64],
                 vec![ValType::I32],
             ),
             (
-                ("wasi:clocks", "monotonic-clock", "subscribe-duration"),
+                &("wasi", "clocks", "monotonic-clock", "subscribe-duration"),
                 vec![ValType::I64],
                 vec![ValType::I32],
             ),
             (
-                ("wasi:clocks", "wall-clock", "now"),
+                &("wasi", "clocks", "wall-clock", "now"),
                 vec![],
                 vec![ValType::I32],
             ),
             (
-                ("wasi:clocks", "wall-clock", "resolution"),
+                &("wasi", "clocks", "wall-clock", "resolution"),
                 vec![],
                 vec![ValType::I32],
             ),
