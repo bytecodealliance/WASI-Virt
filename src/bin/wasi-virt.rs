@@ -1,6 +1,9 @@
+use std::error::Error;
+use std::fs;
+use std::path::PathBuf;
+
 use anyhow::{bail, Result};
 use clap::{ArgAction, Parser};
-use std::{error::Error, fs, path::PathBuf};
 use wasi_virt::{StdioCfg, WasiVirt};
 
 #[derive(Parser, Debug)]

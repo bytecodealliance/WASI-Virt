@@ -30,20 +30,6 @@ default = ["wasm-opt"]
 # If you allow all WASI subsystems, this feature doesn't make much difference.
 wasm-opt = ["dep:wasm-opt"]
 
-[dev-dependencies]
-anyhow = { workspace = true }
-cap-std = { workspace = true }
-heck = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
-wasmparser = { workspace = true }
-wasmtime = { workspace = true, features = [
-  "component-model",
-  "cranelift",
-  "cache",
-] }
-wasmtime-wasi = { workspace = true }
-wasmtime-wasi-config = { workspace = true }
-
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["std", "derive"] }
@@ -55,6 +41,21 @@ wasm-opt = { workspace = true, optional = true }
 wit-component = { workspace = true }
 wit-parser = { workspace = true }
 toml = { workspace = true, features = ["parse"] }
+semver = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+cap-std = { workspace = true }
+heck = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+wasmparser = { workspace = true, features = ["std", "component-model"] }
+wasmtime = { workspace = true, features = [
+  "component-model",
+  "cranelift",
+  "cache",
+] }
+wasmtime-wasi = { workspace = true }
+wasmtime-wasi-config = { workspace = true }
 
 [workspace.dependencies]
 anyhow = { version = "1", default-features = false }
@@ -69,13 +70,14 @@ walrus = { version = "0.23.3", default-features = false }
 wasm-compose = { version = "0.219", default-features = false }
 wasm-metadata = { version = "0.217", default-features = false }
 wasm-opt = { version = "0.116.1", default-features = false }
-wasmparser = { version = "0.227.1", default-features = false }
-wasmtime = { version = "31.0", default-features = false }
-wasmtime-wasi = { version = "31.0", default-features = false }
-wasmtime-wasi-config = { version = "31.0", default-features = false }
+wasmparser = { version = "0.220.0", default-features = false }
+wasmtime = { version = "30.0", default-features = false }
+wasmtime-wasi = { version = "30.0", default-features = false }
+wasmtime-wasi-config = { version = "30.0", default-features = false }
 wit-bindgen = { version = "0.32", default-features = false }
 wit-component = { version = "0.217", default-features = false }
 wit-parser = { version = "0.217", default-features = false }
+semver = { version = "1.0.26", default-features = false }
 
 [profile.release]
 opt-level = "z"

@@ -1,6 +1,7 @@
 use std::sync::OnceLock;
 
 use anyhow::Result;
+use semver::Version;
 use walrus::{FuncParams, FuncResults, Module, ValType};
 
 use super::replace_or_insert_stub_for_exports;
@@ -17,6 +18,12 @@ fn get_wasi_exit_fns() -> &'static Vec<(WITInterfaceNameParts, FuncParams, FuncR
 }
 
 /// Replace exports related to exiting in WASI to deny access
-pub(crate) fn deny_exit_virt(module: &mut Module) -> Result<()> {
-    replace_or_insert_stub_for_exports(module, get_wasi_exit_fns())
+///
+/// # Arguments
+///
+/// * `module` - The module to deny
+/// * `insert_wasi_version` - version of WASI to use when inserting stubs
+///
+pub(crate) fn deny_exit_virt(module: &mut Module, insert_wasi_version: &Version) -> Result<()> {
+    replace_or_insert_stub_for_exports(module, get_wasi_exit_fns(), insert_wasi_version)
 }
