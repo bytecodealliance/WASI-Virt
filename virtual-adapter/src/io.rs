@@ -1,3 +1,5 @@
+#![allow(static_mut_refs)]
+
 use crate::exports::wasi::cli::stderr::Guest as Stderr;
 use crate::exports::wasi::cli::stdin::Guest as Stdin;
 use crate::exports::wasi::cli::stdout::Guest as Stdout;
@@ -239,11 +241,11 @@ impl StaticIndexEntry {
         unsafe { cur_index_start.sub_ptr(static_index_start) }
     }
     fn runtime_path(&self) -> &'static str {
-        let c_str = unsafe { CStr::from_ptr((*self).data.runtime_path) };
+        let c_str = unsafe { CStr::from_ptr(self.data.runtime_path) };
         c_str.to_str().unwrap()
     }
     fn name(&self) -> &'static str {
-        let c_str = unsafe { CStr::from_ptr((*self).name) };
+        let c_str = unsafe { CStr::from_ptr(self.name) };
         c_str.to_str().unwrap()
     }
     fn ty(&self) -> DescriptorType {
@@ -274,12 +276,12 @@ impl StaticIndexEntry {
         if !matches!(self.ty(), DescriptorType::Directory) {
             return Err(ErrorCode::NotDirectory);
         }
-        let (child_offset, child_list_len) = unsafe { (*self).data.dir };
+        let (child_offset, child_list_len) = unsafe { self.data.dir };
         let static_index = Io::static_index();
         Ok(&static_index[self.idx() + child_offset..self.idx() + child_offset + child_list_len])
     }
     fn dir_lookup(&self, path: &str) -> Result<&StaticIndexEntry, ErrorCode> {
-        assert!(path.len() > 0);
+        assert!(!path.is_empty());
         let (first_part, rem) = match path.find('/') {
             Some(idx) => (&path[0..idx], &path[idx + 1..]),
             None => {
@@ -293,7 +295,7 @@ impl StaticIndexEntry {
         let child_list = self.child_list()?;
         if let Ok(child_idx) = child_list.binary_search_by(|entry| entry.name().cmp(first_part)) {
             let child = &child_list[child_idx];
-            if rem.len() > 0 {
+            if !rem.is_empty() {
                 child.dir_lookup(rem)
             } else {
                 Ok(child)
@@ -417,8 +419,8 @@ pub enum FilesystemDirectoryEntryStream {
     Host(filesystem_types::DirectoryEntryStream),
 }
 
-pub struct CliTerminalInput(terminal_input::TerminalInput);
-pub struct CliTerminalOutput(terminal_output::TerminalOutput);
+pub struct CliTerminalInput(#[allow(unused)] terminal_input::TerminalInput);
+pub struct CliTerminalOutput(#[allow(unused)] terminal_output::TerminalOutput);
 
 pub struct HttpFields(http_types::Fields);
 pub struct HttpFutureIncomingResponse(http_types::FutureIncomingResponse);
@@ -482,27 +484,25 @@ impl IoState {
         unsafe { STATE.initialized = true };
     }
 
-    fn get_host_preopen<'a>(
-        path: &'a str,
-    ) -> Option<(&'static filesystem_types::Descriptor, &'a str)> {
-        let path = if path.starts_with("./") {
-            &path[2..]
+    fn get_host_preopen(path: &str) -> Option<(&'static filesystem_types::Descriptor, &str)> {
+        let path = if let Some(stripped) = path.strip_prefix("./") {
+            stripped
         } else {
             path
         };
         for (preopen_name, fd) in unsafe { &STATE.host_preopen_directories } {
-            let preopen_name = if preopen_name.starts_with("./") {
-                &preopen_name[2..]
-            } else if preopen_name.starts_with(".") {
-                &preopen_name[1..]
+            let preopen_name = if let Some(stripped) = preopen_name.strip_prefix("./") {
+                stripped
+            } else if let Some(stripped) = preopen_name.strip_prefix(".") {
+                stripped
             } else {
                 preopen_name
             };
             if path.starts_with(preopen_name) {
                 // ambient relative
-                if preopen_name.len() == 0 {
+                if preopen_name.is_empty() {
                     if path.as_bytes()[0] != b'/' {
-                        return Some((fd, &path));
+                        return Some((fd, path));
                     }
                 } else {
                     // root '/' match
@@ -898,7 +898,7 @@ impl GuestDescriptor for FilesystemDescriptor {
                     host_fd
                         .stat_at(
                             filesystem_types::PathFlags::from_bits(flags.bits()).unwrap(),
-                            &path,
+                            path,
                         )
                         .map(stat_map)
                         .map_err(err_map)
@@ -964,7 +964,7 @@ impl GuestDescriptor for FilesystemDescriptor {
                     let child_fd = host_fd
                         .open_at(
                             filesystem_types::PathFlags::from_bits(path_flags.bits()).unwrap(),
-                            &path,
+                            path,
                             filesystem_types::OpenFlags::from_bits(open_flags.bits()).unwrap(),
                             filesystem_types::DescriptorFlags::from_bits(descriptor_flags.bits())
                                 .unwrap(),
@@ -1002,7 +1002,7 @@ impl GuestDescriptor for FilesystemDescriptor {
                     else {
                         return Err(ErrorCode::NoEntry);
                     };
-                    host_fd.readlink_at(&path).map_err(err_map)
+                    host_fd.readlink_at(path).map_err(err_map)
                 } else {
                     Err(ErrorCode::Invalid)
                 }
@@ -1032,9 +1032,7 @@ impl GuestDescriptor for FilesystemDescriptor {
         // already-opened static index descriptors will never point to a RuntimeFile
         // or RuntimeDir - instead they point to an already-created HostDescriptor
         match (self, other) {
-            (Self::Static(entry1), Self::Static(entry2)) => {
-                entry1 as *const _ == entry2 as *const _
-            }
+            (Self::Static(entry1), Self::Static(entry2)) => std::ptr::eq(entry1, entry2),
             (Self::Host(host_fd1), Self::Host(host_fd2)) => host_fd1.is_same_object(host_fd2),
             _ => false,
         }
@@ -1072,7 +1070,7 @@ impl GuestDescriptor for FilesystemDescriptor {
                     host_fd
                         .metadata_hash_at(
                             filesystem_types::PathFlags::from_bits(path_flags.bits()).unwrap(),
-                            &path,
+                            path,
                         )
                         .map(metadata_hash_map)
                         .map_err(err_map)
@@ -1224,7 +1222,7 @@ impl GuestOutputStream for IoOutputStream {
             IoInputStream::StaticFile { .. } => todo!(),
             IoInputStream::Host(sid) => sid,
         };
-        to_sid.splice(&from_sid, len).map_err(stream_err_map)
+        to_sid.splice(from_sid, len).map_err(stream_err_map)
     }
     fn blocking_splice(&self, from: InputStreamBorrow, len: u64) -> Result<u64, StreamError> {
         debug!(
@@ -1250,7 +1248,7 @@ impl GuestOutputStream for IoOutputStream {
             IoInputStream::Host(sid) => sid,
         };
         to_sid
-            .blocking_splice(&from_sid, len)
+            .blocking_splice(from_sid, len)
             .map_err(stream_err_map)
     }
     fn subscribe(&self) -> Pollable {
@@ -1299,7 +1297,7 @@ impl GuestHttpTypes for VirtAdapter {
         debug!("CALL wasi:http/types#http-error-code");
         match err.get() {
             IoError::FsCode(_) => None,
-            IoError::Host(h) => http_types::http_error_code(h).map(|e| http_err_map_rev(e)),
+            IoError::Host(h) => http_types::http_error_code(h).map(http_err_map_rev),
         }
     }
 }
@@ -1554,7 +1552,7 @@ impl GuestFutureIncomingResponse for HttpFutureIncomingResponse {
         self.0.get().map(|r| {
             r.map(|r| {
                 r.map(|response| IncomingResponse::new(HttpIncomingResponse(response)))
-                    .map_err(|e| http_err_map_rev(e))
+                    .map_err(http_err_map_rev)
             })
         })
     }
@@ -2148,5 +2146,5 @@ fn http_err_map_rev(err: http_types::ErrorCode) -> HttpErrorCode {
 #[no_mangle]
 #[inline(never)]
 pub fn passive_alloc(passive_idx: u32, offset: u32, len: u32) -> *mut u8 {
-    return (passive_idx + offset + len) as *mut u8;
+    (passive_idx + offset + len) as *mut u8
 }
