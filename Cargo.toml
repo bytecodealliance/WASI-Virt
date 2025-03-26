@@ -36,7 +36,7 @@ cap-std = { workspace = true }
 heck = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 wasmparser = { workspace = true }
-wasmtime = { workspace = true, features = ["component-model"] }
+wasmtime = { workspace = true, features = ["component-model", "cranelift", "cache"] }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-config = { workspace = true }
 
@@ -50,6 +50,7 @@ wasm-metadata = { workspace = true }
 wasm-opt = { workspace = true, optional = true }
 wit-component = { workspace = true }
 wit-parser = { workspace = true }
+toml = { workspace = true, features = ["parse"] }
 
 [workspace.dependencies]
 anyhow = { version = "1", default-features = false }
