@@ -36,7 +36,11 @@ cap-std = { workspace = true }
 heck = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 wasmparser = { workspace = true }
-wasmtime = { workspace = true, features = ["component-model", "cranelift", "cache"] }
+wasmtime = { workspace = true, features = [
+  "component-model",
+  "cranelift",
+  "cache",
+] }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-config = { workspace = true }
 
@@ -62,16 +66,16 @@ serde = { version = "1", default-features = false }
 tokio = { version = "1.42", default-features = false }
 toml = { version = "0.8", default-features = false }
 walrus = { version = "0.23.3", default-features = false }
-wasm-compose = { version = "0.227.1", default-features = false }
-wasm-metadata = { version = "0.227.1", default-features = false }
+wasm-compose = { version = "0.219", default-features = false }
+wasm-metadata = { version = "0.217", default-features = false }
 wasm-opt = { version = "0.116.1", default-features = false }
 wasmparser = { version = "0.227.1", default-features = false }
 wasmtime = { version = "31.0", default-features = false }
 wasmtime-wasi = { version = "31.0", default-features = false }
 wasmtime-wasi-config = { version = "31.0", default-features = false }
-wit-bindgen = { version = "0.41", default-features = false }
-wit-component = { version = "0.227.1", default-features = false }
-wit-parser = { version = "0.227.1", default-features = false }
+wit-bindgen = { version = "0.32", default-features = false }
+wit-component = { version = "0.217", default-features = false }
+wit-parser = { version = "0.217", default-features = false }
 
 [profile.release]
 opt-level = "z"
