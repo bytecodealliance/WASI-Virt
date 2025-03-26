@@ -50,7 +50,6 @@ wasm-metadata = { workspace = true }
 wasm-opt = { workspace = true, optional = true }
 wit-component = { workspace = true }
 wit-parser = { workspace = true }
-wit-bindgen = { workspace = true, features = ["macros"] }
 
 [workspace.dependencies]
 anyhow = { version = "1", default-features = false }

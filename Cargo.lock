@@ -1786,7 +1786,6 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-config",
- "wit-bindgen",
  "wit-component",
  "wit-parser 0.217.1",
 ]
