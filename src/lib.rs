@@ -30,6 +30,8 @@ const VIRT_ADAPTER: &[u8] = include_bytes!("../lib/virtual_adapter.wasm");
 const VIRT_ADAPTER_DEBUG: &[u8] = include_bytes!("../lib/virtual_adapter.debug.wasm");
 const VIRT_WIT_METADATA: &[u8] = include_bytes!("../lib/package.wasm");
 
+pub(crate) type StaticNsPkgIfaceTuple = &'static (&'static str, &'static str, &'static str);
+
 /// Virtualization options
 ///
 /// When subsystems are not virtualized, their imports and exports

@@ -18,6 +18,8 @@ fn replace_or_insert_stub_for_exports<'a>(
     exports: impl IntoIterator<Item = &'a (&'a str, FuncParams, FuncResults)>,
 ) -> Result<()> {
     for (export_name, params, results) in exports {
+        // TODO: look through all functions that are exported, and replace as we, finding varying versions
+
         // If the export exists, replace it directly
         if let Ok(fid) = module.exports.get_func(&export_name) {
             module.replace_exported_func(fid, |(body, _)| {
