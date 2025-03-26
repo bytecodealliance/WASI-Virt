@@ -3,6 +3,8 @@ name = "file-read"
 version = "0.1.0"
 publish = false
 
+edition.workspace = true
+
 [lib]
 crate-type = ["cdylib"]
 

@@ -180,7 +180,7 @@ fn main() {
       .allow(&["PUBLIC_ENV_VAR"])
       // provide custom env overrides
       .overrides(&[("SOME", "ENV"), ("VAR", "OVERRIDES")]);
-        
+
     virt.fs()
         // deny arbitrary host preopens
         .deny_host_preopens()
@@ -224,7 +224,8 @@ There is an important caveat to this: _as soon as any subsystem uses IO, all sub
 
 ## Contributing
 
-Note: You may need to install the `wasm32-wasi` target if not already added (`rustup target add wasm32-wasi`).
+> [!NOTE]
+> You may need to install the `wasm32-wasip1` target if not already added (`rustup target add wasm32-wasip1`).
 
 To build, run `./build-adapter.sh` which builds the master `virtual-adapter` component, followed by `cargo build` to build
 the virtualization tooling (located in `src`).
