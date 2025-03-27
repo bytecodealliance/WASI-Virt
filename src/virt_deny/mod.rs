@@ -60,7 +60,6 @@ fn replace_or_insert_stub_for_exports<'a>(
                 &export_name,
                 ExportItem::Function(module.funcs.add_local(builder.local_func(vec![]))),
             );
-            eprintln!("EXPORT {}", export_name);
         }
 
         for fid in matching_export_fids.iter() {
