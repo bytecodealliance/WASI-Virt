@@ -70,7 +70,7 @@ walrus = { version = "0.23.3", default-features = false }
 wasm-compose = { version = "0.219", default-features = false }
 wasm-metadata = { version = "0.217", default-features = false }
 wasm-opt = { version = "0.116.1", default-features = false }
-wasmparser = { version = "0.220.0", default-features = false }
+wasmparser = { version = "0.227.1", default-features = false }
 wasmtime = { version = "30.0", default-features = false }
 wasmtime-wasi = { version = "30.0", default-features = false }
 wasmtime-wasi-config = { version = "30.0", default-features = false }
