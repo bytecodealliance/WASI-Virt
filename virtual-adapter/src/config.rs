@@ -53,7 +53,7 @@ impl Store for VirtAdapter {
         for _ in 0..unsafe { config.host_field_cnt } {
             let config_key = read_data_str(&mut data_offset);
             let config_val = read_data_str(&mut data_offset);
-            if key == config_key.to_string() {
+            if key == *config_key {
                 return Ok(Some(config_val.to_string()));
             }
         }

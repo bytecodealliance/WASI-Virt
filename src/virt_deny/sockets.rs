@@ -1,56 +1,64 @@
 use std::sync::OnceLock;
 
 use anyhow::Result;
+use semver::Version;
 use walrus::{FuncParams, FuncResults, Module, ValType};
 
 use crate::walrus_ops::stub_virt;
 
 use super::replace_or_insert_stub_for_exports;
+use crate::WITInterfaceNameParts;
 
 /// Functions that represent the environment functionality provided by WASI sockets
-static WASI_SOCKETS_FNS: OnceLock<Vec<(&str, FuncParams, FuncResults)>> = OnceLock::new();
+static WASI_SOCKETS_FNS: OnceLock<Vec<(WITInterfaceNameParts, FuncParams, FuncResults)>> =
+    OnceLock::new();
 
 /// Retrieve or initialize the static list of functions related to sockets in WASI
-pub fn get_wasi_sockets_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> {
+pub fn get_wasi_sockets_fns() -> &'static Vec<(WITInterfaceNameParts, FuncParams, FuncResults)> {
     WASI_SOCKETS_FNS.get_or_init(|| {
         Vec::from([
             (
-                "wasi:sockets/network@0.2.1#drop-network",
+                &("wasi", "sockets", "network", "drop-network"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/instance-network@0.2.1#instance-network",
+                &("wasi", "sockets", "instance-network", "instance-network"),
                 vec![],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/ip-name-lookup@0.2.1#resolve-addresses",
+                &("wasi", "sockets", "ip-name-lookup", "resolve-addresses"),
                 vec![ValType::I32, ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/ip-name-lookup@0.2.1#resolve-next-address",
+                &("wasi", "sockets", "ip-name-lookup", "resolve-next-address"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/ip-name-lookup@0.2.1#drop-resolve-address-stream",
+                &(
+                    "wasi",
+                    "sockets",
+                    "ip-name-lookup",
+                    "drop-resolve-address-stream",
+                ),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/ip-name-lookup@0.2.1#subscribe",
+                &("wasi", "sockets", "ip-name-lookup", "subscribe"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp-create-socket@0.2.1#create-tcp-socket",
+                &("wasi", "sockets", "tcp-create-socket", "create-tcp-socket"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#start-bind",
+                &("wasi", "sockets", "tcp", "start-bind"),
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -70,12 +78,12 @@ pub fn get_wasi_sockets_fns() -> &'static Vec<(&'static str, FuncParams, FuncRes
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#finish-bind",
+                &("wasi", "sockets", "tcp", "finish-bind"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#start-connect",
+                &("wasi", "sockets", "tcp", "start-connect"),
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -95,142 +103,142 @@ pub fn get_wasi_sockets_fns() -> &'static Vec<(&'static str, FuncParams, FuncRes
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#finish-connect",
+                &("wasi", "sockets", "tcp", "finish-connect"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#start-listen",
+                &("wasi", "sockets", "tcp", "start-listen"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#finish-listen",
+                &("wasi", "sockets", "tcp", "finish-listen"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#accept",
+                &("wasi", "sockets", "tcp", "accept"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#local-address",
+                &("wasi", "sockets", "tcp", "local-address"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#remote-address",
+                &("wasi", "sockets", "tcp", "remote-address"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#[method]tcp-socket.is-listening",
+                &("wasi", "sockets", "tcp", "[method]tcp-socket.is-listening"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#address-family",
+                &("wasi", "sockets", "tcp", "address-family"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#set-listen-backlog-size",
+                &("wasi", "sockets", "tcp", "set-listen-backlog-size"),
                 vec![ValType::I32, ValType::I64],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#keep-alive-enabled",
+                &("wasi", "sockets", "tcp", "keep-alive-enabled"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#set-keep-alive-enabled",
+                &("wasi", "sockets", "tcp", "set-keep-alive-enabled"),
                 vec![ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#keep-alive-idle-time",
+                &("wasi", "sockets", "tcp", "keep-alive-idle-time"),
                 vec![ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#set-keep-alive-idle-time",
+                &("wasi", "sockets", "tcp", "set-keep-alive-idle-time"),
                 vec![ValType::I32, ValType::I64, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#keep-alive-interval",
+                &("wasi", "sockets", "tcp", "keep-alive-interval"),
                 vec![ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#set-keep-alive-interval",
+                &("wasi", "sockets", "tcp", "set-keep-alive-interval"),
                 vec![ValType::I32, ValType::I64, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#keep-alive-count",
+                &("wasi", "sockets", "tcp", "keep-alive-count"),
                 vec![ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#set-keep-alive-count",
+                &("wasi", "sockets", "tcp", "set-keep-alive-count"),
                 vec![ValType::I32, ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#hop-limit",
+                &("wasi", "sockets", "tcp", "hop-limit"),
                 vec![ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#set-hop-limit",
+                &("wasi", "sockets", "tcp", "set-hop-limit"),
                 vec![ValType::I32, ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#receive-buffer-size",
+                &("wasi", "sockets", "tcp", "receive-buffer-size"),
                 vec![ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#set-receive-buffer-size",
+                &("wasi", "sockets", "tcp", "set-receive-buffer-size"),
                 vec![ValType::I32, ValType::I64, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#send-buffer-size",
+                &("wasi", "sockets", "tcp", "send-buffer-size"),
                 vec![ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#set-send-buffer-size",
+                &("wasi", "sockets", "tcp", "set-send-buffer-size"),
                 vec![ValType::I32, ValType::I64, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#subscribe",
+                &("wasi", "sockets", "tcp", "subscribe"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#shutdown",
+                &("wasi", "sockets", "tcp", "shutdown"),
                 vec![ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/tcp@0.2.1#drop-tcp-socket",
+                &("wasi", "sockets", "tcp", "drop-tcp-socket"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/udp-create-socket@0.2.1#create-udp-socket",
+                &("wasi", "sockets", "udp-create-socket", "create-udp-socket"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#start-bind",
+                &("wasi", "sockets", "udp", "start-bind"),
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -250,67 +258,67 @@ pub fn get_wasi_sockets_fns() -> &'static Vec<(&'static str, FuncParams, FuncRes
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#finish-bind",
+                &("wasi", "sockets", "udp", "finish-bind"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#local-address",
+                &("wasi", "sockets", "udp", "local-address"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#remote-address",
+                &("wasi", "sockets", "udp", "remote-address"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#address-family",
+                &("wasi", "sockets", "udp", "address-family"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#unicast-hop-limit",
+                &("wasi", "sockets", "udp", "unicast-hop-limit"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#set-unicast-hop-limit",
+                &("wasi", "sockets", "udp", "set-unicast-hop-limit"),
                 vec![ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#receive-buffer-size",
+                &("wasi", "sockets", "udp", "receive-buffer-size"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#set-receive-buffer-size",
+                &("wasi", "sockets", "udp", "set-receive-buffer-size"),
                 vec![ValType::I32, ValType::I64],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#send-buffer-size",
+                &("wasi", "sockets", "udp", "send-buffer-size"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#set-send-buffer-size",
+                &("wasi", "sockets", "udp", "set-send-buffer-size"),
                 vec![ValType::I32, ValType::I64],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#subscribe",
+                &("wasi", "sockets", "udp", "subscribe"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#drop-udp-socket",
+                &("wasi", "sockets", "udp", "drop-udp-socket"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/udp@0.2.1#[method]udp-socket.stream",
+                &("wasi", "sockets", "udp", "[method]udp-socket.stream"),
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -331,37 +339,72 @@ pub fn get_wasi_sockets_fns() -> &'static Vec<(&'static str, FuncParams, FuncRes
                 vec![],
             ),
             (
-                "wasi:sockets/udp@0.2.1#[method]incoming-datagram-stream.receive",
+                &(
+                    "wasi",
+                    "sockets",
+                    "udp",
+                    "[method]incoming-datagram-stream.receive",
+                ),
                 vec![ValType::I32, ValType::I64, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/udp@0.2.1#[method]incoming-datagram-stream.subscribe",
+                &(
+                    "wasi",
+                    "sockets",
+                    "udp",
+                    "[method]incoming-datagram-stream.subscribe",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#[resource-drop]incoming-datagram-stream",
+                &(
+                    "wasi",
+                    "sockets",
+                    "udp",
+                    "[resource-drop]incoming-datagram-stream",
+                ),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/udp@0.2.1#[method]outgoing-datagram-stream.check-send",
+                &(
+                    "wasi",
+                    "sockets",
+                    "udp",
+                    "[method]outgoing-datagram-stream.check-send",
+                ),
                 vec![ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/udp@0.2.1#[method]outgoing-datagram-stream.send",
+                &(
+                    "wasi",
+                    "sockets",
+                    "udp",
+                    "[method]outgoing-datagram-stream.send",
+                ),
                 vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:sockets/udp@0.2.1#[method]outgoing-datagram-stream.subscribe",
+                &(
+                    "wasi",
+                    "sockets",
+                    "udp",
+                    "[method]outgoing-datagram-stream.subscribe",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:sockets/udp@0.2.1#[resource-drop]outgoing-datagram-stream",
+                &(
+                    "wasi",
+                    "sockets",
+                    "udp",
+                    "[resource-drop]outgoing-datagram-stream",
+                ),
                 vec![ValType::I32],
                 vec![],
             ),
@@ -370,7 +413,13 @@ pub fn get_wasi_sockets_fns() -> &'static Vec<(&'static str, FuncParams, FuncRes
 }
 
 /// Replace exports related to sockets in WASI to deny access
-pub(crate) fn deny_sockets_virt(module: &mut Module) -> Result<()> {
+///
+/// # Arguments
+///
+/// * `module` - The module to deny
+/// * `insert_wasi_version` - version of WASI to use when inserting stubs
+///
+pub(crate) fn deny_sockets_virt(module: &mut Module, insert_wasi_version: &Version) -> Result<()> {
     stub_virt(module, &["wasi:sockets/"], false)?;
-    replace_or_insert_stub_for_exports(module, get_wasi_sockets_fns())
+    replace_or_insert_stub_for_exports(module, get_wasi_sockets_fns(), insert_wasi_version)
 }

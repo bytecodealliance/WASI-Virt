@@ -1,6 +1,11 @@
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+use std::time::SystemTime;
+
 use anyhow::{bail, Context, Result};
+use semver::Version;
 use serde::Deserialize;
-use std::{env, fs, path::PathBuf, time::SystemTime};
 use virt_config::{create_config_virt, strip_config_virt};
 use virt_deny::{
     deny_clocks_virt, deny_exit_virt, deny_http_virt, deny_random_virt, deny_sockets_virt,
@@ -29,6 +34,14 @@ pub use virt_io::{FsEntry, StdioCfg, VirtFs, VirtualFiles};
 const VIRT_ADAPTER: &[u8] = include_bytes!("../lib/virtual_adapter.wasm");
 const VIRT_ADAPTER_DEBUG: &[u8] = include_bytes!("../lib/virtual_adapter.debug.wasm");
 const VIRT_WIT_METADATA: &[u8] = include_bytes!("../lib/package.wasm");
+
+pub const DEFAULT_INSERT_WASI_VERSION: Version = Version::new(0, 2, 1);
+
+/// Parts of a WIT interface name
+///
+/// (namespace, package, iface, export)
+pub(crate) type WITInterfaceNameParts =
+    &'static (&'static str, &'static str, &'static str, &'static str);
 
 /// Virtualization options
 ///
@@ -69,12 +82,17 @@ pub struct WasiVirt {
     pub compose: Option<String>,
 }
 
+/// Result of a successful virtualization
 pub struct VirtResult {
+    /// Adapter that was used during virtualization
     pub adapter: Vec<u8>,
+
+    /// Files that were used during virtualization
     pub virtual_files: VirtualFiles,
 }
 
 impl WasiVirt {
+    /// Create a new [`WasiVirt`]
     pub fn new() -> Self {
         Self::default()
     }
@@ -210,8 +228,14 @@ impl WasiVirt {
     }
 
     pub fn finish(&mut self) -> Result<VirtResult> {
+        self.finish_with_version(&DEFAULT_INSERT_WASI_VERSION)
+    }
+
+    /// Finish the module using a certain intended WASI version
+    pub fn finish_with_version(&mut self, insert_wasi_version: &Version) -> Result<VirtResult> {
         let mut config = walrus::ModuleConfig::new();
         config.generate_name_section(self.debug);
+
         let mut module = if self.debug {
             config.parse(VIRT_ADAPTER_DEBUG)
         } else {
@@ -342,7 +366,8 @@ impl WasiVirt {
                 resolve
                     .merge_worlds(exit_world, base_world)
                     .context("failed to merge with exit world")?;
-                deny_exit_virt(&mut module).context("failed to deny exit exports")?;
+                deny_exit_virt(&mut module, &insert_wasi_version)
+                    .context("failed to deny exit exports")?;
             }
         }
         if let Some(random) = self.random {
@@ -350,7 +375,8 @@ impl WasiVirt {
                 resolve
                     .merge_worlds(random_world, base_world)
                     .context("failed to merge with random world")?;
-                deny_random_virt(&mut module).context("failed to deny random exports")?;
+                deny_random_virt(&mut module, &insert_wasi_version)
+                    .context("failed to deny random exports")?;
             }
         }
 
@@ -371,7 +397,8 @@ impl WasiVirt {
                 resolve
                     .merge_worlds(clocks_world, base_world)
                     .context("failed to merge with clock world")?;
-                deny_clocks_virt(&mut module).context("failed to deny clock exports")?;
+                deny_clocks_virt(&mut module, &insert_wasi_version)
+                    .context("failed to deny clock exports")?;
             } else {
                 // passthrough can be simplified to just rewrapping io interfaces
                 resolve
@@ -387,7 +414,8 @@ impl WasiVirt {
                 resolve
                     .merge_worlds(sockets_world, base_world)
                     .context("failed to merge with sockets world")?;
-                deny_sockets_virt(&mut module).context("failed to deny socket exports")?;
+                deny_sockets_virt(&mut module, &insert_wasi_version)
+                    .context("failed to deny socket exports")?;
             } else {
                 resolve
                     .merge_worlds(io_sockets_world, base_world)
@@ -402,7 +430,8 @@ impl WasiVirt {
                 resolve
                     .merge_worlds(http_world, base_world)
                     .context("failed to merge with HTTP world")?;
-                deny_http_virt(&mut module).context("failed to deny with HTTP exports")?;
+                deny_http_virt(&mut module, &insert_wasi_version)
+                    .context("failed to deny with HTTP exports")?;
             } else {
                 resolve
                     .merge_worlds(io_http_world, base_world)

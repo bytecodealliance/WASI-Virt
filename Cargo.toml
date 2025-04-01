@@ -1,7 +1,8 @@
 [package]
 name = "wasi-virt"
 version = "0.1.0"
-edition = "2021"
+
+edition.workspace = true
 
 [lib]
 crate-type = ["lib"]
@@ -20,43 +21,66 @@ members = [
   "tests/components/stdio",
 ]
 
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-panic = "abort"
-
-[dependencies]
-anyhow = "1"
-clap = { version = "4", features = ["derive"] }
-serde = { version = "1", features = ["derive"] }
-toml = "0.8"
-walrus = "0.23.3"
-wasm-compose = "0.219"
-wasm-metadata = "0.217"
-wasm-opt = { version = "0.116.1", optional = true }
-wit-component = "0.217"
-wit-parser = "0.217"
-
-[build-dependencies]
-anyhow = "1"
-
-[dev-dependencies]
-anyhow = "1"
-cap-std = "3.3.0"
-heck = { version = "0.5" }
-tokio = { version = "1.42", features = ["macros"] }
-wasmtime = { version = "30", features = ["component-model"] }
-wasmtime-wasi = { version = "30" }
-wasmtime-wasi-config = { version = "30" }
-wasmparser = "0.220.0"
-
-[workspace.dependencies]
-anyhow = "1"
-wit-bindgen = "0.32"
+[workspace.package]
+edition = "2021"
 
 [features]
 default = ["wasm-opt"]
 # Optimize the generated virtual adapter with wasm-opt to reduce its size.
 # If you allow all WASI subsystems, this feature doesn't make much difference.
 wasm-opt = ["dep:wasm-opt"]
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["std", "derive"] }
+serde = { workspace = true, features = ["derive"] }
+walrus = { workspace = true }
+wasm-compose = { workspace = true }
+wasm-metadata = { workspace = true }
+wasm-opt = { workspace = true, optional = true }
+wit-component = { workspace = true }
+wit-parser = { workspace = true }
+toml = { workspace = true, features = ["parse"] }
+semver = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+cap-std = { workspace = true }
+heck = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+wasmparser = { workspace = true, features = ["std", "component-model"] }
+wasmtime = { workspace = true, features = [
+  "component-model",
+  "cranelift",
+  "cache",
+] }
+wasmtime-wasi = { workspace = true }
+wasmtime-wasi-config = { workspace = true }
+
+[workspace.dependencies]
+anyhow = { version = "1", default-features = false }
+cap-std = { version = "3.4.2", default-features = false }
+clap = { version = "4", default-features = false }
+heck = { version = "0.5", default-features = false }
+rand = { version = "0.9.0", default-features = false }
+serde = { version = "1", default-features = false }
+tokio = { version = "1.42", default-features = false }
+toml = { version = "0.8", default-features = false }
+walrus = { version = "0.23.3", default-features = false }
+wasm-compose = { version = "0.219", default-features = false }
+wasm-metadata = { version = "0.217", default-features = false }
+wasm-opt = { version = "0.116.1", default-features = false }
+wasmparser = { version = "0.220.0", default-features = false }
+wasmtime = { version = "30.0", default-features = false }
+wasmtime-wasi = { version = "30.0", default-features = false }
+wasmtime-wasi-config = { version = "30.0", default-features = false }
+wit-bindgen = { version = "0.32", default-features = false }
+wit-component = { version = "0.217", default-features = false }
+wit-parser = { version = "0.217", default-features = false }
+semver = { version = "1.0.26", default-features = false }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

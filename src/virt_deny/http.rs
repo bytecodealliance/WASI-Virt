@@ -1,26 +1,29 @@
 use std::sync::OnceLock;
 
 use anyhow::Result;
+use semver::Version;
 use walrus::{FuncParams, FuncResults, Module, ValType};
 
 use crate::walrus_ops::stub_virt;
 
 use super::replace_or_insert_stub_for_exports;
+use crate::WITInterfaceNameParts;
 
 /// Functions that represent the HTTP functionality provided by WASI https
-pub(crate) static WASI_HTTP_FNS: OnceLock<Vec<(&str, FuncParams, FuncResults)>> = OnceLock::new();
+pub(crate) static WASI_HTTP_FNS: OnceLock<Vec<(WITInterfaceNameParts, FuncParams, FuncResults)>> =
+    OnceLock::new();
 
 /// Retrieve or initialize the static list of functions related to HTTP in WASI
-fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> {
+fn get_wasi_http_fns() -> &'static Vec<(WITInterfaceNameParts, FuncParams, FuncResults)> {
     WASI_HTTP_FNS.get_or_init(|| {
         Vec::from([
             (
-                "wasi:http/incoming-handler@0.2.1#handle",
+                &("wasi", "http", "incoming-handler", "handle"),
                 vec![ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/outgoing-handler@0.2.1#handle",
+                &("wasi", "http", "outgoing-handler", "handle"),
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -34,32 +37,32 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[dtor]fields",
+                &("wasi", "http", "types", "[dtor]fields"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[constructor]fields",
+                &("wasi", "http", "types", "[constructor]fields"),
                 vec![ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[constructor]fields.from-list",
+                &("wasi", "http", "types", "[constructor]fields.from-list"),
                 vec![ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]fields.get",
+                &("wasi", "http", "types", "[method]fields.get"),
                 vec![ValType::I32, ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]fields.has",
+                &("wasi", "http", "types", "[method]fields.has"),
                 vec![ValType::I32, ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]fields.set",
+                &("wasi", "http", "types", "[method]fields.set"),
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -70,12 +73,12 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[method]fields.delete",
+                &("wasi", "http", "types", "[method]fields.delete"),
                 vec![ValType::I32, ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[method]fields.append",
+                &("wasi", "http", "types", "[method]fields.append"),
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -86,57 +89,67 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[method]fields.entries",
+                &("wasi", "http", "types", "[method]fields.entries"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]fields.clone",
+                &("wasi", "http", "types", "[method]fields.clone"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[dtor]incoming-request",
+                &("wasi", "http", "types", "[dtor]incoming-request"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[method]incoming-request.method",
+                &("wasi", "http", "types", "[method]incoming-request.method"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]incoming-request.path-with-query",
+                &(
+                    "wasi",
+                    "http",
+                    "types",
+                    "[method]incoming-request.path-with-query",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]incoming-request.scheme",
+                &("wasi", "http", "types", "[method]incoming-request.scheme"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]incoming-request.authority",
+                &(
+                    "wasi",
+                    "http",
+                    "types",
+                    "[method]incoming-request.authority",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]incoming-request.headers",
+                &("wasi", "http", "types", "[method]incoming-request.headers"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]incoming-request.consume",
+                &("wasi", "http", "types", "[method]incoming-request.consume"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[dtor]outgoing-request",
+                &("wasi", "http", "types", "[dtor]outgoing-request"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[constructor]outgoing-request",
+                &("wasi", "http", "types", "[constructor]outgoing-request"),
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -156,92 +169,122 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-request.body",
+                &("wasi", "http", "types", "[method]outgoing-request.body"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-request.method",
+                &("wasi", "http", "types", "[method]outgoing-request.method"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-request.set-method",
+                &(
+                    "wasi",
+                    "http",
+                    "types",
+                    "[method]outgoing-request.set-method",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-request.path-with-query",
+                &(
+                    "wasi",
+                    "http",
+                    "types",
+                    "[method]outgoing-request.path-with-query",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-request.set-path-with-query",
+                &(
+                    "wasi",
+                    "http",
+                    "types",
+                    "[method]outgoing-request.set-path-with-query",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-request.scheme",
+                &("wasi", "http", "types", "[method]outgoing-request.scheme"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-request.set-scheme",
+                &(
+                    "wasi",
+                    "http",
+                    "types",
+                    "[method]outgoing-request.set-scheme",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-request.authority",
+                &(
+                    "wasi",
+                    "http",
+                    "types",
+                    "[method]outgoing-request.authority",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-request.set-authority",
+                &(
+                    "wasi",
+                    "http",
+                    "types",
+                    "[method]outgoing-request.set-authority",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-request.headers",
+                &("wasi", "http", "types", "[method]outgoing-request.headers"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[dtor]incoming-body",
+                &("wasi", "http", "types", "[dtor]incoming-body"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[method]incoming-body.stream",
+                &("wasi", "http", "types", "[method]incoming-body.stream"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[static]incoming-body.finish",
+                &("wasi", "http", "types", "[static]incoming-body.finish"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[dtor]outgoing-body",
+                &("wasi", "http", "types", "[dtor]outgoing-body"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-body.write",
+                &("wasi", "http", "types", "[method]outgoing-body.write"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[static]outgoing-body.finish",
+                &("wasi", "http", "types", "[static]outgoing-body.finish"),
                 vec![ValType::I32, ValType::I32, ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[dtor]response-outparam",
+                &("wasi", "http", "types", "[dtor]response-outparam"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[static]response-outparam.set",
+                &("wasi", "http", "types", "[static]response-outparam.set"),
                 vec![
                     ValType::I32,
                     ValType::I32,
@@ -252,87 +295,107 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[dtor]incoming-response",
+                &("wasi", "http", "types", "[dtor]incoming-response"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[method]incoming-response.status",
+                &("wasi", "http", "types", "[method]incoming-response.status"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]incoming-response.headers",
+                &("wasi", "http", "types", "[method]incoming-response.headers"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]incoming-response.consume",
+                &("wasi", "http", "types", "[method]incoming-response.consume"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[dtor]outgoing-response",
+                &("wasi", "http", "types", "[dtor]outgoing-response"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[constructor]outgoing-response",
+                &("wasi", "http", "types", "[constructor]outgoing-response"),
                 vec![ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-response.body",
+                &("wasi", "http", "types", "[method]outgoing-response.body"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-response.status-code",
+                &(
+                    "wasi",
+                    "http",
+                    "types",
+                    "[method]outgoing-response.status-code",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-response.set-status-code",
+                &(
+                    "wasi",
+                    "http",
+                    "types",
+                    "[method]outgoing-response.set-status-code",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]outgoing-response.headers",
+                &("wasi", "http", "types", "[method]outgoing-response.headers"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[dtor]future-incoming-response",
+                &("wasi", "http", "types", "[dtor]future-incoming-response"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[method]future-incoming-response.get",
+                &(
+                    "wasi",
+                    "http",
+                    "types",
+                    "[method]future-incoming-response.get",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]future-incoming-response.subscribe",
+                &(
+                    "wasi",
+                    "http",
+                    "types",
+                    "[method]future-incoming-response.subscribe",
+                ),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[dtor]future-trailers",
+                &("wasi", "http", "types", "[dtor]future-trailers"),
                 vec![ValType::I32],
                 vec![],
             ),
             (
-                "wasi:http/types@0.2.1#[method]future-trailers.subscribe",
+                &("wasi", "http", "types", "[method]future-trailers.subscribe"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/types@0.2.1#[method]future-trailers.get",
+                &("wasi", "http", "types", "[method]future-trailers.get"),
                 vec![ValType::I32],
                 vec![ValType::I32],
             ),
             (
-                "wasi:http/outgoing-handler@0.2.1#handle",
+                &("wasi", "http", "outgoing-handler", "handle"),
                 vec![ValType::I32; 8],
                 vec![ValType::I32],
             ),
@@ -341,7 +404,13 @@ fn get_wasi_http_fns() -> &'static Vec<(&'static str, FuncParams, FuncResults)> 
 }
 
 /// Replace exports related to HTTP in WASI to deny access
-pub(crate) fn deny_http_virt(module: &mut Module) -> Result<()> {
+///
+/// # Arguments
+///
+/// * `module` - The module to deny
+/// * `insert_wasi_version` - version of WASI to use when inserting stubs
+///
+pub(crate) fn deny_http_virt(module: &mut Module, insert_wasi_version: &Version) -> Result<()> {
     stub_virt(module, &["wasi:http/"], false)?;
-    replace_or_insert_stub_for_exports(module, get_wasi_http_fns())
+    replace_or_insert_stub_for_exports(module, get_wasi_http_fns(), insert_wasi_version)
 }
