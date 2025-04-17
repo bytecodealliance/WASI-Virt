@@ -32,7 +32,7 @@ wasm-opt = ["dep:wasm-opt"]
 
 [dependencies]
 anyhow = { workspace = true }
-clap = { workspace = true, features = ["std", "derive", "color", "error-context", "help", "suggestions", "usage"] }
+clap = { workspace = true, features = ["std", "derive", "color", "error-context", "help", "suggestions", "usage", "wrap_help"] }
 serde = { workspace = true, features = ["derive"] }
 walrus = { workspace = true }
 wasm-compose = { workspace = true }
