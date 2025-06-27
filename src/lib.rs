@@ -477,11 +477,12 @@ impl WasiVirt {
         }
 
         // now adapt the virtualized component
-        let encoder = ComponentEncoder::default()
+        let encoded_bytes = ComponentEncoder::default()
             .validate(true)
             .module(&bytes)
-            .context("failed to set core component module")?;
-        let encoded_bytes = encoder.encode().context("failed to encode component")?;
+            .context("failed to set core component module")?
+            .encode()
+            .context("failed to encode component")?;
 
         let adapter = if let Some(compose_path) = &self.compose {
             let compose_path = PathBuf::from(compose_path);
