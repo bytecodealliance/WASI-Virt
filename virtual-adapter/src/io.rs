@@ -238,7 +238,7 @@ impl StaticIndexEntry {
     fn idx(&self) -> usize {
         let static_index_start = unsafe { io.static_index };
         let cur_index_start = self as *const StaticIndexEntry;
-        unsafe { cur_index_start.sub_ptr(static_index_start) }
+        unsafe { cur_index_start.offset_from_unsigned(static_index_start) }
     }
     fn runtime_path(&self) -> &'static str {
         let c_str = unsafe { CStr::from_ptr(self.data.runtime_path) };
