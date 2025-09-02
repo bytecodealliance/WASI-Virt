@@ -314,12 +314,12 @@ impl WasiVirt {
 
         let mut module = match (self.debug, insert_wasi_version.to_string().as_ref()) {
             (_debug @ true, "0.2.1") => config.parse(VIRT_ADAPTER_DEBUG_0_2_1),
-            (_debug @ false, "0.2.1") => config.parse(VIRT_ADAPTER_DEBUG_0_2_1),
+            (_debug @ false, "0.2.1") => config.parse(VIRT_ADAPTER_0_2_1),
             (_debug @ true, "0.2.3") => config.parse(VIRT_ADAPTER_DEBUG_0_2_3),
-            (_debug @ false, "0.2.3") => config.parse(VIRT_ADAPTER_DEBUG_0_2_3),
+            (_debug @ false, "0.2.3") => config.parse(VIRT_ADAPTER_0_2_3),
             _ => bail!(
                 "unsupported WASI version [{}] (only 0.2.1 and 0.2.3 are supported)",
-                insert_wasi_version.to_string().as_ref()
+                &insert_wasi_version.to_string()
             ),
         }
         .context("failed to parse adapter")?;
