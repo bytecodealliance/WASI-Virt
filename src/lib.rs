@@ -42,7 +42,7 @@ const VIRT_ADAPTER_DEBUG_0_2_3: &[u8] =
 
 const VIRT_WIT_METADATA: &[u8] = include_bytes!("../lib/package.wasm");
 
-pub const DEFAULT_INSERT_WASI_VERSION: Version = Version::new(0, 2, 1);
+pub const DEFAULT_INSERT_WASI_VERSION: Version = Version::new(0, 2, 3);
 
 /// Parts of a WIT interface name
 ///
