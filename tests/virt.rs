@@ -1,16 +1,19 @@
-use anyhow::{anyhow, bail, Context, Result};
-use heck::ToSnakeCase;
-use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
-use std::{fs, path::PathBuf};
+
+use anyhow::{Context, Result, anyhow, bail};
+use heck::ToSnakeCase;
+use log::debug;
+use serde::Deserialize;
 use wasi_virt::WasiVirt;
 use wasm_compose::composer::ComponentComposer;
 use wasmparser::{Chunk, Parser, Payload};
 use wasmtime::component::ResourceTable;
 use wasmtime::{
-    component::{Component, Linker},
     Config, Engine, Store, WasmBacktraceDetails,
+    component::{Component, Linker},
 };
 use wasmtime_wasi::{DirPerms, FilePerms, IoView, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
@@ -74,10 +77,10 @@ struct TestCase {
     expect: TestExpectation,
 }
 
-const DEBUG: bool = false;
-
 #[tokio::test]
 async fn virt_test() -> Result<()> {
+    let debug_enabled: bool = std::env::var("TEST_DEBUG").is_ok();
+
     let wasi_adapter = fs::read("lib/wasi_snapshot_preview1.reactor.wasm")?;
 
     for test_case in fs::read_dir("tests/cases")? {
@@ -103,25 +106,21 @@ async fn virt_test() -> Result<()> {
         let generated_path = PathBuf::from("tests/generated");
         fs::create_dir_all(&generated_path)?;
 
-        if DEBUG {
-            println!("- Building test component");
-        }
+        debug!("- Building test component");
 
         let mut generated_component_path = generated_path.join(component_name);
         generated_component_path.set_extension("component.wasm");
         cmd(&format!(
             "cargo build -p {component_name} --target wasm32-wasip1 {}",
-            if DEBUG { "" } else { "--release" }
+            if debug_enabled { "" } else { "--release" }
         ))?;
 
-        if DEBUG {
-            println!("- Encoding test component");
-        }
+        debug!("- Encoding test component");
 
         // encode the component
         let component_core_path = &format!(
             "target/wasm32-wasip1/{}/{}.wasm",
-            if DEBUG { "debug" } else { "release" },
+            if debug_enabled { "debug" } else { "release" },
             component_name.to_snake_case()
         );
         let component_core = fs::read(component_core_path)?;
@@ -135,18 +134,16 @@ async fn virt_test() -> Result<()> {
         )?;
 
         // create the test case specific virtualization
-        if DEBUG {
-            println!("- Creating virtualization");
-        }
+        debug!("- Creating virtualization");
 
         let mut virt_component_path = generated_path.join(test_case_name);
         virt_component_path.set_extension("wasm");
         let mut virt_opts = test.virt_opts.clone().unwrap_or_default();
         virt_opts.exit(Default::default());
-        if DEBUG {
-            virt_opts.debug = true;
+        if debug_enabled {
+            virt_opts.debug(true);
             if test_case_name != "encapsulate" {
-                virt_opts.wasm_opt = Some(false);
+                virt_opts.wasm_opt(false);
             }
         }
         if let Some(compose) = test.compose {
@@ -156,7 +153,7 @@ async fn virt_test() -> Result<()> {
                     .into_os_string()
                     .into_string()
                     .unwrap();
-                virt_opts.compose = Some(compose_path);
+                virt_opts.compose_component_path(compose_path);
                 virt_opts.filter_imports()?;
             }
         }
@@ -189,9 +186,7 @@ async fn virt_test() -> Result<()> {
             }
             _ => {
                 // compose the test component with the defined test virtualization
-                if DEBUG {
-                    println!("- Composing virtualization");
-                }
+                debug!("- Composing virtualization");
                 let component_bytes = ComponentComposer::new(
                     &generated_component_path,
                     &wasm_compose::config::Config {
@@ -208,9 +203,7 @@ async fn virt_test() -> Result<()> {
         };
 
         // execute the composed virtualized component test function
-        if DEBUG {
-            println!("- Executing composition");
-        }
+        debug!("- Executing composition");
         let mut builder = WasiCtxBuilder::new();
         let _ = builder
             .inherit_stdio()
@@ -279,9 +272,7 @@ async fn virt_test() -> Result<()> {
 
         let instance = VirtTest::instantiate_async(&mut store, &component, &linker).await?;
 
-        if DEBUG {
-            println!("- Checking expectations");
-        }
+        debug!("- Checking expectations");
 
         // env var expectation check
         if let Some(expect_env) = &test.expect.env {

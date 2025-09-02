@@ -169,41 +169,44 @@ use wasi_virt::{WasiVirt, FsEntry};
 fn main() {
     let mut virt = WasiVirt::new();
 
-    // allow all subsystems initially
+    // Allow all subsystems initially
     virt.allow_all();
 
-    // ignore stdio
+    // Ignore stdio
     virt.stdio().ignore();
 
     virt.env()
-      // provide an allow list of host env vars
+      // Provide an allow list of host env vars
       .allow(&["PUBLIC_ENV_VAR"])
-      // provide custom env overrides
+      // Provide custom env overrides
       .overrides(&[("SOME", "ENV"), ("VAR", "OVERRIDES")]);
 
     virt.fs()
-        // deny arbitrary host preopens
+        // Deny arbitrary host preopens
         .deny_host_preopens()
-        // mount and virtualize a local directory recursively
+        // Mount and virtualize a local directory recursively
         .virtual_preopen("/dir", "/local/dir")
-        // create a virtual directory containing some virtual files
+        // Create a virtual directory containing some virtual files
         .preopen("/another-dir", FsEntry::Dir(BTreeMap::from([
-          // create a virtual file from the given UTF8 source
+          // Create a virtual file from the given UTF8 source
           ("file.txt", FsEntry::Source("Hello world")),
-          // create a virtual file read from a local file at
-          // virtualization time
+          // Create a virtual file read from a local file at virtualization time
           ("another.wasm", FsEntry::Virtualize("/local/another.wasm"))
-          // create a virtual file which reads from a given file
+          // Create a virtual file which reads from a given file
           // path at runtime using the runtime host filesystem API
           ("host.txt", FsEntry::RuntimeFile("/runtime/host/path.txt"))
         ])));
 
-    // compose the virtualization with a component
+    // Compose the virtualization with a component
     virt.compose("path/to/component.wasm");
-    // filter enabled subsystems by imports on the composed component
+
+    // Filter enabled subsystems by imports on the composed component
     virt.filter_imports().unwrap();
 
+    // Finalize the virtualization
     let virt_component_bytes = virt.finish().unwrap();
+
+    // Write out the virtualized component
     fs::write("virt.component.wasm", virt_component_bytes).unwrap();
 }
 ```

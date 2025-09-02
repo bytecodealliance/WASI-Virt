@@ -1,9 +1,10 @@
+use std::collections::BTreeSet;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use semver::Version;
 use serde::Deserialize;
 use virt_config::{create_config_virt, strip_config_virt};
@@ -11,11 +12,11 @@ use virt_deny::{
     deny_clocks_virt, deny_exit_virt, deny_http_virt, deny_random_virt, deny_sockets_virt,
 };
 use virt_env::{create_env_virt, strip_env_virt};
-use virt_io::{create_io_virt, VirtStdio};
+use virt_io::{VirtStdio, create_io_virt};
 use walrus_ops::strip_virt;
 use wasm_compose::composer::ComponentComposer;
 use wasm_metadata::Producers;
-use wit_component::{metadata, ComponentEncoder, DecodedWasm, StringEncoding};
+use wit_component::{ComponentEncoder, DecodedWasm, StringEncoding, metadata};
 use wit_parser::WorldItem;
 
 mod data;
@@ -55,31 +56,38 @@ pub(crate) type WITInterfaceNameParts =
 #[derive(Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct WasiVirt {
+    /// Exit virtualization (`wasi:cli/exit`)
+    pub(crate) exit: Option<bool>,
+    /// Clocks virtualization
+    pub(crate) clocks: Option<bool>,
+    /// Http virtualization
+    pub(crate) http: Option<bool>,
+    /// Sockets virtualization
+    pub(crate) sockets: Option<bool>,
+    /// Random virtualization
+    pub(crate) random: Option<bool>,
+
+    /// Environment virtualization
+    pub(crate) env: Option<VirtEnv>,
+    /// Configuration virtualization
+    pub(crate) config: Option<VirtConfig>,
+    /// Filesystem virtualization
+    pub(crate) fs: Option<VirtFs>,
+    /// Stdio virtualization (`wasi:cli/{stdin,stdout}`)
+    pub(crate) stdio: Option<VirtStdio>,
+
+    /// Whether to run wasm-opt for optimization
+    pub(crate) run_wasm_opt: Option<bool>,
+
+    /// Path to compose component
+    pub(crate) compose_component_path: Option<PathBuf>,
+
+    /// WASI version to use for interfaces
+    pub(crate) wasi_version: Option<Version>,
+
     /// Debug mode traces all virt calls
     #[serde(default)]
-    pub debug: bool,
-    /// Environment virtualization
-    pub env: Option<VirtEnv>,
-    /// Configuration virtualization
-    pub config: Option<VirtConfig>,
-    /// Filesystem virtualization
-    pub fs: Option<VirtFs>,
-    /// Stdio virtualization
-    pub stdio: Option<VirtStdio>,
-    /// Exit virtualization
-    pub exit: Option<bool>,
-    /// Clocks virtualization
-    pub clocks: Option<bool>,
-    /// Http virtualization
-    pub http: Option<bool>,
-    /// Sockets virtualization
-    pub sockets: Option<bool>,
-    /// Random virtualization
-    pub random: Option<bool>,
-    /// Disable wasm-opt run if desired
-    pub wasm_opt: Option<bool>,
-    /// Path to compose component
-    pub compose: Option<String>,
+    pub(crate) debug: bool,
 }
 
 /// Result of a successful virtualization
@@ -91,12 +99,101 @@ pub struct VirtResult {
     pub virtual_files: VirtualFiles,
 }
 
+/// These prefixes are searched for when determining whether to
+/// filter certain capabilities. See [`WasiVirt::filter_imports`]
+const IMPORT_FILTER_PREFIXES: [&str; 9] = [
+    "wasi:cli/environment",
+    "wasi:config/store",
+    "wasi:cli/std",
+    "wasi:cli/terminal",
+    "wasi:cli/clocks",
+    "wasi:cli/exit",
+    "wasi:http/",
+    "wasi:sockets/",
+    "wasi:random/",
+];
+
 impl WasiVirt {
     /// Create a new [`WasiVirt`]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Enable debug
+    pub fn debug(&mut self, enable_debug: bool) {
+        self.debug = enable_debug;
+    }
+
+    /// Get whether debug has been eanbled
+    pub fn debug_enabled(&self) -> bool {
+        self.debug
+    }
+
+    /// Set whether `wasi:cli/exit` should be virtualized
+    pub fn exit(&mut self, virtualize: bool) {
+        self.exit = Some(virtualize);
+    }
+
+    /// Enable/disable virtualization of `wasi:clocks`
+    pub fn clocks(&mut self, virtualize: bool) {
+        self.clocks = Some(virtualize);
+    }
+
+    /// Enable/disable virtualization of `wasi:http`
+    pub fn http(&mut self, virtualize: bool) {
+        self.http = Some(virtualize);
+    }
+
+    /// Enable/disable virtualization of `wasi:sockets`
+    pub fn sockets(&mut self, virtualize: bool) {
+        self.sockets = Some(virtualize);
+    }
+
+    /// Enable/disable virtualization of `wasi:random`
+    pub fn random(&mut self, virtualize: bool) {
+        self.random = Some(virtualize);
+    }
+
+    /// Enable/disable optimization via `wasm_opt`
+    pub fn wasm_opt(&mut self, run_wasm_opt: bool) {
+        self.run_wasm_opt = Some(run_wasm_opt);
+    }
+
+    /// Set path to compose component
+    pub fn compose_component_path(&mut self, component_path: impl AsRef<Path>) {
+        self.compose_component_path = Some(component_path.as_ref().into());
+    }
+
+    /// Set virtualized WASI version
+    pub fn wasi_version(&mut self, wasi_version: Version) {
+        self.wasi_version = Some(wasi_version);
+    }
+
+    /// Retrieve the virtualized environment in use
+    #[must_use]
+    pub fn env(&mut self) -> &mut VirtEnv {
+        self.env.get_or_insert_with(Default::default)
+    }
+
+    /// Set virtualized configuration
+    #[must_use]
+    pub fn config(&mut self) -> &mut VirtConfig {
+        self.config.get_or_insert_with(Default::default)
+    }
+
+    /// Set virtualized filesystem
+    #[must_use]
+    pub fn fs(&mut self) -> &mut VirtFs {
+        self.fs.get_or_insert_with(Default::default)
+    }
+
+    /// Set virtualized standard I/O
+    #[must_use]
+    pub fn stdio(&mut self) -> &mut VirtStdio {
+        self.stdio.get_or_insert_with(Default::default)
+    }
+
+    /// Allow all features
     pub fn allow_all(&mut self) {
         self.clocks(true);
         self.http(true);
@@ -110,6 +207,7 @@ impl WasiVirt {
         self.stdio().allow();
     }
 
+    /// Deny all features
     pub fn deny_all(&mut self) {
         self.clocks(false);
         self.http(false);
@@ -123,116 +221,88 @@ impl WasiVirt {
         self.stdio().ignore();
     }
 
-    pub fn clocks(&mut self, allow: bool) {
-        self.clocks = Some(allow);
-    }
-
-    pub fn http(&mut self, allow: bool) {
-        self.http = Some(allow);
-    }
-
-    pub fn sockets(&mut self, allow: bool) {
-        self.sockets = Some(allow);
-    }
-
-    pub fn exit(&mut self, allow: bool) {
-        self.exit = Some(allow);
-    }
-
-    pub fn random(&mut self, allow: bool) {
-        self.random = Some(allow);
-    }
-
-    pub fn env(&mut self) -> &mut VirtEnv {
-        self.env.get_or_insert_with(Default::default)
-    }
-
-    pub fn config(&mut self) -> &mut VirtConfig {
-        self.config.get_or_insert_with(Default::default)
-    }
-
-    pub fn fs(&mut self) -> &mut VirtFs {
-        self.fs.get_or_insert_with(Default::default)
-    }
-
-    pub fn stdio(&mut self) -> &mut VirtStdio {
-        self.stdio.get_or_insert_with(Default::default)
-    }
-
-    pub fn opt(&mut self, opt: bool) {
-        self.wasm_opt = Some(opt);
-    }
-
-    pub fn compose(&mut self, compose: String) {
-        self.compose = Some(compose);
-    }
-
-    /// drop capabilities that are not imported by the composed component
+    /// Drop capabilities that are not imported by the composed component
     pub fn filter_imports(&mut self) -> Result<()> {
-        match &self.compose {
-            Some(compose) => {
-                let imports = {
-                    let module_bytes = fs::read(compose).map_err(anyhow::Error::new)?;
-                    let (resolve, world_id) = match wit_component::decode(&module_bytes)? {
-                        DecodedWasm::WitPackage(..) => {
-                            bail!("expected a component, found a WIT package")
-                        }
-                        DecodedWasm::Component(resolve, world_id) => (resolve, world_id),
-                    };
+        let Some(ref component_path) = self.compose_component_path else {
+            bail!("filtering imports can only be applied to composed components");
+        };
 
-                    let mut import_ids: Vec<String> = vec![];
-                    for (_, import) in &resolve.worlds[world_id].imports {
-                        if let WorldItem::Interface { id, .. } = import {
-                            if let Some(id) = resolve.id_of(*id) {
-                                import_ids.push(id);
-                            }
+        // Read in the component
+        let module_bytes = fs::read(component_path).with_context(|| {
+            format!("failed to read component @ [{}]", component_path.display())
+        })?;
+
+        // Decode the component to access it's types
+        let (resolve, world_id) = match wit_component::decode(&module_bytes)? {
+            DecodedWasm::WitPackage(..) => {
+                bail!("expected a component, found a WIT package")
+            }
+            DecodedWasm::Component(resolve, world_id) => (resolve, world_id),
+        };
+
+        // Look through all import IDs for any known import prefixes
+        let mut found_prefixes = BTreeSet::new();
+        for (_, import) in &resolve.worlds[world_id].imports {
+            if let WorldItem::Interface { id, .. } = import {
+                if let Some(id) = resolve.id_of(*id) {
+                    for prefix in IMPORT_FILTER_PREFIXES {
+                        if id.starts_with(prefix) {
+                            found_prefixes.insert(prefix);
                         }
                     }
-
-                    import_ids
-                };
-                let matches = |prefix: &str| imports.iter().any(|i| i.starts_with(prefix));
-
-                if !matches("wasi:cli/environment") {
-                    self.env = None;
                 }
-                if !matches("wasi:config/store") {
-                    self.config = None;
-                }
-                if !matches("wasi:filesystem/") {
-                    self.fs = None;
-                }
-                if !(matches("wasi:cli/std") || matches("wasi:cli/terminal")) {
-                    self.stdio = None;
-                }
-                if !matches("wasi:cli/exit") {
-                    self.exit = None;
-                }
-                if !matches("wasi:clocks/") {
-                    self.clocks = None;
-                }
-                if !matches("wasi:http/") {
-                    self.http = None;
-                }
-                if !matches("wasi:sockets/") {
-                    self.sockets = None;
-                }
-                if !matches("wasi:random/") {
-                    self.random = None;
-                }
-
-                Ok(())
             }
-            None => bail!("filtering imports can only be applied to composed components"),
         }
+
+        // For all the prefixes that were *not* found, ensure
+        if !found_prefixes.contains("wasi:cli/environment") {
+            self.env = None;
+        }
+        if !found_prefixes.contains("wasi:config/store") {
+            self.config = None;
+        }
+        if !found_prefixes.contains("wasi:filesystem/") {
+            self.fs = None;
+        }
+        if !found_prefixes.contains("wasi:cli/std") && !found_prefixes.contains("wasi:cli/terminal")
+        {
+            self.stdio = None;
+        }
+        if !found_prefixes.contains("wasi:cli/exit") {
+            self.exit = None;
+        }
+        if !found_prefixes.contains("wasi:clocks/") {
+            self.clocks = None;
+        }
+        if !found_prefixes.contains("wasi:http/") {
+            self.http = None;
+        }
+        if !found_prefixes.contains("wasi:sockets/") {
+            self.sockets = None;
+        }
+        if !found_prefixes.contains("wasi:random/") {
+            self.random = None;
+        }
+
+        Ok(())
     }
 
+    /// Whether this WasiVirt has any IO enabled
+    pub(crate) fn has_virtualized_io(&self) -> bool {
+        self.fs.is_some()
+            || self.stdio.is_some()
+            || self.clocks.is_some()
+            || self.http.is_some()
+            || self.sockets.is_some()
+    }
+
+    /// Finish the WASI module
     pub fn finish(&mut self) -> Result<VirtResult> {
-        self.finish_with_version(&DEFAULT_INSERT_WASI_VERSION)
-    }
+        let insert_wasi_version = &self
+            .wasi_version
+            .clone()
+            .unwrap_or(DEFAULT_INSERT_WASI_VERSION);
 
-    /// Finish the module using a certain intended WASI version
-    pub fn finish_with_version(&mut self, insert_wasi_version: &Version) -> Result<VirtResult> {
         let mut config = walrus::ModuleConfig::new();
         config.generate_name_section(self.debug);
 
@@ -252,13 +322,7 @@ impl WasiVirt {
             create_config_virt(&mut module, config).context("failed to virtualize config")?;
         }
 
-        let has_io = self.fs.is_some()
-            || self.stdio.is_some()
-            || self.clocks.is_some()
-            || self.http.is_some()
-            || self.sockets.is_some();
-
-        let virtual_files = if has_io {
+        let virtual_files = if self.has_virtualized_io() {
             // io virt is managed through a singular io configuration
             create_io_virt(&mut module, self.fs.as_ref(), self.stdio.as_ref())
                 .context("failed to virtualize I/O")?
@@ -346,7 +410,7 @@ impl WasiVirt {
             .select_world(pkg_id, Some("virtual-sockets"))
             .context("failed to select `virtual-sockets` world")?;
 
-        // env, config, exit & random subsystems are fully independent
+        // Process `wasi:environment`
         if self.env.is_some() {
             resolve
                 .merge_worlds(env_world, base_world)
@@ -354,6 +418,8 @@ impl WasiVirt {
         } else {
             strip_env_virt(&mut module).context("failed to strip environment exports")?;
         }
+
+        // Process `wasi:config`
         if self.config.is_some() {
             resolve
                 .merge_worlds(config_world, base_world)
@@ -361,6 +427,8 @@ impl WasiVirt {
         } else {
             strip_config_virt(&mut module).context("failed to strip config exports")?;
         }
+
+        // Process `wasi:cli/exit`
         if let Some(exit) = self.exit {
             if !exit {
                 resolve
@@ -370,6 +438,8 @@ impl WasiVirt {
                     .context("failed to deny exit exports")?;
             }
         }
+
+        // Process `wasi:random`
         if let Some(random) = self.random {
             if !random {
                 resolve
@@ -380,15 +450,17 @@ impl WasiVirt {
             }
         }
 
-        // io subsystems have io dependence due to streams + poll
+        // I/O subsystems have I/O dependence due to streams + poll
         // therefore we need to strip just their io dependence portion
-        if has_io {
+        if self.has_virtualized_io() {
             resolve
                 .merge_worlds(io_world, base_world)
                 .context("failed to merge with I/O world")?;
         } else {
             strip_virt(&mut module, &["wasi:io/"]).context("failed to strip I/O exports")?;
         }
+
+        // Process clocks
         if let Some(clocks) = self.clocks {
             if !clocks {
                 // deny is effectively virtualization
@@ -408,7 +480,8 @@ impl WasiVirt {
         } else {
             strip_virt(&mut module, &["wasi:clocks/"]).context("failed to strip clock exports")?;
         }
-        // sockets and http are identical to clocks above
+
+        // Process sockets & HTTP (identical to clocks above)
         if let Some(sockets) = self.sockets {
             if !sockets {
                 resolve
@@ -425,6 +498,8 @@ impl WasiVirt {
             strip_virt(&mut module, &["wasi:sockets/"])
                 .context("failed to strip socket exports")?;
         }
+
+        // Process `wasi:http`
         if let Some(http) = self.http {
             if !http {
                 resolve
@@ -441,7 +516,7 @@ impl WasiVirt {
             strip_virt(&mut module, &["wasi:http/"]).context("failed to strip HTTP exports")?;
         }
 
-        // stdio and fs are fully implemented in io world
+        // Stdio is fully implemented in io world
         // (all their interfaces use streams)
         if self.stdio.is_some() {
             resolve
@@ -451,6 +526,8 @@ impl WasiVirt {
             strip_virt(&mut module, &["wasi:cli/std", "wasi:cli/terminal"])
                 .context("failed to strip CLI exports")?;
         }
+
+        // Stdio may use FS, so enable when stdio is present
         if self.fs.is_some() || self.stdio.is_some() {
             resolve.merge_worlds(fs_world, base_world)?;
         } else {
@@ -472,7 +549,7 @@ impl WasiVirt {
         // because we rely on dead code ellimination to remove unnecessary adapter code
         // we save into a temporary file and run wasm-opt before returning
         // this can be disabled with wasm_opt: false
-        if self.wasm_opt.unwrap_or(true) {
+        if self.run_wasm_opt.unwrap_or(true) {
             bytes = apply_wasm_opt(bytes, self.debug).context("failed to apply `wasm-opt`")?;
         }
 
@@ -483,7 +560,7 @@ impl WasiVirt {
             .context("failed to set core component module")?;
         let encoded_bytes = encoder.encode().context("failed to encode component")?;
 
-        let adapter = if let Some(compose_path) = &self.compose {
+        let adapter = if let Some(compose_path) = &self.compose_component_path {
             let compose_path = PathBuf::from(compose_path);
             let dir = env::temp_dir();
             let tmp_virt = dir.join(format!("virt{}.wasm", timestamp()));
