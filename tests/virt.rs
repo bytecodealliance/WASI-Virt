@@ -22,7 +22,7 @@ use wit_parser::WorldItem;
 
 wasmtime::component::bindgen!({
     world: "virt-test",
-    path: "wit/0_2_3",
+    path: "wit/0_2_1",
     async: true
 });
 
@@ -80,6 +80,9 @@ struct TestCase {
 #[tokio::test]
 async fn virt_test() -> Result<()> {
     let debug_enabled: bool = std::env::var("TEST_DEBUG").is_ok();
+    if debug_enabled {
+        env_logger::builder().is_test(true).try_init()?;
+    }
 
     let wasi_adapter = fs::read("lib/wasi_snapshot_preview1.reactor.wasm")?;
 
@@ -158,6 +161,9 @@ async fn virt_test() -> Result<()> {
             }
         }
 
+        // TODO: move to 0.2.3 in tests
+        virt_opts.wasi_version(semver::Version::new(0, 2, 1));
+
         let virt_component = virt_opts.finish().with_context(|| {
             format!(
                 "Error creating virtual adapter {:?} for {:?}",
@@ -194,7 +200,8 @@ async fn virt_test() -> Result<()> {
                         ..Default::default()
                     },
                 )
-                .compose()?;
+                .compose()
+                .context("failed to compose virtualization")?;
 
                 fs::write(&composed_path, &component_bytes)?;
 
@@ -318,15 +325,12 @@ async fn virt_test() -> Result<()> {
                 .call_test_file_read(&mut store, test.host_fs_path.as_ref().unwrap())
                 .await?;
             if file_read.starts_with("ERR") {
-                eprintln!("> {}", file_read);
+                debug!("> {}", file_read);
             }
             if !file_read.eq(expect_file_read) {
-                eprintln!("expected: {expect_file_read}\n");
-                eprintln!("got: {file_read}\n");
-                return Err(anyhow!(
-                    "Unexpected file read result testing {:?}",
-                    test_case_path
-                ));
+                debug!("expected: {expect_file_read}\n");
+                debug!("got: {file_read}\n");
+                bail!("Unexpected file read result testing [{test_case_path:?}]",);
             }
         }
 
