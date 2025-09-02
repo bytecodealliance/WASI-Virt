@@ -1,6 +1,6 @@
-use crate::exports::wasi::cli::environment::Guest as Environment;
-use crate::wasi::cli::environment;
 use crate::VirtAdapter;
+use crate::bindings::exports::wasi::cli::environment::Guest as Environment;
+use crate::bindings::wasi::cli::environment;
 
 #[repr(C)]
 pub struct Env {

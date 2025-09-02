@@ -1,23 +1,25 @@
 #![allow(static_mut_refs)]
 
-use crate::exports::wasi::cli::stderr::Guest as Stderr;
-use crate::exports::wasi::cli::stdin::Guest as Stdin;
-use crate::exports::wasi::cli::stdout::Guest as Stdout;
-use crate::exports::wasi::cli::terminal_input::{GuestTerminalInput, TerminalInput};
-use crate::exports::wasi::cli::terminal_output::{GuestTerminalOutput, TerminalOutput};
-use crate::exports::wasi::cli::terminal_stderr::Guest as TerminalStderr;
-use crate::exports::wasi::cli::terminal_stdin::Guest as TerminalStdin;
-use crate::exports::wasi::cli::terminal_stdout::Guest as TerminalStdout;
-use crate::exports::wasi::clocks::monotonic_clock::Guest as MonotonicClock;
-use crate::exports::wasi::filesystem::preopens::Guest as Preopens;
-use crate::exports::wasi::filesystem::types::{
+use crate::bindings;
+
+use bindings::exports::wasi::cli::stderr::Guest as Stderr;
+use bindings::exports::wasi::cli::stdin::Guest as Stdin;
+use bindings::exports::wasi::cli::stdout::Guest as Stdout;
+use bindings::exports::wasi::cli::terminal_input::{GuestTerminalInput, TerminalInput};
+use bindings::exports::wasi::cli::terminal_output::{GuestTerminalOutput, TerminalOutput};
+use bindings::exports::wasi::cli::terminal_stderr::Guest as TerminalStderr;
+use bindings::exports::wasi::cli::terminal_stdin::Guest as TerminalStdin;
+use bindings::exports::wasi::cli::terminal_stdout::Guest as TerminalStdout;
+use bindings::exports::wasi::clocks::monotonic_clock::Guest as MonotonicClock;
+use bindings::exports::wasi::filesystem::preopens::Guest as Preopens;
+use bindings::exports::wasi::filesystem::types::{
     Advice, Descriptor, DescriptorBorrow, DescriptorFlags, DescriptorStat, DescriptorType,
     DirectoryEntry, DirectoryEntryStream, ErrorBorrow, ErrorCode, Guest as FilesystemTypes,
     GuestDescriptor, GuestDirectoryEntryStream, InputStreamBorrow, MetadataHashValue, NewTimestamp,
     OpenFlags, PathFlags,
 };
-use crate::exports::wasi::http::outgoing_handler::Guest as OutgoingHandler;
-use crate::exports::wasi::http::types::{
+use bindings::exports::wasi::http::outgoing_handler::Guest as OutgoingHandler;
+use bindings::exports::wasi::http::types::{
     DnsErrorPayload, ErrorCode as HttpErrorCode, FieldSizePayload, Fields, FutureIncomingResponse,
     FutureTrailers, Guest as GuestHttpTypes, GuestFields, GuestFutureIncomingResponse,
     GuestFutureTrailers, GuestIncomingBody, GuestIncomingRequest, GuestIncomingResponse,
@@ -26,40 +28,40 @@ use crate::exports::wasi::http::types::{
     OutgoingBody, OutgoingRequest, OutgoingResponse, RequestOptions, ResponseOutparam, Scheme,
     StatusCode, TlsAlertReceivedPayload,
 };
-use crate::exports::wasi::io::error::{Error, GuestError as GuestStreamsError};
-use crate::exports::wasi::io::poll::{Guest as Poll, GuestPollable, Pollable, PollableBorrow};
-use crate::exports::wasi::io::streams::{
+use bindings::exports::wasi::io::error::{Error, GuestError as GuestStreamsError};
+use bindings::exports::wasi::io::poll::{Guest as Poll, GuestPollable, Pollable, PollableBorrow};
+use bindings::exports::wasi::io::streams::{
     GuestInputStream, GuestOutputStream, InputStream, OutputStream, StreamError,
 };
-use crate::exports::wasi::sockets::ip_name_lookup::{
+use bindings::exports::wasi::sockets::ip_name_lookup::{
     Guest as IpNameLookup, GuestResolveAddressStream, IpAddress, Network, ResolveAddressStream,
 };
-use crate::exports::wasi::sockets::tcp::{
+use bindings::exports::wasi::sockets::tcp::{
     Duration, ErrorCode as NetworkErrorCode, GuestTcpSocket, IpAddressFamily, IpSocketAddress,
     ShutdownType, TcpSocket,
 };
-use crate::exports::wasi::sockets::udp::{
+use bindings::exports::wasi::sockets::udp::{
     GuestIncomingDatagramStream, GuestOutgoingDatagramStream, GuestUdpSocket, IncomingDatagram,
     IncomingDatagramStream, OutgoingDatagram, OutgoingDatagramStream,
 };
 
-use crate::wasi::cli::stdin;
-use crate::wasi::cli::stdout;
-use crate::wasi::cli::terminal_input;
-use crate::wasi::cli::terminal_output;
-use crate::wasi::cli::{stderr, terminal_stderr, terminal_stdin, terminal_stdout};
-use crate::wasi::filesystem::preopens;
-use crate::wasi::filesystem::types as filesystem_types;
-use crate::wasi::io::streams;
+use crate::bindings::wasi::cli::stdin;
+use crate::bindings::wasi::cli::stdout;
+use crate::bindings::wasi::cli::terminal_input;
+use crate::bindings::wasi::cli::terminal_output;
+use crate::bindings::wasi::cli::{stderr, terminal_stderr, terminal_stdin, terminal_stdout};
+use crate::bindings::wasi::filesystem::preopens;
+use crate::bindings::wasi::filesystem::types as filesystem_types;
+use crate::bindings::wasi::io::streams;
 
 // these are all the subsystems which touch streams + poll
-use crate::wasi::clocks::monotonic_clock;
-use crate::wasi::http::outgoing_handler;
-use crate::wasi::http::types as http_types;
-use crate::wasi::io::poll;
-use crate::wasi::sockets::ip_name_lookup;
-use crate::wasi::sockets::tcp;
-use crate::wasi::sockets::udp;
+use crate::bindings::wasi::clocks::monotonic_clock;
+use crate::bindings::wasi::http::outgoing_handler;
+use crate::bindings::wasi::http::types as http_types;
+use crate::bindings::wasi::io::poll;
+use crate::bindings::wasi::sockets::ip_name_lookup;
+use crate::bindings::wasi::sockets::tcp;
+use crate::bindings::wasi::sockets::udp;
 
 use crate::VirtAdapter;
 
@@ -637,23 +639,23 @@ impl Preopens for VirtAdapter {
     }
 }
 
-impl crate::exports::wasi::io::error::Guest for VirtAdapter {
+impl bindings::exports::wasi::io::error::Guest for VirtAdapter {
     type Error = IoError;
 }
-impl crate::exports::wasi::io::streams::Guest for VirtAdapter {
+impl bindings::exports::wasi::io::streams::Guest for VirtAdapter {
     type InputStream = IoInputStream;
     type OutputStream = IoOutputStream;
 }
-impl crate::exports::wasi::cli::terminal_input::Guest for VirtAdapter {
+impl bindings::exports::wasi::cli::terminal_input::Guest for VirtAdapter {
     type TerminalInput = CliTerminalInput;
 }
-impl crate::exports::wasi::cli::terminal_output::Guest for VirtAdapter {
+impl bindings::exports::wasi::cli::terminal_output::Guest for VirtAdapter {
     type TerminalOutput = CliTerminalOutput;
 }
-impl crate::exports::wasi::sockets::tcp::Guest for VirtAdapter {
+impl bindings::exports::wasi::sockets::tcp::Guest for VirtAdapter {
     type TcpSocket = SocketsTcpSocket;
 }
-impl crate::exports::wasi::sockets::udp::Guest for VirtAdapter {
+impl bindings::exports::wasi::sockets::udp::Guest for VirtAdapter {
     type UdpSocket = SocketsUdpSocket;
     type IncomingDatagramStream = SocketsIncomingDatagramStream;
     type OutgoingDatagramStream = SocketsOutgoingDatagramStream;

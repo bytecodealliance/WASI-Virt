@@ -8,8 +8,11 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [features]
+default = ["wasi-0_2_3"]
 debug = []
+wasi-0_2_1 = [] # use wasi:*@0.2.1
+wasi-0_2_3 = [] # use wasi:*@0.2.3
 
 [dependencies]
-anyhow = { workspace = true }
-wit-bindgen = { workspace = true, features = [ "macros" ] }
+anyhow = { workspace = true, default-features = false }
+wit-bindgen = { workspace = true, features = ["macros"] }
