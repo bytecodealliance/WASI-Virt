@@ -40,7 +40,8 @@ const VIRT_ADAPTER_0_2_3: &[u8] = include_bytes!("../lib/virtual_adapter-wasi0_2
 const VIRT_ADAPTER_DEBUG_0_2_3: &[u8] =
     include_bytes!("../lib/virtual_adapter-wasi0_2_3.debug.wasm");
 
-const VIRT_WIT_METADATA: &[u8] = include_bytes!("../lib/package.wasm");
+const VIRT_WIT_METADATA_0_2_1: &[u8] = include_bytes!("../lib/package-wasi0_2_1.wasm");
+const VIRT_WIT_METADATA_0_2_3: &[u8] = include_bytes!("../lib/package-wasi0_2_3.wasm");
 
 pub const DEFAULT_INSERT_WASI_VERSION: Version = Version::new(0, 2, 3);
 
@@ -317,10 +318,7 @@ impl WasiVirt {
             (_debug @ false, "0.2.1") => config.parse(VIRT_ADAPTER_0_2_1),
             (_debug @ true, "0.2.3") => config.parse(VIRT_ADAPTER_DEBUG_0_2_3),
             (_debug @ false, "0.2.3") => config.parse(VIRT_ADAPTER_0_2_3),
-            _ => bail!(
-                "unsupported WASI version [{}] (only 0.2.1 and 0.2.3 are supported)",
-                &insert_wasi_version.to_string()
-            ),
+            (_, v) => bail!("unsupported WASI version [{v}] (only 0.2.1 and 0.2.3 are supported)",),
         }
         .context("failed to parse adapter")?;
 
@@ -328,7 +326,8 @@ impl WasiVirt {
 
         // only env virtualization is independent of io
         if let Some(env) = &self.env {
-            create_env_virt(&mut module, env).context("failed to virtualize environment")?;
+            create_env_virt(&mut module, env, &insert_wasi_version)
+                .context("failed to virtualize environment")?;
         }
         if let Some(config) = &self.config {
             create_config_virt(&mut module, config).context("failed to virtualize config")?;
@@ -367,7 +366,13 @@ impl WasiVirt {
             .downcast::<walrus::RawCustomSection>()
             .unwrap();
 
-        let (mut resolve, pkg_id) = match wit_component::decode(VIRT_WIT_METADATA)
+        let metadata_component_bytes = match insert_wasi_version.to_string().as_str() {
+            "0.2.1" => VIRT_WIT_METADATA_0_2_1,
+            "0.2.3" => VIRT_WIT_METADATA_0_2_3,
+            v => bail!("unsupported WASI version [{v}] (only 0.2.1 and 0.2.3 are supported)"),
+        };
+
+        let (mut resolve, pkg_id) = match wit_component::decode(metadata_component_bytes)
             .context("failed to decode WIT package")?
         {
             DecodedWasm::WitPackage(resolve, pkg_id) => (resolve, pkg_id),
@@ -428,7 +433,8 @@ impl WasiVirt {
                 .merge_worlds(env_world, base_world)
                 .context("failed to merge with environment world")?;
         } else {
-            strip_env_virt(&mut module).context("failed to strip environment exports")?;
+            strip_env_virt(&mut module, insert_wasi_version)
+                .context("failed to strip environment exports")?;
         }
 
         // Process `wasi:config`

@@ -1,14 +1,12 @@
 use std::{collections::BTreeMap, fmt, fs};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::ValueEnum;
 use serde::Deserialize;
-use walrus::{ir::Value, ConstExpr, ExportItem, GlobalKind, Module};
+use walrus::{ConstExpr, ExportItem, GlobalKind, Module, ir::Value};
 
-use crate::{
-    data::{Data, WasmEncode},
-    walrus_ops::{get_active_data_segment, get_stack_global, strip_virt, stub_virt},
-};
+use crate::data::{Data, WasmEncode};
+use crate::walrus_ops::{get_active_data_segment, get_stack_global, strip_virt, stub_virt};
 
 pub type VirtualFiles = BTreeMap<String, String>;
 

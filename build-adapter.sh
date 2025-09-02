@@ -8,7 +8,7 @@ VERSIONS="0_2_1 0_2_3"
 for version in $VERSIONS
 do
     echo -e "[info] building component WIT for [$version]...";
-    wasm-tools component wit --wasm wit/$version -o lib/package-$version.wasm
+    wasm-tools component wit --wasm wit/$version -o lib/package-wasi$version.wasm
 
     echo -e "[info] building virtual adapters for version [$version]...";
     cargo build \
