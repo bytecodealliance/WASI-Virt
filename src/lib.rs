@@ -32,8 +32,14 @@ pub use virt_config::{HostConfig, VirtConfig};
 pub use virt_env::{HostEnv, VirtEnv};
 pub use virt_io::{FsEntry, StdioCfg, VirtFs, VirtualFiles};
 
-const VIRT_ADAPTER: &[u8] = include_bytes!("../lib/virtual_adapter.wasm");
-const VIRT_ADAPTER_DEBUG: &[u8] = include_bytes!("../lib/virtual_adapter.debug.wasm");
+const VIRT_ADAPTER_0_2_1: &[u8] = include_bytes!("../lib/virtual_adapter-wasi0_2_1.wasm");
+const VIRT_ADAPTER_DEBUG_0_2_1: &[u8] =
+    include_bytes!("../lib/virtual_adapter-wasi0_2_1.debug.wasm");
+
+const VIRT_ADAPTER_0_2_3: &[u8] = include_bytes!("../lib/virtual_adapter-wasi0_2_3.wasm");
+const VIRT_ADAPTER_DEBUG_0_2_3: &[u8] =
+    include_bytes!("../lib/virtual_adapter-wasi0_2_3.debug.wasm");
+
 const VIRT_WIT_METADATA: &[u8] = include_bytes!("../lib/package.wasm");
 
 pub const DEFAULT_INSERT_WASI_VERSION: Version = Version::new(0, 2, 1);
@@ -306,12 +312,18 @@ impl WasiVirt {
         let mut config = walrus::ModuleConfig::new();
         config.generate_name_section(self.debug);
 
-        let mut module = if self.debug {
-            config.parse(VIRT_ADAPTER_DEBUG)
-        } else {
-            config.parse(VIRT_ADAPTER)
+        let mut module = match (self.debug, insert_wasi_version.to_string().as_ref()) {
+            (_debug @ true, "0.2.1") => config.parse(VIRT_ADAPTER_DEBUG_0_2_1),
+            (_debug @ false, "0.2.1") => config.parse(VIRT_ADAPTER_DEBUG_0_2_1),
+            (_debug @ true, "0.2.3") => config.parse(VIRT_ADAPTER_DEBUG_0_2_3),
+            (_debug @ false, "0.2.3") => config.parse(VIRT_ADAPTER_DEBUG_0_2_3),
+            _ => bail!(
+                "unsupported WASI version [{}] (only 0.2.1 and 0.2.3 are supported)",
+                insert_wasi_version.to_string().as_ref()
+            ),
         }
         .context("failed to parse adapter")?;
+
         module.name = Some("wasi_virt".into());
 
         // only env virtualization is independent of io
