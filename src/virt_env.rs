@@ -1,7 +1,7 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use semver::Version;
 use serde::Deserialize;
-use walrus::{ConstExpr, DataKind, ExportItem, GlobalKind, Module, ir::Value};
+use walrus::{ir::Value, ConstExpr, DataKind, ExportItem, GlobalKind, Module};
 
 use crate::walrus_ops::{bump_stack_global, get_active_data_segment};
 

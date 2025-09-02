@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{anyhow, bail, Context, Result};
 use heck::ToSnakeCase;
 use log::debug;
 use serde::Deserialize;
@@ -12,8 +12,8 @@ use wasm_compose::composer::ComponentComposer;
 use wasmparser::{Chunk, Parser, Payload};
 use wasmtime::component::ResourceTable;
 use wasmtime::{
-    Config, Engine, Store, WasmBacktraceDetails,
     component::{Component, Linker},
+    Config, Engine, Store, WasmBacktraceDetails,
 };
 use wasmtime_wasi::{DirPerms, FilePerms, IoView, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};

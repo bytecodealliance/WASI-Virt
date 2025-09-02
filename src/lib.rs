@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use semver::Version;
 use serde::Deserialize;
 use virt_config::{create_config_virt, strip_config_virt};
@@ -12,11 +12,11 @@ use virt_deny::{
     deny_clocks_virt, deny_exit_virt, deny_http_virt, deny_random_virt, deny_sockets_virt,
 };
 use virt_env::{create_env_virt, strip_env_virt};
-use virt_io::{VirtStdio, create_io_virt};
+use virt_io::{create_io_virt, VirtStdio};
 use walrus_ops::strip_virt;
 use wasm_compose::composer::ComponentComposer;
 use wasm_metadata::Producers;
-use wit_component::{ComponentEncoder, DecodedWasm, StringEncoding, metadata};
+use wit_component::{metadata, ComponentEncoder, DecodedWasm, StringEncoding};
 use wit_parser::WorldItem;
 
 mod data;

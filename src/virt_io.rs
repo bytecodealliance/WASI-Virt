@@ -1,9 +1,9 @@
 use std::{collections::BTreeMap, fmt, fs};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use clap::ValueEnum;
 use serde::Deserialize;
-use walrus::{ConstExpr, ExportItem, GlobalKind, Module, ir::Value};
+use walrus::{ir::Value, ConstExpr, ExportItem, GlobalKind, Module};
 
 use crate::data::{Data, WasmEncode};
 use crate::walrus_ops::{get_active_data_segment, get_stack_global, strip_virt, stub_virt};

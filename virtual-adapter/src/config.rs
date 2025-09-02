@@ -1,6 +1,6 @@
-use crate::VirtAdapter;
 use crate::bindings::exports::wasi::config::store::{Error, Guest as Store};
 use crate::bindings::wasi::config::store;
+use crate::VirtAdapter;
 
 #[repr(C)]
 pub struct Config {
