@@ -1,7 +1,7 @@
 use std::env;
 
 wit_bindgen::generate!({
-    path: "../../../wit",
+    path: "../../../wit/0_2_1",
     world: "virt-test",
     generate_all
 });

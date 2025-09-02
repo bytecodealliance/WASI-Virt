@@ -1,3 +1,4 @@
 /target
 /tests/generated
 /lib/package.wasm
+/virt.wasm

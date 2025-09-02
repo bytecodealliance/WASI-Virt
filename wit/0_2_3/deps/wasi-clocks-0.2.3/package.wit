@@ -1,17 +1,4 @@
-component = "file-read"
-
-host-fs-path = "wasi-clocks-0.2.1/package.wit"
-
-[virt-opts.stdio]
-stdin = "allow"
-stdout = "allow"
-stderr = "allow"
-
-[virt-opts.fs.preopens."/"]
-virtualize = "./wit/0_2_1/deps"
-
-[expect]
-file-read = '''package wasi:clocks@0.2.1;
+package wasi:clocks@0.2.3;
 
 /// WASI Monotonic Clock is a clock API intended to let users measure elapsed
 /// time.
@@ -24,7 +11,7 @@ file-read = '''package wasi:clocks@0.2.1;
 @since(version = 0.2.0)
 interface monotonic-clock {
   @since(version = 0.2.0)
-  use wasi:io/poll@0.2.1.{pollable};
+  use wasi:io/poll@0.2.3.{pollable};
 
   /// An instant in time, in nanoseconds. An instant is relative to an
   /// unspecified initial value, and can only be compared to instances from
@@ -108,10 +95,9 @@ interface wall-clock {
 @since(version = 0.2.0)
 world imports {
   @since(version = 0.2.0)
-  import wasi:io/poll@0.2.1;
+  import wasi:io/poll@0.2.3;
   @since(version = 0.2.0)
   import monotonic-clock;
   @since(version = 0.2.0)
   import wall-clock;
 }
-'''

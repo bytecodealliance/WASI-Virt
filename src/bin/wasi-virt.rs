@@ -16,7 +16,7 @@ struct Args {
     /// If not provided, only the virtualization component itself will be generated,
     /// which can then be composed via `wasm-tools compose -d virt.wasm component.wasm`
     #[arg(required(false), value_name("component.wasm"), verbatim_doc_comment)]
-    compose: Option<String>,
+    compose: Option<PathBuf>,
 
     /// Enable debug tracing of all virtualized calls
     #[arg(long, action = ArgAction::SetTrue)]
@@ -126,7 +126,7 @@ fn main() -> Result<()> {
 
     let mut virt_opts = WasiVirt::default();
 
-    virt_opts.debug = args.debug.unwrap_or_default();
+    virt_opts.debug(args.debug.unwrap_or_default());
 
     // By default, we virtualize all subsystems
     // This ensures full encapsulation in the default (no argument) case
@@ -156,7 +156,8 @@ fn main() -> Result<()> {
         .stdio()
         .stdout(args.stdout.unwrap_or(stdio.clone()));
     let stderr = args.stderr.unwrap_or(stdio.clone());
-    if virt_opts.debug && !matches!(stderr, StdioCfg::Allow) {
+
+    if virt_opts.debug_enabled() && !matches!(stderr, StdioCfg::Allow) {
         bail!("Debug build requires stderr to be enabled");
     }
     virt_opts.stdio().stderr(stderr);
@@ -194,7 +195,7 @@ fn main() -> Result<()> {
         }
         None => {
             if allow_all {
-                // TODO enable once wasi:config/store is stable
+                // TODO: enable once wasi:config/store is stable
                 // config.allow_all();
             }
         }
@@ -220,23 +221,24 @@ fn main() -> Result<()> {
     }
 
     if let Some(compose) = args.compose {
-        virt_opts.compose(compose);
+        virt_opts.compose_component_path(compose);
         virt_opts.filter_imports()?;
     }
 
-    let virt_component = virt_opts.finish_with_version(
-        &args
-            .wasi_version
+    virt_opts.wasi_version(
+        args.wasi_version
             .as_ref()
             .and_then(|s| Version::parse(s).ok())
             .unwrap_or(DEFAULT_INSERT_WASI_VERSION),
-    )?;
+    );
+
+    let virt_component = virt_opts.finish()?;
 
     let out_path = PathBuf::from(args.out);
     if virt_component.virtual_files.len() > 0 {
-        println!("Virtualized files from local filesystem:\n");
+        eprintln!("Virtualized files from local filesystem:\n");
         for (virtual_path, original_path) in virt_component.virtual_files {
-            println!("  - {virtual_path} : {original_path}");
+            eprintln!("  - {virtual_path} : {original_path}");
         }
     }
 

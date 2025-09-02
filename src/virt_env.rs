@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use semver::Version;
 use serde::Deserialize;
 use walrus::{ir::Value, ConstExpr, DataKind, ExportItem, GlobalKind, Module};
 
@@ -66,7 +67,11 @@ impl VirtEnv {
     }
 }
 
-pub(crate) fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Result<()> {
+pub(crate) fn create_env_virt<'a>(
+    module: &'a mut Module,
+    env: &VirtEnv,
+    wasi_version: &Version,
+) -> Result<()> {
     let env_ptr_addr = {
         let env_ptr_export = module
             .exports
@@ -87,7 +92,7 @@ pub(crate) fn create_env_virt<'a>(module: &'a mut Module, env: &VirtEnv) -> Resu
     // If host env is disabled, remove its import entirely
     // replacing it with a stub panic
     if matches!(env.host, HostEnv::None) {
-        stub_env_virt(module)?;
+        stub_env_virt(module, &wasi_version)?;
         // we do arguments as well because virt assumes reactors for now...
     }
 
@@ -215,12 +220,12 @@ const WASI_ENV_FNS: [&str; 3] = ["get-arguments", "get-environment", "initial-cw
 /// Stub imported functions that implement the WASI CLI environment functionality
 ///
 /// This function throws an error if any imported functions do not exist
-pub(crate) fn stub_env_virt(module: &mut Module) -> Result<()> {
+pub(crate) fn stub_env_virt(module: &mut Module, wasi_version: &Version) -> Result<()> {
     for fn_name in WASI_ENV_FNS {
         module.replace_imported_func(
             module
                 .imports
-                .get_func("wasi:cli/environment@0.2.1", fn_name)?,
+                .get_func(format!("wasi:cli/environment@{wasi_version}"), fn_name)?,
             |(body, _)| {
                 body.unreachable();
             },
@@ -231,13 +236,13 @@ pub(crate) fn stub_env_virt(module: &mut Module) -> Result<()> {
 }
 
 /// Strip exported functions that implement the WASI CLI environment functionality
-pub(crate) fn strip_env_virt(module: &mut Module) -> Result<()> {
-    stub_env_virt(module)?;
+pub(crate) fn strip_env_virt(module: &mut Module, wasi_version: &Version) -> Result<()> {
+    stub_env_virt(module, wasi_version)?;
 
     for fn_name in WASI_ENV_FNS {
         let Ok(fid) = module
             .exports
-            .get_func(format!("wasi:cli/environment@0.2.1#{fn_name}"))
+            .get_func(format!("wasi:cli/environment@{wasi_version}#{fn_name}"))
         else {
             bail!("Expected CLI function {fn_name}")
         };
