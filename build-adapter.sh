@@ -1,7 +1,6 @@
 # Useful for debugging:
 # export CARGO_PROFILE_RELEASE_DEBUG=2
 # export WIT_BINDGEN_DEBUG=1
-export RUSTFLAGS="-Zoom=panic"
 
 VERSIONS="0_2_1 0_2_3"
 
