@@ -1,7 +1,6 @@
 # Useful for debugging:
 # export CARGO_PROFILE_RELEASE_DEBUG=2
 # export WIT_BINDGEN_DEBUG=1
-export RUSTFLAGS="-Zoom=panic"
 
 wasm-tools component wit --wasm wit -o lib/package.wasm
 
