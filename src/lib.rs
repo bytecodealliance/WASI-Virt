@@ -326,7 +326,7 @@ impl WasiVirt {
 
         // only env virtualization is independent of io
         if let Some(env) = &self.env {
-            create_env_virt(&mut module, env, &insert_wasi_version)
+            create_env_virt(&mut module, env, insert_wasi_version)
                 .context("failed to virtualize environment")?;
         }
         if let Some(config) = &self.config {
@@ -382,49 +382,49 @@ impl WasiVirt {
         };
 
         let base_world = resolve
-            .select_world(pkg_id, Some("virtual-base"))
+            .select_world(&[pkg_id], Some("virtual-base"))
             .context("failed to select `virtual-base` world")?;
 
         let env_world = resolve
-            .select_world(pkg_id, Some("virtual-env"))
+            .select_world(&[pkg_id], Some("virtual-env"))
             .context("failed to select `virtual-env` world")?;
         let config_world = resolve
-            .select_world(pkg_id, Some("virtual-config"))
+            .select_world(&[pkg_id], Some("virtual-config"))
             .context("failed to select `virtual-config` world")?;
 
         let io_world = resolve
-            .select_world(pkg_id, Some("virtual-io"))
+            .select_world(&[pkg_id], Some("virtual-io"))
             .context("failed to select `virtual-io` world")?;
         let io_clocks_world = resolve
-            .select_world(pkg_id, Some("virtual-io-clocks"))
+            .select_world(&[pkg_id], Some("virtual-io-clocks"))
             .context("failed to select `virtual-io-clocks` world")?;
         let io_http_world = resolve
-            .select_world(pkg_id, Some("virtual-io-http"))
+            .select_world(&[pkg_id], Some("virtual-io-http"))
             .context("failed to select `virtual-io-http` world")?;
         let io_sockets_world = resolve
-            .select_world(pkg_id, Some("virtual-io-sockets"))
+            .select_world(&[pkg_id], Some("virtual-io-sockets"))
             .context("failed to select `virtual-io-sockets` world")?;
 
         let exit_world = resolve
-            .select_world(pkg_id, Some("virtual-exit"))
+            .select_world(&[pkg_id], Some("virtual-exit"))
             .context("failed to select `virtual-exit` world")?;
         let fs_world = resolve
-            .select_world(pkg_id, Some("virtual-fs"))
+            .select_world(&[pkg_id], Some("virtual-fs"))
             .context("failed to select `virtual-fs` world")?;
         let random_world = resolve
-            .select_world(pkg_id, Some("virtual-random"))
+            .select_world(&[pkg_id], Some("virtual-random"))
             .context("failed to select `virtual-random` world")?;
         let stdio_world = resolve
-            .select_world(pkg_id, Some("virtual-stdio"))
+            .select_world(&[pkg_id], Some("virtual-stdio"))
             .context("failed to select `virtual-stdio` world")?;
         let clocks_world = resolve
-            .select_world(pkg_id, Some("virtual-clocks"))
+            .select_world(&[pkg_id], Some("virtual-clocks"))
             .context("failed to select `virtual-clocks` world")?;
         let http_world = resolve
-            .select_world(pkg_id, Some("virtual-http"))
+            .select_world(&[pkg_id], Some("virtual-http"))
             .context("failed to select `virtual-http` world")?;
         let sockets_world = resolve
-            .select_world(pkg_id, Some("virtual-sockets"))
+            .select_world(&[pkg_id], Some("virtual-sockets"))
             .context("failed to select `virtual-sockets` world")?;
 
         // Process `wasi:environment`
@@ -452,7 +452,7 @@ impl WasiVirt {
                 resolve
                     .merge_worlds(exit_world, base_world)
                     .context("failed to merge with exit world")?;
-                deny_exit_virt(&mut module, &insert_wasi_version)
+                deny_exit_virt(&mut module, insert_wasi_version)
                     .context("failed to deny exit exports")?;
             }
         }
@@ -463,7 +463,7 @@ impl WasiVirt {
                 resolve
                     .merge_worlds(random_world, base_world)
                     .context("failed to merge with random world")?;
-                deny_random_virt(&mut module, &insert_wasi_version)
+                deny_random_virt(&mut module, insert_wasi_version)
                     .context("failed to deny random exports")?;
             }
         }
@@ -487,7 +487,7 @@ impl WasiVirt {
                 resolve
                     .merge_worlds(clocks_world, base_world)
                     .context("failed to merge with clock world")?;
-                deny_clocks_virt(&mut module, &insert_wasi_version)
+                deny_clocks_virt(&mut module, insert_wasi_version)
                     .context("failed to deny clock exports")?;
             } else {
                 // passthrough can be simplified to just rewrapping io interfaces
@@ -505,7 +505,7 @@ impl WasiVirt {
                 resolve
                     .merge_worlds(sockets_world, base_world)
                     .context("failed to merge with sockets world")?;
-                deny_sockets_virt(&mut module, &insert_wasi_version)
+                deny_sockets_virt(&mut module, insert_wasi_version)
                     .context("failed to deny socket exports")?;
             } else {
                 resolve
@@ -523,7 +523,7 @@ impl WasiVirt {
                 resolve
                     .merge_worlds(http_world, base_world)
                     .context("failed to merge with HTTP world")?;
-                deny_http_virt(&mut module, &insert_wasi_version)
+                deny_http_virt(&mut module, insert_wasi_version)
                     .context("failed to deny with HTTP exports")?;
             } else {
                 resolve
@@ -572,7 +572,7 @@ impl WasiVirt {
         }
 
         // now adapt the virtualized component
-        let encoder = ComponentEncoder::default()
+        let mut encoder = ComponentEncoder::default()
             .validate(true)
             .module(&bytes)
             .context("failed to set core component module")?;

@@ -11,11 +11,12 @@ use wasi_virt::WasiVirt;
 use wasm_compose::composer::ComponentComposer;
 use wasmparser::{Chunk, Parser, Payload};
 use wasmtime::component::ResourceTable;
+use wasmtime::Cache;
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store, WasmBacktraceDetails,
 };
-use wasmtime_wasi::{DirPerms, FilePerms, IoView, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 use wit_component::{ComponentEncoder, DecodedWasm};
 use wit_parser::WorldItem;
@@ -23,7 +24,9 @@ use wit_parser::WorldItem;
 wasmtime::component::bindgen!({
     world: "virt-test",
     path: "wit/0_2_1",
-    async: true
+    exports: {
+        default: async,
+    },
 });
 
 fn cmd(arg: &str) -> Result<()> {
@@ -233,7 +236,7 @@ async fn virt_test() -> Result<()> {
         let wasi = builder.build();
 
         let mut config = Config::new();
-        config.cache_config_load_default().unwrap();
+        config.cache(Some(Cache::from_file(None).unwrap()));
         config.wasm_backtrace_details(WasmBacktraceDetails::Enable);
         config.wasm_component_model(true);
         config.async_support(true);
@@ -248,14 +251,12 @@ async fn virt_test() -> Result<()> {
             wasi: WasiCtx,
             wasi_config: WasiConfigVariables,
         }
-        impl IoView for CommandCtx {
-            fn table(&mut self) -> &mut ResourceTable {
-                &mut self.table
-            }
-        }
         impl WasiView for CommandCtx {
-            fn ctx(&mut self) -> &mut WasiCtx {
-                &mut self.wasi
+            fn ctx(&mut self) -> WasiCtxView<'_> {
+                WasiCtxView {
+                    ctx: &mut self.wasi,
+                    table: &mut self.table,
+                }
             }
         }
         impl CommandCtx {
@@ -264,7 +265,7 @@ async fn virt_test() -> Result<()> {
             }
         }
 
-        wasmtime_wasi::add_to_linker_async(&mut linker)?;
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
         wasmtime_wasi_config::add_to_linker(&mut linker, |ctx: &mut CommandCtx| {
             WasiConfig::new(ctx.wasi_config())
         })?;

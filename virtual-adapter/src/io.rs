@@ -899,7 +899,7 @@ impl GuestDescriptor for FilesystemDescriptor {
                     };
                     host_fd
                         .stat_at(
-                            filesystem_types::PathFlags::from_bits(flags.bits()).unwrap(),
+                            filesystem_types::PathFlags::from_bits_retain(flags.bits()),
                             path,
                         )
                         .map(stat_map)
@@ -917,7 +917,7 @@ impl GuestDescriptor for FilesystemDescriptor {
             }
             Self::Host(host_fd) => host_fd
                 .stat_at(
-                    filesystem_types::PathFlags::from_bits(flags.bits()).unwrap(),
+                    filesystem_types::PathFlags::from_bits_retain(flags.bits()),
                     &path,
                 )
                 .map(stat_map)
@@ -965,11 +965,12 @@ impl GuestDescriptor for FilesystemDescriptor {
                     };
                     let child_fd = host_fd
                         .open_at(
-                            filesystem_types::PathFlags::from_bits(path_flags.bits()).unwrap(),
+                            filesystem_types::PathFlags::from_bits_retain(path_flags.bits()),
                             path,
-                            filesystem_types::OpenFlags::from_bits(open_flags.bits()).unwrap(),
-                            filesystem_types::DescriptorFlags::from_bits(descriptor_flags.bits())
-                                .unwrap(),
+                            filesystem_types::OpenFlags::from_bits_retain(open_flags.bits()),
+                            filesystem_types::DescriptorFlags::from_bits_retain(
+                                descriptor_flags.bits(),
+                            ),
                         )
                         .map_err(err_map)?;
                     Ok(Descriptor::new(Self::Host(Rc::new(child_fd))))
@@ -980,11 +981,12 @@ impl GuestDescriptor for FilesystemDescriptor {
             Self::Host(host_fd) => {
                 let child_fd = host_fd
                     .open_at(
-                        filesystem_types::PathFlags::from_bits(path_flags.bits()).unwrap(),
+                        filesystem_types::PathFlags::from_bits_retain(path_flags.bits()),
                         &path,
-                        filesystem_types::OpenFlags::from_bits(open_flags.bits()).unwrap(),
-                        filesystem_types::DescriptorFlags::from_bits(descriptor_flags.bits())
-                            .unwrap(),
+                        filesystem_types::OpenFlags::from_bits_retain(open_flags.bits()),
+                        filesystem_types::DescriptorFlags::from_bits_retain(
+                            descriptor_flags.bits(),
+                        ),
                     )
                     .map_err(err_map)?;
                 Ok(Descriptor::new(Self::Host(Rc::new(child_fd))))
@@ -1071,7 +1073,7 @@ impl GuestDescriptor for FilesystemDescriptor {
                     };
                     host_fd
                         .metadata_hash_at(
-                            filesystem_types::PathFlags::from_bits(path_flags.bits()).unwrap(),
+                            filesystem_types::PathFlags::from_bits_retain(path_flags.bits()),
                             path,
                         )
                         .map(metadata_hash_map)
@@ -1085,7 +1087,7 @@ impl GuestDescriptor for FilesystemDescriptor {
             }
             Self::Host(host_fd) => host_fd
                 .metadata_hash_at(
-                    filesystem_types::PathFlags::from_bits(path_flags.bits()).unwrap(),
+                    filesystem_types::PathFlags::from_bits_retain(path_flags.bits()),
                     &path,
                 )
                 .map(metadata_hash_map)
