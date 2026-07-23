@@ -43,8 +43,8 @@ world virtual-adapter {
   export wasi:sockets/tcp@0.2.1;
   import wasi:sockets/udp@0.2.1;
   export wasi:sockets/udp@0.2.1;
-  import wasi:config/store@0.2.0-draft;
-  export wasi:config/store@0.2.0-draft;
+  import wasi:config/store@0.2.0-rc.1;
+  export wasi:config/store@0.2.0-rc.1;
 }
 
 world virtual-base {
@@ -83,10 +83,13 @@ world virtual-io-http {
   export wasi:http/outgoing-handler@0.2.1;
 }
 
-world virtual-fs {
-  import wasi:filesystem/preopens@0.2.1;
+world virtual-fs-types {
   import wasi:filesystem/types@0.2.1;
   export wasi:filesystem/types@0.2.1;
+}
+
+world virtual-fs-preopens {
+  import wasi:filesystem/preopens@0.2.1;
   export wasi:filesystem/preopens@0.2.1;
 }
 
@@ -131,26 +134,32 @@ world virtual-random {
   export wasi:random/random@0.2.1;
 }
 
-world virtual-sockets {
-  import wasi:sockets/ip-name-lookup@0.2.1;
-  export wasi:sockets/ip-name-lookup@0.2.1;
+world virtual-sockets-core {
+  import wasi:sockets/network@0.2.1;
+  export wasi:sockets/network@0.2.1;
   import wasi:sockets/tcp@0.2.1;
   export wasi:sockets/tcp@0.2.1;
   import wasi:sockets/udp@0.2.1;
   export wasi:sockets/udp@0.2.1;
+}
+
+world virtual-sockets {
+  import wasi:sockets/ip-name-lookup@0.2.1;
+  export wasi:sockets/ip-name-lookup@0.2.1;
   import wasi:sockets/instance-network@0.2.1;
   import wasi:sockets/tcp-create-socket@0.2.1;
   import wasi:sockets/udp-create-socket@0.2.1;
   export wasi:sockets/instance-network@0.2.1;
   export wasi:sockets/tcp-create-socket@0.2.1;
   export wasi:sockets/udp-create-socket@0.2.1;
-  import wasi:sockets/network@0.2.1;
-  export wasi:sockets/network@0.2.1;
+}
+
+world virtual-http-types {
+  import wasi:http/types@0.2.1;
+  export wasi:http/types@0.2.1;
 }
 
 world virtual-http {
-  import wasi:http/types@0.2.1;
-  export wasi:http/types@0.2.1;
   import wasi:http/incoming-handler@0.2.1;
   import wasi:http/outgoing-handler@0.2.1;
   export wasi:http/incoming-handler@0.2.1;
@@ -163,8 +172,8 @@ world virtual-exit {
 }
 
 world virtual-config {
-  import wasi:config/store@0.2.0-draft;
-  export wasi:config/store@0.2.0-draft;
+  import wasi:config/store@0.2.0-rc.1;
+  export wasi:config/store@0.2.0-rc.1;
 }
 
 world virt-test {
@@ -184,7 +193,7 @@ world virt-test {
   import wasi:io/poll@0.2.1;
   import wasi:io/streams@0.2.1;
   import wasi:cli/environment@0.2.1;
-  import wasi:config/store@0.2.0-draft;
+  import wasi:config/store@0.2.0-rc.1;
   import wasi:filesystem/preopens@0.2.1;
   import wasi:cli/exit@0.2.1;
   import wasi:cli/stdin@0.2.1;

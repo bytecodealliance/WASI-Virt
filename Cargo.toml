@@ -44,13 +44,14 @@ clap = { workspace = true, features = [
 ] }
 serde = { workspace = true, features = ["derive"] }
 walrus = { workspace = true }
-wasm-compose = { workspace = true }
 wasm-metadata = { workspace = true }
 wasm-opt = { workspace = true, optional = true }
 wit-component = { workspace = true }
 wit-parser = { workspace = true }
 toml = { workspace = true, features = ["parse"] }
 semver = { workspace = true, features = ["serde"] }
+wac-graph = { workspace = true }
+
 
 [dev-dependencies]
 anyhow = { workspace = true }
@@ -64,6 +65,7 @@ wasmtime = { workspace = true, features = [
   "component-model",
   "cranelift",
   "cache",
+  "anyhow",
 ] }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-config = { workspace = true }
@@ -80,17 +82,18 @@ semver = { version = "1.0.27", default-features = false }
 serde = { version = "1", default-features = false }
 tokio = { version = "1.47", default-features = false }
 toml = { version = "0.8", default-features = false }
-walrus = { version = "0.23.3", default-features = false }
-wasm-compose = { version = "0.219", default-features = false }
-wasm-metadata = { version = "0.217", default-features = false }
+walrus = { version = "0.26.4", default-features = false }
+wac-graph = { version = "0.10.1", default-features = false }
+wasm-metadata = { version = "0.252", default-features = false }
+
 wasm-opt = { version = "0.116.1", default-features = false }
 wasmparser = { version = "0.227.1", default-features = false }
-wasmtime = { version = "30.0", default-features = false }
-wasmtime-wasi = { version = "30.0", default-features = false }
-wasmtime-wasi-config = { version = "30.0", default-features = false }
-wit-bindgen = { version = "0.32", default-features = false }
-wit-component = { version = "0.217", default-features = false }
-wit-parser = { version = "0.217", default-features = false }
+wasmtime = { version = "47.0.2", default-features = false }
+wasmtime-wasi = { version = "47.0.2", default-features = false }
+wasmtime-wasi-config = { version = "47.0.2", default-features = false }
+wit-bindgen = { version = "0.59", default-features = false }
+wit-component = { version = "0.252", default-features = false }
+wit-parser = { version = "0.252", default-features = false }
 
 [profile.release]
 opt-level = "z"

@@ -7,15 +7,16 @@ use anyhow::{anyhow, bail, Context, Result};
 use heck::ToSnakeCase;
 use log::debug;
 use serde::Deserialize;
+use wac_graph::{plug, types::Package, CompositionGraph, EncodeOptions};
 use wasi_virt::WasiVirt;
-use wasm_compose::composer::ComponentComposer;
 use wasmparser::{Chunk, Parser, Payload};
+
 use wasmtime::component::ResourceTable;
 use wasmtime::{
     component::{Component, Linker},
-    Config, Engine, Store, WasmBacktraceDetails,
+    Cache, Config, Engine, Store, WasmBacktraceDetails,
 };
-use wasmtime_wasi::{DirPerms, FilePerms, IoView, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 use wit_component::{ComponentEncoder, DecodedWasm};
 use wit_parser::WorldItem;
@@ -23,7 +24,8 @@ use wit_parser::WorldItem;
 wasmtime::component::bindgen!({
     world: "virt-test",
     path: "wit/0_2_1",
-    async: true
+    imports: { default: async },
+    exports: { default: async },
 });
 
 fn cmd(arg: &str) -> Result<()> {
@@ -193,15 +195,30 @@ async fn virt_test() -> Result<()> {
             _ => {
                 // compose the test component with the defined test virtualization
                 debug!("- Composing virtualization");
-                let component_bytes = ComponentComposer::new(
+
+                let mut graph = CompositionGraph::new();
+
+                let virt_bytes = fs::read(&virt_component_path)?;
+                let virt_pkg =
+                    Package::from_bytes("wasi-virt", None, virt_bytes, graph.types_mut())
+                        .context("failed to decode virtualized adapter package")?;
+                let virt = graph.register_package(virt_pkg)?;
+
+                let component_pkg = Package::from_file(
+                    "component",
+                    None,
                     &generated_component_path,
-                    &wasm_compose::config::Config {
-                        definitions: vec![virt_component_path],
-                        ..Default::default()
-                    },
+                    graph.types_mut(),
                 )
-                .compose()
-                .context("failed to compose virtualization")?;
+                .context("failed to decode test component package")?;
+                let component = graph.register_package(component_pkg)?;
+
+                plug(&mut graph, vec![virt], component)
+                    .context("failed to compose virtualization")?;
+
+                let component_bytes = graph
+                    .encode(EncodeOptions::default())
+                    .context("failed to encode composed virtualization")?;
 
                 fs::write(&composed_path, &component_bytes)?;
 
@@ -233,10 +250,9 @@ async fn virt_test() -> Result<()> {
         let wasi = builder.build();
 
         let mut config = Config::new();
-        config.cache_config_load_default().unwrap();
+        config.cache(Some(Cache::from_file(None).unwrap()));
         config.wasm_backtrace_details(WasmBacktraceDetails::Enable);
         config.wasm_component_model(true);
-        config.async_support(true);
 
         let engine = Engine::new(&config)?;
         let mut linker = Linker::new(&engine);
@@ -248,14 +264,12 @@ async fn virt_test() -> Result<()> {
             wasi: WasiCtx,
             wasi_config: WasiConfigVariables,
         }
-        impl IoView for CommandCtx {
-            fn table(&mut self) -> &mut ResourceTable {
-                &mut self.table
-            }
-        }
         impl WasiView for CommandCtx {
-            fn ctx(&mut self) -> &mut WasiCtx {
-                &mut self.wasi
+            fn ctx(&mut self) -> WasiCtxView<'_> {
+                WasiCtxView {
+                    ctx: &mut self.wasi,
+                    table: &mut self.table,
+                }
             }
         }
         impl CommandCtx {
@@ -264,7 +278,7 @@ async fn virt_test() -> Result<()> {
             }
         }
 
-        wasmtime_wasi::add_to_linker_async(&mut linker)?;
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
         wasmtime_wasi_config::add_to_linker(&mut linker, |ctx: &mut CommandCtx| {
             WasiConfig::new(ctx.wasi_config())
         })?;

@@ -220,7 +220,7 @@ pub(crate) fn stub_config_virt(module: &mut Module) -> Result<()> {
         module.replace_imported_func(
             module
                 .imports
-                .get_func("wasi:config/store@0.2.0-draft", fn_name)?,
+                .get_func("wasi:config/store@0.2.0-rc.1", fn_name)?,
             |(body, _)| {
                 body.unreachable();
             },
@@ -237,7 +237,7 @@ pub(crate) fn strip_config_virt(module: &mut Module) -> Result<()> {
     for fn_name in WASI_CONFIG_FNS {
         let Ok(fid) = module
             .exports
-            .get_func(format!("wasi:config/store@0.2.0-draft#{fn_name}"))
+            .get_func(format!("wasi:config/store@0.2.0-rc.1#{fn_name}"))
         else {
             bail!("Expected Config function {fn_name}")
         };

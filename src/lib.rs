@@ -2,7 +2,6 @@ use std::collections::BTreeSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
 use anyhow::{bail, Context, Result};
 use semver::Version;
@@ -14,10 +13,9 @@ use virt_deny::{
 use virt_env::{create_env_virt, strip_env_virt};
 use virt_io::{create_io_virt, VirtStdio};
 use walrus_ops::strip_virt;
-use wasm_compose::composer::ComponentComposer;
 use wasm_metadata::Producers;
 use wit_component::{metadata, ComponentEncoder, DecodedWasm, StringEncoding};
-use wit_parser::WorldItem;
+use wit_parser::{CloneMaps, WorldItem};
 
 mod data;
 mod stub_preview1;
@@ -381,56 +379,82 @@ impl WasiVirt {
             }
         };
 
+        let adapter_pkgs = &[pkg_id];
+
         let base_world = resolve
-            .select_world(pkg_id, Some("virtual-base"))
+            .select_world(adapter_pkgs, Some("virtual-base"))
             .context("failed to select `virtual-base` world")?;
 
         let env_world = resolve
-            .select_world(pkg_id, Some("virtual-env"))
+            .select_world(adapter_pkgs, Some("virtual-env"))
             .context("failed to select `virtual-env` world")?;
+
         let config_world = resolve
-            .select_world(pkg_id, Some("virtual-config"))
+            .select_world(adapter_pkgs, Some("virtual-config"))
             .context("failed to select `virtual-config` world")?;
 
         let io_world = resolve
-            .select_world(pkg_id, Some("virtual-io"))
+            .select_world(adapter_pkgs, Some("virtual-io"))
             .context("failed to select `virtual-io` world")?;
+
         let io_clocks_world = resolve
-            .select_world(pkg_id, Some("virtual-io-clocks"))
+            .select_world(adapter_pkgs, Some("virtual-io-clocks"))
             .context("failed to select `virtual-io-clocks` world")?;
+
         let io_http_world = resolve
-            .select_world(pkg_id, Some("virtual-io-http"))
+            .select_world(adapter_pkgs, Some("virtual-io-http"))
             .context("failed to select `virtual-io-http` world")?;
+
         let io_sockets_world = resolve
-            .select_world(pkg_id, Some("virtual-io-sockets"))
+            .select_world(adapter_pkgs, Some("virtual-io-sockets"))
             .context("failed to select `virtual-io-sockets` world")?;
 
         let exit_world = resolve
-            .select_world(pkg_id, Some("virtual-exit"))
+            .select_world(adapter_pkgs, Some("virtual-exit"))
             .context("failed to select `virtual-exit` world")?;
-        let fs_world = resolve
-            .select_world(pkg_id, Some("virtual-fs"))
-            .context("failed to select `virtual-fs` world")?;
+
+        let fs_types_world = resolve
+            .select_world(adapter_pkgs, Some("virtual-fs-types"))
+            .context("failed to select `virtual-fs-types` world")?;
+
+        let fs_preopens_world = resolve
+            .select_world(adapter_pkgs, Some("virtual-fs-preopens"))
+            .context("failed to select `virtual-fs-preopens` world")?;
+
         let random_world = resolve
-            .select_world(pkg_id, Some("virtual-random"))
+            .select_world(adapter_pkgs, Some("virtual-random"))
             .context("failed to select `virtual-random` world")?;
+
         let stdio_world = resolve
-            .select_world(pkg_id, Some("virtual-stdio"))
+            .select_world(adapter_pkgs, Some("virtual-stdio"))
             .context("failed to select `virtual-stdio` world")?;
+
         let clocks_world = resolve
-            .select_world(pkg_id, Some("virtual-clocks"))
+            .select_world(adapter_pkgs, Some("virtual-clocks"))
             .context("failed to select `virtual-clocks` world")?;
+
+        let http_types_world = resolve
+            .select_world(adapter_pkgs, Some("virtual-http-types"))
+            .context("failed to select `virtual-http-types` world")?;
+
         let http_world = resolve
-            .select_world(pkg_id, Some("virtual-http"))
+            .select_world(adapter_pkgs, Some("virtual-http"))
             .context("failed to select `virtual-http` world")?;
+
+        let sockets_core_world = resolve
+            .select_world(adapter_pkgs, Some("virtual-sockets-core"))
+            .context("failed to select `virtual-sockets-core` world")?;
+
         let sockets_world = resolve
-            .select_world(pkg_id, Some("virtual-sockets"))
+            .select_world(adapter_pkgs, Some("virtual-sockets"))
             .context("failed to select `virtual-sockets` world")?;
+
+        let mut clone_maps = CloneMaps::default();
 
         // Process `wasi:environment`
         if self.env.is_some() {
             resolve
-                .merge_worlds(env_world, base_world)
+                .merge_worlds(env_world, base_world, &mut clone_maps)
                 .context("failed to merge with environment world")?;
         } else {
             strip_env_virt(&mut module, insert_wasi_version)
@@ -440,7 +464,7 @@ impl WasiVirt {
         // Process `wasi:config`
         if self.config.is_some() {
             resolve
-                .merge_worlds(config_world, base_world)
+                .merge_worlds(config_world, base_world, &mut clone_maps)
                 .context("failed to merge with config world")?;
         } else {
             strip_config_virt(&mut module).context("failed to strip config exports")?;
@@ -450,7 +474,7 @@ impl WasiVirt {
         if let Some(exit) = self.exit {
             if !exit {
                 resolve
-                    .merge_worlds(exit_world, base_world)
+                    .merge_worlds(exit_world, base_world, &mut clone_maps)
                     .context("failed to merge with exit world")?;
                 deny_exit_virt(&mut module, &insert_wasi_version)
                     .context("failed to deny exit exports")?;
@@ -461,7 +485,7 @@ impl WasiVirt {
         if let Some(random) = self.random {
             if !random {
                 resolve
-                    .merge_worlds(random_world, base_world)
+                    .merge_worlds(random_world, base_world, &mut clone_maps)
                     .context("failed to merge with random world")?;
                 deny_random_virt(&mut module, &insert_wasi_version)
                     .context("failed to deny random exports")?;
@@ -472,7 +496,7 @@ impl WasiVirt {
         // therefore we need to strip just their io dependence portion
         if self.has_virtualized_io() {
             resolve
-                .merge_worlds(io_world, base_world)
+                .merge_worlds(io_world, base_world, &mut clone_maps)
                 .context("failed to merge with I/O world")?;
         } else {
             strip_virt(&mut module, &["wasi:io/"]).context("failed to strip I/O exports")?;
@@ -485,14 +509,14 @@ impl WasiVirt {
                 // in future with fine-grained virtualization options, they
                 // also would extend here (ie !clocks is deceiving)
                 resolve
-                    .merge_worlds(clocks_world, base_world)
+                    .merge_worlds(clocks_world, base_world, &mut clone_maps)
                     .context("failed to merge with clock world")?;
                 deny_clocks_virt(&mut module, &insert_wasi_version)
                     .context("failed to deny clock exports")?;
             } else {
                 // passthrough can be simplified to just rewrapping io interfaces
                 resolve
-                    .merge_worlds(io_clocks_world, base_world)
+                    .merge_worlds(io_clocks_world, base_world, &mut clone_maps)
                     .context("failed to merge I/O clocks world")?;
             }
         } else {
@@ -501,15 +525,18 @@ impl WasiVirt {
 
         // Process sockets & HTTP (identical to clocks above)
         if let Some(sockets) = self.sockets {
+            resolve
+                .merge_worlds(sockets_core_world, base_world, &mut clone_maps)
+                .context("failed to merge with sockets core world")?;
             if !sockets {
                 resolve
-                    .merge_worlds(sockets_world, base_world)
+                    .merge_worlds(sockets_world, base_world, &mut clone_maps)
                     .context("failed to merge with sockets world")?;
                 deny_sockets_virt(&mut module, &insert_wasi_version)
                     .context("failed to deny socket exports")?;
             } else {
                 resolve
-                    .merge_worlds(io_sockets_world, base_world)
+                    .merge_worlds(io_sockets_world, base_world, &mut clone_maps)
                     .context("failed to merge with socket I/O world")?;
             }
         } else {
@@ -519,15 +546,18 @@ impl WasiVirt {
 
         // Process `wasi:http`
         if let Some(http) = self.http {
+            resolve
+                .merge_worlds(http_types_world, base_world, &mut clone_maps)
+                .context("failed to merge with HTTP types world")?;
             if !http {
                 resolve
-                    .merge_worlds(http_world, base_world)
+                    .merge_worlds(http_world, base_world, &mut clone_maps)
                     .context("failed to merge with HTTP world")?;
                 deny_http_virt(&mut module, &insert_wasi_version)
                     .context("failed to deny with HTTP exports")?;
             } else {
                 resolve
-                    .merge_worlds(io_http_world, base_world)
+                    .merge_worlds(io_http_world, base_world, &mut clone_maps)
                     .context("failed to merge with HTTP I/O world")?;
             }
         } else {
@@ -538,7 +568,7 @@ impl WasiVirt {
         // (all their interfaces use streams)
         if self.stdio.is_some() {
             resolve
-                .merge_worlds(stdio_world, base_world)
+                .merge_worlds(stdio_world, base_world, &mut clone_maps)
                 .context("failed to merge with stdio world")?;
         } else {
             strip_virt(&mut module, &["wasi:cli/std", "wasi:cli/terminal"])
@@ -547,7 +577,12 @@ impl WasiVirt {
 
         // Stdio may use FS, so enable when stdio is present
         if self.fs.is_some() || self.stdio.is_some() {
-            resolve.merge_worlds(fs_world, base_world)?;
+            resolve
+                .merge_worlds(fs_types_world, base_world, &mut clone_maps)
+                .context("failed to merge with fs types world")?;
+            resolve
+                .merge_worlds(fs_preopens_world, base_world, &mut clone_maps)
+                .context("failed to merge with fs preopens world")?;
         } else {
             strip_virt(&mut module, &["wasi:filesystem/"])
                 .context("failed to strip filesystem exports")?;
@@ -564,7 +599,7 @@ impl WasiVirt {
 
         let mut bytes = module.emit_wasm();
 
-        // because we rely on dead code ellimination to remove unnecessary adapter code
+        // because we rely on dead code elimination to remove unnecessary adapter code
         // we save into a temporary file and run wasm-opt before returning
         // this can be disabled with wasm_opt: false
         if self.run_wasm_opt.unwrap_or(true) {
@@ -572,35 +607,36 @@ impl WasiVirt {
         }
 
         // now adapt the virtualized component
-        let encoder = ComponentEncoder::default()
+        let mut encoder = ComponentEncoder::default()
             .validate(true)
             .module(&bytes)
             .context("failed to set core component module")?;
         let encoded_bytes = encoder.encode().context("failed to encode component")?;
 
         let adapter = if let Some(compose_path) = &self.compose_component_path {
-            let compose_path = PathBuf::from(compose_path);
-            let dir = env::temp_dir();
-            let tmp_virt = dir.join(format!("virt{}.wasm", timestamp()));
-            fs::write(&tmp_virt, encoded_bytes).context("failed to write temporary component")?;
+            use wac_graph::{plug, types::Package, CompositionGraph, EncodeOptions};
 
-            let composed_bytes = ComponentComposer::new(
-                &compose_path,
-                &wasm_compose::config::Config {
-                    definitions: vec![tmp_virt.clone()],
-                    ..Default::default()
-                },
-            )
-            .compose()
-            .with_context(|| "Unable to compose virtualized adapter into component.\nMake sure virtualizations are enabled and being used.")
-            .or_else(|e| {
-                fs::remove_file(&tmp_virt).context("failed to remove temporary component")?;
-                Err(e)
-            })?;
+            let component_bytes =
+                fs::read(compose_path).context("failed to read component to compose")?;
 
-            fs::remove_file(&tmp_virt).context("failed to remove temporary component")?;
+            let mut graph = CompositionGraph::new();
 
-            composed_bytes
+            let virt_pkg = Package::from_bytes("wasi-virt", None, encoded_bytes, graph.types_mut())
+                .context("failed to decode virtualized adapter package")?;
+
+            let virt = graph.register_package(virt_pkg)?;
+
+            let component_pkg =
+                Package::from_bytes("component", None, component_bytes, graph.types_mut())
+                    .context("failed to decode component package")?;
+            let component = graph.register_package(component_pkg)?;
+
+            plug(&mut graph, vec![virt], component)
+                .with_context(|| "Unable to plug virtualized adapter into component.\nMake sure virtualizations are enabled and being used.")?;
+
+            graph
+                .encode(EncodeOptions::default())
+                .context("failed to encode composed component")?
         } else {
             encoded_bytes
         };
@@ -649,12 +685,5 @@ fn apply_wasm_opt(bytes: Vec<u8>, debug: bool) -> Result<Vec<u8>> {
         fs::remove_file(&tmp_input)?;
         fs::remove_file(&tmp_output)?;
         Ok(bytes)
-    }
-}
-
-fn timestamp() -> u64 {
-    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(n) => n.as_secs(),
-        Err(_) => panic!(),
     }
 }

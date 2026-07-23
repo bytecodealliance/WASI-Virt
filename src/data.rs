@@ -177,7 +177,7 @@ impl Data {
                 false,
                 passive_fids.len() as u64,
                 Some(passive_fids.len() as u64),
-                RefType::Funcref,
+                RefType::FUNCREF,
             );
             module.elements.add(
                 ElementKind::Active {
