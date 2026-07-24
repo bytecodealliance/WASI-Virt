@@ -138,7 +138,7 @@ world virtual-random {
   export wasi:random/random@0.2.3;
 }
 
-world virtual-sockets-base {
+world virtual-sockets-core {
   import wasi:sockets/network@0.2.3;
   export wasi:sockets/network@0.2.3;
   import wasi:sockets/tcp@0.2.3;
