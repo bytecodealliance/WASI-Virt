@@ -180,7 +180,7 @@ cargo build --no-default-features --features wasm-opt-cli
 ```
 
 Users can download prebuilt Binaryen releases (which provides `wasm-opt`).
-[here]<https://github.com/WebAssembly/binaryen/releases/latest>.
+[here](https://github.com/WebAssembly/binaryen/releases/latest).
 Once installed add `wasm-opt` to your `PATH` or set `WASM_OPT`.
 
 To skip optimization entirelydisable it with `WasiVirt::wasm_opt(false)`.
