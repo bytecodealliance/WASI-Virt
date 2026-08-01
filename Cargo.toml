@@ -93,7 +93,7 @@ wasmtime-wasi = { version = "47.0.2", default-features = false }
 wasmtime-wasi-config = { version = "47.0.2", default-features = false }
 wit-bindgen = { version = "0.59", default-features = false }
 wit-component = { version = "0.252", default-features = false }
-wit-parser = { version = "0.252", default-features = false }
+wit-parser = { version = "0.253", default-features = false }
 
 [profile.release]
 opt-level = "z"
