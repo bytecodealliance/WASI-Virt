@@ -158,6 +158,33 @@ wasi-virt component.wasm --stderr=allow -o virt.wasm
 
 The `--debug` flag can be used to get tracing output of system calls.
 
+## Optimization (`wasm-opt`)
+
+WASI Virt relies on `wasm-opt` to perform dead-code elimination against the
+generated virtual adapter. Optimization can be disabled via the library API with
+`WasiVirt::wasm_opt(false)`.
+
+There are two ways `wasm-opt` can be provided, selected via Cargo features:
+
+- **`wasm-opt` (default):** Uses the bundled [`wasm-opt`](https://crates.io/crates/wasm-opt)
+  FFI crate. This is the default and requires no external tooling — existing behavior is
+  unchanged.
+- **`wasm-opt-cli` (opt-in):** Shells out to an external `wasm-opt` CLI (Binaryen) instead
+  of compiling the FFI crate. This introduces an external dependency but also allows for 
+  wasm-opt to be easily upgraded.
+
+To build with only the CLI path (and skip the FFI crate entirely):
+
+```sh
+cargo build --no-default-features --features wasm-opt-cli
+```
+
+Users can download prebuilt Binaryen releases (which provides `wasm-opt`).
+[here](https://github.com/WebAssembly/binaryen/releases/latest).
+Once installed add `wasm-opt` to your `PATH` or set `WASM_OPT`.
+
+To skip optimization entirelydisable it with `WasiVirt::wasm_opt(false)`.
+
 ## API
 
 When using the virtualization API, subsystems are passthrough by default instead of deny by default.

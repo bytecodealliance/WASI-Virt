@@ -644,9 +644,13 @@ impl WasiVirt {
 }
 
 fn apply_wasm_opt(bytes: Vec<u8>, debug: bool) -> Result<Vec<u8>> {
-    #[cfg(not(feature = "wasm-opt"))]
+    #[cfg(all(feature = "wasm-opt", feature = "wasm-opt-cli"))]
+    compile_error!("Features `wasm-opt` and `wasm-opt-cli` are mutually exclusive.");
+
+    #[cfg(not(any(feature = "wasm-opt", feature = "wasm-opt-cli")))]
     {
-        return Ok(bytes);
+        let _ = debug;
+        Ok(bytes)
     }
 
     #[cfg(feature = "wasm-opt")]
@@ -681,4 +685,98 @@ fn apply_wasm_opt(bytes: Vec<u8>, debug: bool) -> Result<Vec<u8>> {
         fs::remove_file(&tmp_output)?;
         Ok(bytes)
     }
+
+    #[cfg(feature = "wasm-opt-cli")]
+    {
+        apply_wasm_opt_cli(bytes, debug)
+    }
+}
+
+#[cfg(feature = "wasm-opt-cli")]
+fn apply_wasm_opt_cli(bytes: Vec<u8>, debug: bool) -> Result<Vec<u8>> {
+    use std::io::ErrorKind;
+    use std::io::Write;
+    use std::process::Command;
+    use tempfile::NamedTempFile;
+
+    let program = env::var_os("WASM_OPT").unwrap_or_else(|| "wasm-opt".into());
+
+    let mut tmp_input = NamedTempFile::new()
+        .with_context(|| "Unable to create temporary file for wasm-opt call on adapter")?;
+    let tmp_output = NamedTempFile::new()
+        .with_context(|| "Unable to create temporary file for wasm-opt output")?;
+
+    tmp_input
+        .write_all(&bytes)
+        .with_context(|| "Unable to write temporary file for wasm-opt call on adapter")?;
+
+    let mut cmd = Command::new(&program);
+    cmd.arg("-O2").arg("-Os").arg("--all-features");
+    if debug {
+        cmd.arg("-g");
+    }
+    cmd.arg("-o").arg(tmp_output.path()).arg(tmp_input.path());
+
+    let output = cmd.output().map_err(|e| {
+        if e.kind() == ErrorKind::NotFound {
+            wasm_opt_not_found_error()
+        } else {
+            anyhow::Error::new(e).context(format!(
+                "Unable to run `wasm-opt` ({})",
+                program.to_string_lossy()
+            ))
+        }
+    })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!(
+            "`wasm-opt` failed with status {}. This can be disabled with wasm_opt: false.\n{}",
+            output.status,
+            stderr.trim()
+        );
+    }
+
+    fs::read(tmp_output.path()).with_context(|| "Unable to read wasm-opt output for adapter")
+}
+
+/// Build a platform-aware error explaining how to install Binaryen's `wasm-opt`.
+#[cfg(feature = "wasm-opt-cli")]
+fn wasm_opt_not_found_error() -> anyhow::Error {
+    // latest verified version
+    const BINARYEN_VERSION: &str = "131";
+
+    let asset_suffix = match (
+        cfg!(target_os = "linux"),
+        cfg!(target_os = "macos"),
+        cfg!(target_os = "windows"),
+        cfg!(target_arch = "aarch64"),
+        cfg!(target_arch = "x86_64"),
+    ) {
+        (true, _, _, true, _) => Some("aarch64-linux"),
+        (true, _, _, _, true) => Some("x86_64-linux"),
+        (_, true, _, true, _) => Some("arm64-macos"),
+        (_, true, _, _, true) => Some("x86_64-macos"),
+        (_, _, true, true, _) => Some("arm64-windows"),
+        (_, _, true, _, true) => Some("x86_64-windows"),
+        _ => None,
+    };
+
+    let download_hint = match asset_suffix {
+        Some(suffix) => format!(
+            "Download the prebuilt Binaryen release for your platform ({suffix}):\n  \
+             https://github.com/WebAssembly/binaryen/releases/latest\n  \
+             (asset: binaryen-version_{BINARYEN_VERSION}-{suffix}.tar.gz)"
+        ),
+
+        None => "Download a prebuilt Binaryen release for your platform:\n  \
+             https://github.com/WebAssembly/binaryen/releases/latest"
+            .to_string(),
+    };
+
+    anyhow::anyhow!(
+        "`wasm-opt` was not found on your PATH.\n\n\
+         {download_hint}\n\n\
+         Then place `wasm-opt` on your PATH, or point WASM_OPT at it."
+    )
 }
