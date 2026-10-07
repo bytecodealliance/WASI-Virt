@@ -59,8 +59,8 @@ struct Args {
     #[arg(long, num_args(0..), use_value_delimiter(true), require_equals(true), value_name("ENV_VAR"), help_heading = "Env")]
     allow_env: Option<Vec<String>>,
 
-    /// Set environment variable overrides
-    #[arg(short, long, use_value_delimiter(true), value_name("ENV=VAR"), value_parser = parse_key_val::<String, String>, help_heading = "Env")]
+    /// Set an environment variable override; repeat it for each variable
+    #[arg(short, long, value_name("ENV=VAR"), value_parser = parse_key_val::<String, String>, help_heading = "Env")]
     env: Option<Vec<(String, String)>>,
 
     // CONFIG
@@ -68,8 +68,8 @@ struct Args {
     #[arg(long, num_args(0..), use_value_delimiter(true), require_equals(true), value_name("PROPERTY_NAME"), help_heading = "Config (experimental)")]
     allow_config: Option<Vec<String>>,
 
-    /// Set config property overrides
-    #[arg(short, long, use_value_delimiter(true), value_name("NAME=VALUE"), value_parser = parse_key_val::<String, String>, help_heading = "Config (experimental)")]
+    /// Set a config property override; repeat it for each property
+    #[arg(short, long, value_name("NAME=VALUE"), value_parser = parse_key_val::<String, String>, help_heading = "Config (experimental)")]
     config: Option<Vec<(String, String)>>,
 
     // FS
@@ -119,6 +119,25 @@ where
         .find('=')
         .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{s}`"))?;
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
+}
+
+// Commas between KEY=VALUE pairs still separate overrides, as they always
+// did; anywhere else they belong to the value.
+fn expand_comma_pairs(pairs: Vec<(String, String)>) -> Vec<(String, String)> {
+    pairs
+        .into_iter()
+        .flat_map(|(key, value)| {
+            let arg = format!("{key}={value}");
+            match arg
+                .split(',')
+                .map(parse_key_val::<String, String>)
+                .collect::<Result<Vec<_>, _>>()
+            {
+                Ok(parsed) if parsed.len() > 1 => parsed,
+                _ => vec![(key, value)],
+            }
+        })
+        .collect()
 }
 
 fn main() -> Result<()> {
@@ -181,7 +200,7 @@ fn main() -> Result<()> {
         }
     };
     if let Some(env_overrides) = args.env {
-        env.overrides = env_overrides;
+        env.overrides = expand_comma_pairs(env_overrides);
     }
 
     // config options
@@ -201,7 +220,7 @@ fn main() -> Result<()> {
         }
     };
     if let Some(config_overrides) = args.config {
-        config.overrides = config_overrides;
+        config.overrides = expand_comma_pairs(config_overrides);
     }
 
     // fs options
@@ -245,4 +264,91 @@ fn main() -> Result<()> {
     fs::write(&out_path, virt_component.adapter)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Args {
+        Args::try_parse_from(args.iter().copied()).unwrap()
+    }
+
+    fn pair(key: &str, value: &str) -> (String, String) {
+        (key.to_string(), value.to_string())
+    }
+
+    #[test]
+    fn override_values_keep_their_commas() {
+        let args = parse(&[
+            "wasi-virt",
+            "-o",
+            "virt.wasm",
+            "-e",
+            r#"JSON=[{"a":1},{"b":2}]"#,
+            "-e",
+            "TEXT=Hello, world",
+            "-c",
+            "list=a,b",
+            "--allow-env=HOST,PATH",
+        ]);
+        assert_eq!(
+            expand_comma_pairs(args.env.unwrap()),
+            [
+                pair("JSON", r#"[{"a":1},{"b":2}]"#),
+                pair("TEXT", "Hello, world")
+            ]
+        );
+        assert_eq!(
+            expand_comma_pairs(args.config.unwrap()),
+            [pair("list", "a,b")]
+        );
+        // A list of names stays comma-separated.
+        assert_eq!(args.allow_env.unwrap(), ["HOST", "PATH"]);
+    }
+
+    #[test]
+    fn comma_separated_pairs_set_several_overrides() {
+        let args = parse(&[
+            "wasi-virt",
+            "-o",
+            "virt.wasm",
+            "-e",
+            "A=1,B=2",
+            "-c",
+            "x=y,z=w",
+        ]);
+        assert_eq!(
+            expand_comma_pairs(args.env.unwrap()),
+            [pair("A", "1"), pair("B", "2")]
+        );
+        assert_eq!(
+            expand_comma_pairs(args.config.unwrap()),
+            [pair("x", "y"), pair("z", "w")]
+        );
+    }
+
+    #[test]
+    fn existing_override_forms_still_parse() {
+        let args = parse(&[
+            "wasi-virt",
+            "-o",
+            "virt.wasm",
+            "--env",
+            "A=1",
+            "--env",
+            "B=2",
+            "--config",
+            "x=y",
+            "--allow-env=HOST,PATH",
+            "--allow-config=one,two",
+        ]);
+        assert_eq!(
+            expand_comma_pairs(args.env.unwrap()),
+            [pair("A", "1"), pair("B", "2")]
+        );
+        assert_eq!(expand_comma_pairs(args.config.unwrap()), [pair("x", "y")]);
+        assert_eq!(args.allow_env.unwrap(), ["HOST", "PATH"]);
+        assert_eq!(args.allow_config.unwrap(), ["one", "two"]);
+    }
 }
